@@ -11,21 +11,23 @@ class GPT2 {
 	using TensorView = std::span<float>;
 
 	struct MLP {
-		Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
+		TensorView mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
 	};
 	struct LinearLayer {
-		Tensor mBias, mWeight;
+		TensorView mBias, mWeight;
 	};
 	struct AttnLayer {
 
 		LinearLayer mL1, mL2; 
 
-		Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
+		TensorView mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
 
 		MLP mMLP;
 	};
 
-	Tensor mWpeWeight, mWteWeight;
+	Tensor mFloatSpace;
+
+	TensorView mWpeWeight, mWteWeight;
 	LinearLayer mFinalLayer;
 
 	static constexpr auto mAttentionLayersSize = 12;
@@ -44,8 +46,8 @@ public:
 
 	void readSafeTensors(const std::string& filePath= "F:/software dev/programming2025/downloads") {
 
-		using FilePair = std::pair<std::string, Tensor >;
-		auto readFile = [&]() -> FilePair {
+		using Header = std::string;
+		auto readFile = [&]() -> Header {
 
 			//gpt2 tensors https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
 			auto fileName = std::format("{}/model.safeTensors", filePath);
@@ -70,15 +72,15 @@ public:
 
 			auto strData = sstr.str();
 			const auto charSize = strData.size(), floatSize = charSize / 4;
-
-			TensorView source(reinterpret_cast<float*>(strData.data()), floatSize);
-			Tensor dest(floatSize);
-			std::copy(source.begin(), source.end(), dest.begin());
 		
-			return { header, dest};
+			TensorView source(reinterpret_cast<float*>(strData.data()), floatSize);
+			mFloatSpace.resize(floatSize);;
+			std::copy(source.begin(), source.end(), mFloatSpace.begin());
+	
+			return header;
 			};
 
-		auto [header, floats] = readFile();
+		auto header = readFile();
 
 		boost::json::value j = boost::json::parse(header);
 		std::size_t floatsUsed = 0;
@@ -89,15 +91,14 @@ public:
 			auto offsets = obj.at("data_offsets").as_array();
 			auto a = offsets.front().as_int64()/4, b = offsets.back().as_int64()/4;
 			
-			auto start = std::next(floats.begin(), a);
-			auto end = std::next(floats.begin(), b);
+			auto start = std::next(mFloatSpace.begin(), a);
+			auto end = std::next(mFloatSpace.begin(), b);
 			auto size = std::distance(start, end);
 
-			std::vector<float> v(size);
-			std::copy(start, end, v.begin());
+			TensorView tensor(start, size);
 
 			floatsUsed += size;
-			return v;
+			return tensor;
 			};
 
 		mWpeWeight = readTensorByName("wpe.weight");
@@ -145,7 +146,7 @@ public:
 		mFinalLayer.mBias = readTensorByName("ln_f.bias");
 		mFinalLayer.mWeight = readTensorByName("ln_f.weight");
 
-		assert( floatsUsed == data.size());
+		assert( floatsUsed == mFloatSpace.size());
 
 		std::puts("Tensors read successfully");
 	}
