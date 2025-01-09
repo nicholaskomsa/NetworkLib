@@ -10,7 +10,6 @@
 #include <execution>
 #include <boost/json.hpp>
 
-
 namespace FloatSpaceConvert {
 
 	//converts fits FLOAT images to each colorize mode
@@ -178,11 +177,11 @@ namespace FloatSpaceConvert {
 		}
 	}
 
-	void colorizeFloatSpace(const std::string& fileName, std::span<const float> floats, bool rectangular = true) {
+	void colorizeFloatSpace(const std::string& fileName, std::span<const float> floats) {
 
 		std::println("Colorizing float space: {}", fileName);
 
-		auto writeColorizedImages = [&](auto idx, auto& image, auto width, auto height) {
+		auto writeColorizedImages = [&]( auto& image, auto width, auto height) {
 
 			if (image.size() == 0) return;
 
@@ -248,8 +247,6 @@ namespace FloatSpaceConvert {
 
 			};
 
-		auto size = floats.size();
-
 		auto getDimensions = [&](auto size, float aspectRatio = 3840.0f/ 2160.0f) ->std::pair<int, int> {
 
 			int width = 0, height = 0;
@@ -260,13 +257,12 @@ namespace FloatSpaceConvert {
 			return { width, height };
 			};
 
-		auto [width, height] = getDimensions(size);
+		auto [width, height] = getDimensions(floats.size());
 
-		writeColorizedImages(fileName, floats, width, height);
+		writeColorizedImages(floats, width, height);
 
 	}
 };
-
 
 struct GPT2 {
 
