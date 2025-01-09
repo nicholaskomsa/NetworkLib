@@ -404,7 +404,7 @@ public:
 			};
 
 		mAttnLayers.resize(mAttentionLayersSize);
-		std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) { createAttentionLayer(layer); });
+		std::for_each(mAttnLayers.begin(), mAttnLayers.end(), createAttentionLayer);
 
 		mFinalLayer.mBias = readTensorByName("ln_f.bias");
 		mFinalLayer.mWeight = readTensorByName("ln_f.weight");
