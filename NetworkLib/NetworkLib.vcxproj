@@ -84,6 +84,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CpuNetwork.h" />
+    <ClInclude Include="FloatSpaceConvert.h" />
+    <ClInclude Include="Gpt2.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
