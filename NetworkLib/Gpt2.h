@@ -157,18 +157,18 @@ public:
 
 			auto& shape = obj.at("shape").as_array();
 			auto dimensions = shape.size();
+			
 			auto getDim = [&](auto i) {
 				return std::size_t(shape[i].as_int64());
 				};
-
-
+			
 			Tensor tensor;
 
 			auto expectedSize = 0ULL;
 			switch (dimensions) {
 			case 1:
 				tensor = { tensorView, getDim(0) };
-				expectedSize = tensor.size();;
+				expectedSize = tensor.size();
 				break;
 			case 2:
 				tensor = { tensorView, getDim(0), getDim(1) };
