@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <iostream>
 #include <print>
 #include <fstream>
@@ -9,6 +10,18 @@
 #include <boost/json.hpp>
 
 struct GPT2 {
+
+	static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
+	static constexpr std::size_t mDVocab = 50257;
+
+	struct Error : public std::system_error {
+
+		Error(std::errc code, const std::string& message) : std::system_error(int(code), std::generic_category(), message) {}
+
+		static void fileNotFound(const auto& fileName) {
+			throw Error(std::errc::no_such_file_or_directory, std::format("File Not Found: {}", fileName));
+		}
+	};
 
 	using Floats = std::vector<float>;
 
@@ -51,14 +64,18 @@ struct GPT2 {
 		float& at(std::size_t w, std::size_t z, std::size_t y, std::size_t x) {
 			return  mTensor[w * (mZ * mY * mX) + z * (mY * mX) + y * mX + x];
 		}
-		TensorView span(std::size_t col) {
-			return { &at(col), mX };
+
+		TensorView span() {
+			return { &at(0), mX };
 		}
-		TensorView span(std::size_t row, std::size_t col) {
-			return { &at(row,col), mX };
+		TensorView span(std::size_t row) {
+			return { &at(row,0), mX };
 		}
-		TensorView span(std::size_t depth, std::size_t row, std::size_t col) {
-			return { &at(depth, row, col), mX };
+		TensorView span(std::size_t depth, std::size_t row) {
+			return { &at(depth, row, 0), mX };
+		}
+		TensorView span(std::size_t w, std::size_t z, std::size_t y) {
+			return { &at(w, z, y, 0), mX };
 		}
 	};
 
@@ -81,35 +98,76 @@ struct GPT2 {
 
 	Tensor mWpeWeight, mWteWeight;
 	LinearLayer mFinalLayer;
+	std::array<AttnLayer,12> mAttnLayers;
 
-	static constexpr auto mAttentionLayersSize = 12;
-	std::vector<AttnLayer> mAttnLayers;
+	struct Decoder {
 
-	struct Error : public std::system_error {
+		using Word = std::string_view;
+		using Words= std::vector<Word>;
 
-		Error(std::errc code, const std::string& message) : std::system_error(int(code), std::generic_category(), message) {}
+		Words mWords;
 
-		static void fileNotFound() {
-			throw Error(std::errc::no_such_file_or_directory, "file not found");
+		static constexpr auto mDenseWordsSize = 321428;
+		std::string mDenseWords;
+
+		void readEnc() {
+
+			auto readFile = [&]()  {
+
+				//enc file https://github.com/rkaehn/gpt-2/blob/main/assets/enc
+				auto fileName = std::format("{}enc", mFilePath);
+
+				std::println("Reading file: {}", fileName);
+
+				std::ifstream fin(fileName, std::ios::in | std::ios::binary);
+
+				if (!fin)
+					Error::fileNotFound(fileName);
+
+				using Offset = std::pair<std::uint32_t, std::uint32_t>;
+				std::vector<Offset> offsets; 
+
+				offsets.resize(mDVocab);
+				mWords.resize(mDVocab);
+				mDenseWords.resize(mDenseWordsSize);
+
+				fin.read(reinterpret_cast<char*>(offsets.data()),  mDVocab * sizeof(Offset));
+				fin.read(mDenseWords.data(), mDenseWordsSize);
+
+				for (std::size_t i = 0; i < mWords.size(); ++i) {
+
+					auto& [offset,size] = offsets[i];
+
+					mWords[i] = std::string_view(mDenseWords.data() + offset, size);
+				}
+
+				fin.close();
+				std::puts("file read done`");
+				};
+
+			readFile();
+
 		}
-	};
+	} mDecoder;
 
 public:
 
-	void readSafeTensors(const std::string& filePath = "F:/software dev/programming2025/downloads") {
+	void readSafeTensors() {
 
+		constexpr auto floatSize = sizeof(float);
 		using Header = std::string;
+
 		auto readFile = [&]() -> Header {
 
 			//gpt2 tensors https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
-			auto fileName = std::format("{}/model.safeTensors", filePath);
+			auto fileName = std::format("{}model.safeTensors", mFilePath);
 
 			std::println("Reading file: {}", fileName);
 
 			std::ifstream fin(fileName, std::ios::in | std::ios::binary);
 
 			if (!fin)
-				Error::fileNotFound();
+				Error::fileNotFound(fileName);
 
 			std::uint64_t headerSize;
 			fin.read(reinterpret_cast<char*>(&headerSize), sizeof(headerSize));
@@ -119,7 +177,6 @@ public:
 
 			std::streampos current = fin.tellg(), end = fin.seekg(0, std::ios::end).tellg();
 
-			constexpr auto floatSize = sizeof(float);
 			std::streamoff floatsSize = static_cast<std::streamoff>(end - current) / floatSize;
 			mFloatSpace.resize(floatsSize);
 
@@ -131,7 +188,7 @@ public:
 			assert(knownFileFloatSize == floatsSize);
 
 			fin.close();
-			std::puts("file read...");
+			std::puts("file read done`");
 
 			return header;
 			};
@@ -145,7 +202,7 @@ public:
 
 			auto& obj = j.at(name);
 			auto& offsets = obj.at("data_offsets").as_array();
-			auto a = offsets.front().as_int64() / 4, b = offsets.back().as_int64() / 4;
+			auto a = offsets.front().as_int64() / floatSize, b = offsets.back().as_int64() / floatSize;
 
 			auto start = std::next(mFloatSpace.begin(), a);
 			auto end = std::next(mFloatSpace.begin(), b);
@@ -226,7 +283,6 @@ public:
 
 			};
 
-		mAttnLayers.resize(mAttentionLayersSize);
 		std::for_each(mAttnLayers.begin(), mAttnLayers.end(), createAttentionLayer);
 
 		mFinalLayer.mBias = readTensorByName("ln_f.bias");
@@ -235,10 +291,6 @@ public:
 		assert(floatsUsed == mFloatSpace.size());
 
 		std::puts("Tensors read successfully");
-	}
-
-	void readPostEmbedText() {
-
 	}
 
 	void feedForward() {

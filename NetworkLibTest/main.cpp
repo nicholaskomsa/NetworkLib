@@ -7,7 +7,9 @@ int main() {
 
 	GPT2 gpt2;
 	gpt2.readSafeTensors();
-	FloatSpaceConvert::colorizeFloatSpace("gpt2", gpt2.mFloatSpace);
+	//FloatSpaceConvert::colorizeFloatSpace("gpt2", gpt2.mFloatSpace);
+	gpt2.mDecoder.readEnc();
+
 
 	std::puts("Program Finished press enter to exit");
 	std::cin.get();
