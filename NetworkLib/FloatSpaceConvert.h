@@ -43,7 +43,7 @@ namespace FloatSpaceConvert {
 
 	auto snrgb = [&](auto percent)->std::uint32_t {
 
-		//produce a three bytes (rgb) max value
+		//produce a two bytes (rg) max value
 		constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 16 };
 
 		return maxValue * percent;
@@ -193,14 +193,13 @@ namespace FloatSpaceConvert {
 
 				int pitch = width * (32 / 8);
 
-				//freeimage is writing in bgra format
+				//freeimage is writing in bgra format depending if you are windows vs apple, check your free image file format
 				auto bgra = [&](std::uint32_t rgba) {
 
-					std::uint32_t tmp = rgba;
-					std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&tmp);
+					std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
 					std::swap(bytes[0], bytes[2]);
 
-					return tmp;
+					return rgba;
 					};
 
 				std::transform(image.begin(), image.end(), image.begin(), bgra);

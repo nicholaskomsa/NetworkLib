@@ -8,6 +8,7 @@
 #include <sstream>
 #include <execution>
 #include <boost/json.hpp>
+#include <map>
 
 struct GPT2 {
 
@@ -103,9 +104,11 @@ struct GPT2 {
 	struct Decoder {
 
 		using Word = std::string_view;
-		using Words= std::vector<Word>;
+		using Words = std::vector<Word>;
+		using WordMap= std::map<Word, std::size_t>;
 
 		Words mWords;
+		WordMap mWordMap;//map words to their index
 
 		static constexpr auto mDenseWordsSize = 321428;
 		std::string mDenseWords;
@@ -134,21 +137,80 @@ struct GPT2 {
 				fin.read(reinterpret_cast<char*>(offsets.data()),  mDVocab * sizeof(Offset));
 				fin.read(mDenseWords.data(), mDenseWordsSize);
 
-				for (std::size_t i = 0; i < mWords.size(); ++i) {
+				fin.close();
+				std::puts("file read done");
 
-					auto& [offset,size] = offsets[i];
+				return offsets;		
+				};
 
-					mWords[i] = std::string_view(mDenseWords.data() + offset, size);
-				}
+			auto offsets = readFile();
+
+			for (std::size_t i = 0; i < mWords.size(); ++i) {
+
+				auto& [offset, size] = offsets[i];
+				auto& word = mWords[i];
+
+				word = { mDenseWords.data() + offset, size };
+
+				mWordMap[word] = i;
+			}
+		}
+
+		std::string decode(std::span<std::uint16_t> tokens) {
+
+			std::string text;
+			text.reserve(tokens.size()*3); //avg word size == 3?
+
+			for (auto token : tokens) {
+				text += mWords[token];
+			}
+
+			return text;
+		}
+	} mDecoder;
+
+	struct Data {
+
+		using Token = std::uint16_t;
+		std::vector<Token> mTokens;
+
+		void readData() {
+
+			auto readFile = [&]() {
+
+				//enc file https://github.com/rkaehn/gpt-2/blob/main/assets/data
+				auto fileName = std::format("{}data", mFilePath);
+
+				std::println("Reading file: {}", fileName);
+
+				std::ifstream fin(fileName, std::ios::in | std::ios::binary);
+
+				if (!fin)
+					Error::fileNotFound(fileName);
+
+				std::streampos end = fin.seekg(0, std::ios::end).tellg();
+
+				constexpr auto tokenSize = sizeof(Token);
+				std::streamoff tokensSize = static_cast<std::streamoff>(end) / tokenSize;
+				mTokens.resize(tokensSize);
+
+				fin.seekg(0);
+				fin.read(reinterpret_cast<char*>(mTokens.data()), tokensSize * tokenSize);
 
 				fin.close();
-				std::puts("file read done`");
+				std::puts("file read done");
+
 				};
 
 			readFile();
 
+			std::println(std::cout, "Data Tokens size: {}", mTokens.size());
 		}
-	} mDecoder;
+
+
+
+	} mData;
+
 
 public:
 
@@ -188,7 +250,7 @@ public:
 			assert(knownFileFloatSize == floatsSize);
 
 			fin.close();
-			std::puts("file read done`");
+			std::puts("file read done");
 
 			return header;
 			};
