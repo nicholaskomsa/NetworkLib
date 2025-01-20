@@ -13,7 +13,9 @@
 struct GPT2 {
 
 	static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
-	static constexpr std::size_t mDVocab = 50257;
+	static constexpr std::size_t mDVocab = 50257
+		, mDModel = 768
+		, mDSeq = 1024;
 
 	struct Error : public std::system_error {
 
@@ -59,6 +61,9 @@ struct GPT2 {
 		float& at(std::size_t row, std::size_t col) {
 			return  mTensor[row * mX + col];
 		}
+		float& atT(std::size_t row, std::size_t col) {
+			return  mTensor[col * mY + row];
+		}
 		float& at(std::size_t depth, std::size_t row, std::size_t col) {
 			return  mTensor[depth * (mY * mX) + row * mX + col];
 		}
@@ -69,9 +74,17 @@ struct GPT2 {
 		TensorView span() {
 			return { &at(0), mX };
 		}
+		TensorView spanT() {
+			return { &at(0), mY };
+		}
+
 		TensorView span(std::size_t row) {
 			return { &at(row,0), mX };
 		}
+		TensorView spanT(size_t col) {
+			return { &atT(0, col), mY };
+		}
+
 		TensorView span(std::size_t depth, std::size_t row) {
 			return { &at(depth, row, 0), mX };
 		}
@@ -207,8 +220,6 @@ struct GPT2 {
 			std::println(std::cout, "Data Tokens size: {}", mTokens.size());
 		}
 
-
-
 	} mData;
 
 
@@ -237,12 +248,13 @@ public:
 			std::string header; header.resize(headerSize);
 			fin.read(header.data(), header.size());
 
-			std::streampos current = fin.tellg(), end = fin.seekg(0, std::ios::end).tellg();
+			std::streampos current = fin.tellg()
+				, end = fin.seekg(0, std::ios::end).tellg(); //get length of file
+			fin.seekg(current);
 
 			std::streamoff floatsSize = static_cast<std::streamoff>(end - current) / floatSize;
 			mFloatSpace.resize(floatsSize);
 
-			fin.seekg(current);
 			fin.read(reinterpret_cast<char*>(mFloatSpace.data()), floatsSize * floatSize);
 
 			constexpr std::size_t knownFileFloatSize = 548090880 / floatSize;
@@ -356,6 +368,64 @@ public:
 	}
 
 	void feedForward() {
+
+		constexpr auto inputSize = 64;
+
+		Floats floats(mDSeq * mDModel)
+			, floats2(mDSeq * mDModel);
+
+		Tensor activations(floats, mDSeq, mDModel );
+		Tensor firstLayerActivations( floats2, mDSeq, mDModel );
+		
+		for (std::size_t i = 0; i < inputSize; ++i) { //inputSize vs dseq
+
+			std::uint16_t token = mData.mTokens[i];
+
+			//wte dvocab * dmodel
+			auto wte = mWteWeight.spanT(token);//this is transposed span over mDModel
+			//wpe dseq * dmodel
+			auto wpe = mWpeWeight.spanT(i); //this is transposed?
+
+			auto activationsOut = activations.spanT(i);
+
+			for (std::size_t w = 0; w < mDModel; ++w)
+				activationsOut[w] = wte[w] + wpe[w];
+		}
+
+		auto sum = std::reduce(activations.mTensor.begin(), activations.mTensor.end());
+		std::println(std::cout, "sum: {}", sum);//==-30.5
+
+		for (std::size_t i = 0; i < inputSize; ++i) {
+
+			auto activationsOut = activations.spanT(i);
+
+			auto mean = std::reduce(activationsOut.begin(), activationsOut.end()) / mDModel;
+
+			auto meanDiffSq = std::reduce(activationsOut.begin(), activationsOut.end(), 0.0f,
+				[&](auto sum, auto w) {
+					auto diff = w - mean;
+					return sum + diff * diff;
+				}) / mDModel;
+
+			auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
+
+			auto& firstLayer = mAttnLayers.front();
+			auto ln1Bias = firstLayer.mL1.mBias.span();
+			auto ln1Weight = firstLayer.mL1.mWeight.span();
+
+			auto out = firstLayerActivations.spanT(i);
+
+			std::transform(activationsOut.begin(), activationsOut.end(), out.begin(),
+				[&](auto& w) {
+					std::size_t idx = &w - activationsOut.data();
+
+					auto inNorm = (w - mean) * r_stdDev;
+					return inNorm * ln1Weight[idx] + ln1Bias[idx];
+				});
+		}
+
+		sum = std::reduce(firstLayerActivations.mTensor.begin(), firstLayerActivations.mTensor.end());
+		std::println(std::cout, "sum: {}", sum);
 
 	}
 };

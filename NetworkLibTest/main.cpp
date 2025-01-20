@@ -11,10 +11,15 @@ int main() {
 	gpt2.mDecoder.readEnc();
 	gpt2.mData.readData();
 	//auto text = gpt2.mDecoder.decode(gpt2.mData.mTokens);
-	//std::cout << text;
-
+//	std::cout << text;
+	
 	//for( auto word : gpt2.mDecoder.mWords )
 	//	std::cout << word << std::endl;
+
+
+	gpt2.feedForward();
+
+
 
 	std::puts("Program Finished press enter to exit");
 	std::cin.get();
