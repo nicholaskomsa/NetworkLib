@@ -95,22 +95,25 @@ struct GPT2 {
 
 	struct MLP {
 		Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
+		Tensor mActivations;
 	};
 	struct LinearLayer {
 		Tensor mBias, mWeight;
+		Tensor mActivations;
 	};
 	struct AttnLayer {
 
 		LinearLayer mL1, mL2;
 
 		Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
+		Tensor mCAttnActivations;
 
 		MLP mMLP;
 	};
 
-	Floats mFloatSpace;
+	Floats mTensorSpace, mActivationSpace;
 
-	Tensor mWpeWeight, mWteWeight;
+	Tensor mWpeWeight, mWteWeight, mWActivations;
 	LinearLayer mFinalLayer;
 	std::array<AttnLayer,12> mAttnLayers;
 
@@ -253,9 +256,9 @@ public:
 			fin.seekg(current);
 
 			std::streamoff floatsSize = static_cast<std::streamoff>(end - current) / floatSize;
-			mFloatSpace.resize(floatsSize);
+			mTensorSpace.resize(floatsSize);
 
-			fin.read(reinterpret_cast<char*>(mFloatSpace.data()), floatsSize * floatSize);
+			fin.read(reinterpret_cast<char*>(mTensorSpace.data()), floatsSize * floatSize);
 
 			constexpr std::size_t knownFileFloatSize = 548090880 / floatSize;
 
@@ -278,8 +281,8 @@ public:
 			auto& offsets = obj.at("data_offsets").as_array();
 			auto a = offsets.front().as_int64() / floatSize, b = offsets.back().as_int64() / floatSize;
 
-			auto start = std::next(mFloatSpace.begin(), a);
-			auto end = std::next(mFloatSpace.begin(), b);
+			auto start = std::next(mTensorSpace.begin(), a);
+			auto end = std::next(mTensorSpace.begin(), b);
 			auto size = std::distance(start, end);
 
 			Tensor::TensorView tensorView(start, size);
@@ -362,20 +365,34 @@ public:
 		mFinalLayer.mBias = readTensorByName("ln_f.bias");
 		mFinalLayer.mWeight = readTensorByName("ln_f.weight");
 
-		assert(floatsUsed == mFloatSpace.size());
+		assert(floatsUsed == mTensorSpace.size());
 
 		std::puts("Tensors read successfully");
-	}
+
+
+		auto embedSize = mDSeq * mDModel;
+		auto attnSize = mDModel * mDModel * 3;
+
+		mActivationSpace.resize(embedSize + (embedSize + attnSize) * mAttnLayers.size() );
+
+		auto begin = mActivationSpace.begin();
+
+		mWActivations = { {begin, embedSize}, mDSeq, mDModel };
+		std::advance(begin, embedSize);
+
+		for(auto& layer : mAttnLayers) {
+			
+			layer.mL1.mActivations = { {begin, embedSize}, mDSeq, mDModel };
+			std::advance(begin, embedSize);
+
+			layer.mCAttnActivations = { {begin, attnSize}, mDModel, mDModel*3 };
+			std::advance(begin, attnSize);
+		}
+	}	
 
 	void feedForward() {
 
-		constexpr auto inputSize = 64;
-
-		Floats floats(mDSeq * mDModel)
-			, floats2(mDSeq * mDModel);
-
-		Tensor activations(floats, mDSeq, mDModel );
-		Tensor firstLayerActivations( floats2, mDSeq, mDModel );
+		constexpr auto inputSize = 64; // vs mDSeq
 		
 		for (std::size_t i = 0; i < inputSize; ++i) { //inputSize vs dseq
 
@@ -384,48 +401,61 @@ public:
 			//wte dvocab * dmodel
 			auto wte = mWteWeight.spanT(token);//this is transposed span over mDModel
 			//wpe dseq * dmodel
-			auto wpe = mWpeWeight.spanT(i); //this is transposed?
+			auto wpe = mWpeWeight.spanT(i); 
 
-			auto activationsOut = activations.spanT(i);
+			auto wActivations = mWActivations.spanT(i);
 
 			for (std::size_t w = 0; w < mDModel; ++w)
-				activationsOut[w] = wte[w] + wpe[w];
+				wActivations[w] = wte[w] + wpe[w];
 		}
 
-		auto sum = std::reduce(activations.mTensor.begin(), activations.mTensor.end());
-		std::println(std::cout, "sum: {}", sum);//==-30.5
+		//auto sum = std::reduce(activations.mTensor.begin(), activations.mTensor.end());
+		//std::println(std::cout, "sum: {}", sum);//==-30.5
+
+		auto layer_i = 0;
 
 		for (std::size_t i = 0; i < inputSize; ++i) {
 
-			auto activationsOut = activations.spanT(i);
+			auto wActivations = mWActivations.spanT(i);
 
-			auto mean = std::reduce(activationsOut.begin(), activationsOut.end()) / mDModel;
+			auto mean = std::reduce(wActivations.begin(), wActivations.end()) / mDModel;
 
-			auto meanDiffSq = std::reduce(activationsOut.begin(), activationsOut.end(), 0.0f,
-				[&](auto sum, auto w) {
-					auto diff = w - mean;
+			auto meanDiffSq = std::reduce(wActivations.begin(), wActivations.end(), 0.0f,
+				[&](auto sum, auto a) {
+					auto diff = a - mean;
 					return sum + diff * diff;
 				}) / mDModel;
 
 			auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-			auto& firstLayer = mAttnLayers.front();
-			auto ln1Bias = firstLayer.mL1.mBias.span();
-			auto ln1Weight = firstLayer.mL1.mWeight.span();
+			auto& layer = mAttnLayers[layer_i];
+			auto ln1Bias = layer.mL1.mBias.span();
+			auto ln1Weight = layer.mL1.mWeight.span();
+			auto layerOut = layer.mL1.mActivations.spanT(i);
 
-			auto out = firstLayerActivations.spanT(i);
+			std::transform(wActivations.begin(), wActivations.end(), layerOut.begin(),
+				[&](auto& a) {
+					std::size_t idx = &a - wActivations.data();
 
-			std::transform(activationsOut.begin(), activationsOut.end(), out.begin(),
-				[&](auto& w) {
-					std::size_t idx = &w - activationsOut.data();
-
-					auto inNorm = (w - mean) * r_stdDev;
+					auto inNorm = (a - mean) * r_stdDev;
 					return inNorm * ln1Weight[idx] + ln1Bias[idx];
 				});
 		}
 
-		sum = std::reduce(firstLayerActivations.mTensor.begin(), firstLayerActivations.mTensor.end());
-		std::println(std::cout, "sum: {}", sum);
+		//auto sum = std::reduce(firstLayerActivations.mTensor.begin(), firstLayerActivations.mTensor.end());
+		//std::println(std::cout, "sum: {}", sum);
+
+		for (std::size_t i = 0; i < inputSize; ++i) {
+
+			auto& layer = mAttnLayers[layer_i];
+			auto layerIn = layer.mL1.mActivations.spanT(i);
+
+			auto weight = layer.mCAttnWeight.span();
+			auto bias = layer.mCAttnBias.span();
+
+			auto layerOut = layer.mCAttnActivations.spanT(i*3);
+
+		}
 
 	}
 };
