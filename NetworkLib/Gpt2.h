@@ -36,10 +36,7 @@ struct GPT2 {
 		std::size_t mX{ 0 }, mY{ 0 }, mZ{ 0 }, mW{ 0 };
 
 		Tensor() = default;
-		Tensor(TensorView floats, std::size_t x) : mTensor(floats), mX(x) {}
-		Tensor(TensorView floats, std::size_t x, std::size_t y) : mTensor(floats), mX(x), mY(y) {}
-		Tensor(TensorView floats, std::size_t x, std::size_t y, std::size_t z) : mTensor(floats), mX(x), mY(y), mZ(z) {}
-		Tensor(TensorView floats, std::size_t x, std::size_t y, std::size_t z, std::size_t w) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
+		Tensor(TensorView floats, std::size_t x, std::size_t y=0, std::size_t z=0, std::size_t w=0) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
 
 
 		std::size_t size() const {
@@ -371,7 +368,7 @@ public:
 
 
 		auto embedSize = mDSeq * mDModel;
-		auto attnSize = mDModel * mDModel * 3;
+		auto attnSize = mDSeq * mDModel * 3;
 
 		mActivationSpace.resize(embedSize + (embedSize + attnSize) * mAttnLayers.size() );
 
@@ -385,7 +382,7 @@ public:
 			layer.mL1.mActivations = { {begin, embedSize}, mDSeq, mDModel };
 			std::advance(begin, embedSize);
 
-			layer.mCAttnActivations = { {begin, attnSize}, mDModel, mDModel*3 };
+			layer.mCAttnActivations = { {begin, attnSize}, mDSeq, mDModel*3 };
 			std::advance(begin, attnSize);
 		}
 	}	
@@ -418,13 +415,13 @@ public:
 
 			auto wActivations = mWActivations.spanT(i);
 
-			auto mean = std::reduce(wActivations.begin(), wActivations.end()) / mDModel;
+			auto mean = std::reduce(wActivations.begin(), wActivations.end()) / wActivations.size();
 
 			auto meanDiffSq = std::reduce(wActivations.begin(), wActivations.end(), 0.0f,
-				[&](auto sum, auto a) {
-					auto diff = a - mean;
+				[&](auto sum, auto w) {
+					auto diff = w - mean;
 					return sum + diff * diff;
-				}) / mDModel;
+				}) / wActivations.size();
 
 			auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
@@ -433,29 +430,40 @@ public:
 			auto ln1Weight = layer.mL1.mWeight.span();
 			auto layerOut = layer.mL1.mActivations.spanT(i);
 
-			std::transform(wActivations.begin(), wActivations.end(), layerOut.begin(),
-				[&](auto& a) {
-					std::size_t idx = &a - wActivations.data();
-
-					auto inNorm = (a - mean) * r_stdDev;
-					return inNorm * ln1Weight[idx] + ln1Bias[idx];
-				});
+			for (std::size_t w = 0; w < wActivations.size(); ++w) {
+				auto inNorm = (wActivations[w] - mean) * r_stdDev;
+				layerOut[w] = inNorm * ln1Weight[w] + ln1Bias[w];
+			}
 		}
 
-		//auto sum = std::reduce(firstLayerActivations.mTensor.begin(), firstLayerActivations.mTensor.end());
-		//std::println(std::cout, "sum: {}", sum);
+		//auto& layer = mAttnLayers[layer_i];
+	//	auto sum = std::reduce(layer.mL1.mActivations.mTensor.begin(), layer.mL1.mActivations.mTensor.end());
+		//std::println(std::cout, "sum: {}", sum); //== -334
 
 		for (std::size_t i = 0; i < inputSize; ++i) {
 
 			auto& layer = mAttnLayers[layer_i];
+
 			auto layerIn = layer.mL1.mActivations.spanT(i);
 
-			auto weight = layer.mCAttnWeight.span();
 			auto bias = layer.mCAttnBias.span();
 
-			auto layerOut = layer.mCAttnActivations.spanT(i*3);
+			auto out = layer.mCAttnActivations.spanT(i);
 
+			std::copy(bias.begin(), bias.end(), out.begin());
+
+			for (int m = 0; m < mDModel; ++m) {
+			
+				auto in = layerIn[m];
+				auto w = layer.mCAttnWeight.spanT(m);
+
+				for (int n = 0; n < 3 * mDModel; ++n)
+					out[n] += w[n] * in;
+			}
 		}
 
+		auto& layer = mAttnLayers[layer_i];
+		auto sum = std::reduce(layer.mCAttnActivations.mTensor.begin(), layer.mCAttnActivations.mTensor.end());
+		std::println(std::cout, "sum: {}", sum); //== -3325k
 	}
 };
