@@ -14,8 +14,11 @@ struct GPT2 {
 
 	static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
 	static constexpr std::size_t mDVocab = 50257
-		, mDModel = 768
-		, mDSeq = 1024;
+		, mDModel = 768, mDModel3 = mDModel * 3
+		, mDSeq = 1024
+		, mHeadNum = 12
+		, mHeadsPerDModel = mDModel / mHeadNum
+		, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2;
 
 	struct Error : public std::system_error {
 
@@ -55,15 +58,21 @@ struct GPT2 {
 		float& at(std::size_t col) {
 			return mTensor[col];
 		}
+
 		float& at(std::size_t row, std::size_t col) {
 			return  mTensor[row * mX + col];
 		}
 		float& atT(std::size_t row, std::size_t col) {
 			return  mTensor[col * mY + row];
 		}
+
 		float& at(std::size_t depth, std::size_t row, std::size_t col) {
 			return  mTensor[depth * (mY * mX) + row * mX + col];
 		}
+		float& atT(std::size_t depth, std::size_t row, std::size_t col) {
+			return  mTensor[depth * (mY * mX) + col * mY + row];
+		}
+
 		float& at(std::size_t w, std::size_t z, std::size_t y, std::size_t x) {
 			return  mTensor[w * (mZ * mY * mX) + z * (mY * mX) + y * mX + x];
 		}
@@ -79,12 +88,16 @@ struct GPT2 {
 			return { &at(row,0), mX };
 		}
 		TensorView spanT(size_t col) {
-			return { &atT(0, col), mY };
+ 			return { &atT(0, col), mY };
 		}
 
 		TensorView span(std::size_t depth, std::size_t row) {
 			return { &at(depth, row, 0), mX };
 		}
+		TensorView spanT(std::size_t depth, std::size_t col) {
+			return { &at(depth, 0, col), mX };
+		}
+
 		TensorView span(std::size_t w, std::size_t z, std::size_t y) {
 			return { &at(w, z, y, 0), mX };
 		}
@@ -103,7 +116,7 @@ struct GPT2 {
 		LinearLayer mL1, mL2;
 
 		Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
-		Tensor mCAttnActivations;
+		Tensor mCAttnActivations, mAttnActivations, mAttnSoftmaxActivations, mAttnZ;
 
 		MLP mMLP;
 	};
@@ -118,7 +131,7 @@ struct GPT2 {
 
 		using Word = std::string_view;
 		using Words = std::vector<Word>;
-		using WordMap= std::map<Word, std::size_t>;
+		using WordMap= std::map<Word, std::uint16_t>;
 
 		Words mWords;
 		WordMap mWordMap;//map words to their index
@@ -221,7 +234,6 @@ struct GPT2 {
 		}
 
 	} mData;
-
 
 public:
 
@@ -366,32 +378,48 @@ public:
 
 		std::puts("Tensors read successfully");
 
+		auto createActivationSpace = [&]() {
 
-		auto embedSize = mDSeq * mDModel;
-		auto attnSize = mDSeq * mDModel * 3;
+			auto embedSize = mDSeq * mDModel;
+			auto cAttnSize = mDSeq * mDModel3;
+			auto attnSize = mDSeq * mDSeq * mHeadNum;
+			auto attnSoftMaxSize = attnSize;
+			auto zSize = mDSeq * mDModel;
 
-		mActivationSpace.resize(embedSize + (embedSize + attnSize) * mAttnLayers.size() );
+			mActivationSpace.resize(embedSize + (embedSize + cAttnSize + attnSize + attnSoftMaxSize + zSize) * mAttnLayers.size());
 
-		auto begin = mActivationSpace.begin();
+			auto begin = mActivationSpace.begin();
 
-		mWActivations = { {begin, embedSize}, mDSeq, mDModel };
-		std::advance(begin, embedSize);
-
-		for(auto& layer : mAttnLayers) {
-			
-			layer.mL1.mActivations = { {begin, embedSize}, mDSeq, mDModel };
+			mWActivations = { {begin, embedSize}, mDSeq, mDModel };
 			std::advance(begin, embedSize);
 
-			layer.mCAttnActivations = { {begin, attnSize}, mDSeq, mDModel*3 };
-			std::advance(begin, attnSize);
-		}
+			for (auto& layer : mAttnLayers) {
+
+				layer.mL1.mActivations = { {begin, embedSize}, mDSeq, mDModel };
+				std::advance(begin, embedSize);
+
+				layer.mCAttnActivations = { {begin, cAttnSize}, mDSeq, mDModel3 };
+				std::advance(begin, cAttnSize);
+
+				layer.mAttnActivations = { {begin, attnSize}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, attnSize);
+
+				layer.mAttnSoftmaxActivations = { {begin, attnSoftMaxSize}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, attnSoftMaxSize);
+
+				layer.mAttnZ = { {begin, zSize}, mDSeq, mDModel };
+				std::advance(begin, zSize);
+			}
+			};
+		createActivationSpace();
 	}	
 
 	void feedForward() {
 
-		constexpr auto inputSize = 64; // vs mDSeq
-		
-		for (std::size_t i = 0; i < inputSize; ++i) { //inputSize vs dseq
+		constexpr auto testInputSize = 64; // vs mDSeq
+		const auto r_sqrtHeadsPerModel = 1.0f / std::sqrtf(mHeadsPerDModel);
+
+		for (std::size_t i = 0; i < testInputSize; ++i) { //inputSize vs dseq
 
 			std::uint16_t token = mData.mTokens[i];
 
@@ -409,9 +437,10 @@ public:
 		//auto sum = std::reduce(activations.mTensor.begin(), activations.mTensor.end());
 		//std::println(std::cout, "sum: {}", sum);//==-30.5
 
+
 		auto layer_i = 0;
 
-		for (std::size_t i = 0; i < inputSize; ++i) {
+		for (std::size_t i = 0; i < testInputSize; ++i) {
 
 			auto wActivations = mWActivations.spanT(i);
 
@@ -440,30 +469,112 @@ public:
 	//	auto sum = std::reduce(layer.mL1.mActivations.mTensor.begin(), layer.mL1.mActivations.mTensor.end());
 		//std::println(std::cout, "sum: {}", sum); //== -334
 
-		for (std::size_t i = 0; i < inputSize; ++i) {
+		for (std::size_t i = 0; i < testInputSize; ++i) {
 
 			auto& layer = mAttnLayers[layer_i];
 
-			auto layerIn = layer.mL1.mActivations.spanT(i);
-
+			auto layerInput = layer.mL1.mActivations.spanT(i);
 			auto bias = layer.mCAttnBias.span();
-
 			auto out = layer.mCAttnActivations.spanT(i);
 
 			std::copy(bias.begin(), bias.end(), out.begin());
 
-			for (int m = 0; m < mDModel; ++m) {
+			for (std::size_t m = 0; m < mDModel; ++m) {
 			
-				auto in = layerIn[m];
+				auto in = layerInput[m];
 				auto w = layer.mCAttnWeight.spanT(m);
 
-				for (int n = 0; n < 3 * mDModel; ++n)
+				for (std::size_t n = 0; n < mDModel3; ++n)
 					out[n] += w[n] * in;
 			}
+			//qkv
 		}
 
+		//auto& layer = mAttnLayers[layer_i];
+		//auto sum = std::reduce(layer.mCAttnActivations.mTensor.begin(), layer.mCAttnActivations.mTensor.end());
+		///std::println(std::cout, "sum: {}", sum); //== -3325
+
 		auto& layer = mAttnLayers[layer_i];
-		auto sum = std::reduce(layer.mCAttnActivations.mTensor.begin(), layer.mCAttnActivations.mTensor.end());
-		std::println(std::cout, "sum: {}", sum); //== -3325k
+
+		//activations z cleared here
+		auto zoutTensor = layer.mAttnZ.mTensor;
+		std::fill(zoutTensor.begin(), zoutTensor.end(), 0.0f);
+
+		for (std::size_t h = 0; h < mHeadNum; ++h) {
+
+			const auto headOffset = h * mHeadsPerDModel;
+
+			for( std::size_t q_i =0; q_i < testInputSize; ++q_i) {
+
+				auto qout = layer.mCAttnActivations.spanT(q_i);
+				auto attnOut = layer.mAttnActivations.spanT(h, q_i);
+				auto zout = layer.mAttnZ.spanT(q_i);
+				auto softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
+
+				auto calculateQKAtten = [&]() {
+					Tensor::TensorView q = { qout.data(), mDModel };
+					Tensor::TensorView qh = { q.data() + headOffset, mHeadsPerDModel };
+
+					for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
+
+						auto kout = layer.mCAttnActivations.spanT(k_i);
+						Tensor::TensorView k = { kout.data() + mKOffset, mDModel };
+						Tensor::TensorView kh = { k.data() + headOffset, mHeadsPerDModel };
+
+						float dot = 0.0f;
+
+						for (std::size_t n = 0; n < qh.size(); ++n) {
+							dot += qh[n] * kh[n];
+						}
+
+						attnOut[k_i] = dot * r_sqrtHeadsPerModel;
+					}
+					};
+				auto qkAttnSoftmax = [&]() {
+
+					auto softmaxMax = *std::max_element(softmaxOut.begin(), softmaxOut.end());
+
+					float softmaxSum = 0.0f;
+
+					for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
+
+						auto softmaxExp_i = std::expf(attnOut[k_i] - softmaxMax);
+
+						softmaxOut[k_i] = softmaxExp_i;
+
+						softmaxSum += softmaxExp_i;
+					}
+
+					auto r_softmaxSum = 1.0f / softmaxSum;
+
+					for (std::size_t k_i = 0; k_i <= q_i; ++k_i)
+						softmaxOut[k_i] *= r_softmaxSum;
+					};
+				auto calculateVAtten = [&]() {
+					Tensor::TensorView zh = { zout.data() + headOffset, mHeadsPerDModel };
+
+					for (std::size_t v_i = 0; v_i <= q_i; ++v_i) {
+
+						auto vout = layer.mCAttnActivations.spanT(v_i);
+						Tensor::TensorView v = { vout.data() + mVOffset, mDModel };
+						Tensor::TensorView vh = { v.data() + headOffset, mHeadsPerDModel };
+
+						auto factor = softmaxOut[v_i];
+
+						for (std::size_t n = 0; n < vh.size(); ++n) {
+							zh[n] += vh[n] * factor;
+						}
+					}
+					};
+
+				calculateQKAtten();
+				qkAttnSoftmax();
+				calculateVAtten();
+			}
+		}
+		
+		auto sum = std::reduce(layer.mAttnZ.mTensor.begin(), layer.mAttnZ.mTensor.end());
+		
+		std::println(std::cout, "vatten sum: {}", sum); //== 454
 	}
 };
