@@ -105,18 +105,19 @@ struct GPT2 {
 
 		void forward(auto& outputTensor, auto& weightTensor, auto& biasTensor) const {
 
+			const auto& bias = biasTensor.span();
+
 			for (std::size_t i = 0; i < mTestInputSize; ++i) {
 
-				auto input = spanT(i);
-				auto bias = biasTensor.span();
-				auto output = outputTensor.spanT(i);
+				const auto& input = spanT(i);
+				const auto& output = outputTensor.spanT(i);
 
 				std::copy(bias.begin(), bias.end(), output.begin());
 
 				for (std::size_t m = 0; m < input.size(); ++m) {
 
-					auto in = input[m];
-					auto w = weightTensor.spanT(m);
+					const auto& in = input[m];
+					const auto& w = weightTensor.spanT(m);
 
 					for (std::size_t n = 0; n < output.size(); ++n)
 						output[n] += w[n] * in;
@@ -135,27 +136,28 @@ struct GPT2 {
 
 		void normalise(auto& input) {
 
-			for (std::size_t i = 0; i < mTestInputSize; ++i) {
+			for (std::size_t m = 0; m < mTestInputSize; ++m) {
 
-				auto wActivations = input.spanT(i);
+				const auto& i = input.spanT(m);
+				const auto& o = mActivations.spanT(m);
 
-				auto mean = std::reduce(wActivations.begin(), wActivations.end()) / wActivations.size();
+				const auto mean = std::reduce(i.begin(), i.end()) / i.size();
 
-				auto meanDiffSq = std::reduce(wActivations.begin(), wActivations.end(), 0.0f,
-					[&](auto sum, auto w) {
-						auto diff = w - mean;
+				auto meanDiffSq = std::reduce(i.begin(), i.end(), 0.0f,
+					[&](auto sum, auto x) {
+						auto diff = x - mean;
 						return sum + diff * diff;
-					}) / wActivations.size();
+					}) / i.size();
 
 				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-				auto ln1Bias = mBias.span();
-				auto ln1Weight = mWeight.span();
-				auto layerOut = mActivations.spanT(i);
+				const auto& b = mBias.span();
+				const auto& w = mWeight.span();
 
-				for (std::size_t w = 0; w < wActivations.size(); ++w) {
-					auto inNorm = (wActivations[w] - mean) * r_stdDev;
-					layerOut[w] = inNorm * ln1Weight[w] + ln1Bias[w];
+				float inNorm = 0.0f;
+				for (std::size_t n = 0; n < i.size(); ++n) {
+					inNorm = (i[n] - mean) * r_stdDev;
+					o[n] = inNorm * w[n] + b[n];
 				}
 			}
 		}
@@ -476,25 +478,23 @@ public:
 			Token token = mData.mTokens[i];
 
 			//wte dvocab * dmodel
-			auto wte = mWteWeight.spanT(token);
+			const auto& wte = mWteWeight.spanT(token);
 			//wpe dseq * dmodel
-			auto wpe = mWpeWeight.spanT(i);
+			const auto& wpe = mWpeWeight.spanT(i);
 
-			auto wActivations = mWActivations.spanT(i);
+			const auto& wActivations = mWActivations.spanT(i);
 
 			for (std::size_t w = 0; w < mDModel; ++w)
 				wActivations[w] = wte[w] + wpe[w];
 		}
 
-		for (std::size_t layer_i = 0; layer_i < 1/*mAttnLayers.size()*/; ++layer_i) {
-
-			auto& layer = mAttnLayers[layer_i];
+		std::for_each(mAttnLayers.begin(), mAttnLayers.begin()+1 /*vs end*/, [&](auto& layer) {
 
 			layer.mL1.normalise(mWActivations);
 			layer.mL1.mActivations.forward(layer.mCAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
 
 			//activations z cleared here
-			auto zoutTensor = layer.mAttnZ.mTensor;
+			const auto& zoutTensor = layer.mAttnZ.mTensor;
 			std::fill(zoutTensor.begin(), zoutTensor.end(), 0.0f);
 
 			for (std::size_t h = 0; h < mHeadNum; ++h) {
@@ -503,21 +503,22 @@ public:
 
 				for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) {
 
-					auto qout = layer.mCAttnActivations.spanT(q_i);
-					auto attnOut = layer.mAttnActivations.spanT(h, q_i);
-					auto zout = layer.mAttnZ.spanT(q_i);
-					auto softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
+					const auto& qout = layer.mCAttnActivations.spanT(q_i);
+					const auto& attnOut = layer.mAttnActivations.spanT(h, q_i);
+					const auto& zout = layer.mAttnZ.spanT(q_i);
+					const auto& softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
 
 					auto calculateQKAtten = [&]() {
 
 						Tensor::TensorView q = { qout.data() + mQOffset, mDModel };
 						Tensor::TensorView qh = { q.data() + headOffset, mHeadsPerDModel };
+						Tensor::TensorView k, kh;
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto kout = layer.mCAttnActivations.spanT(m);
-							Tensor::TensorView k = { kout.data() + mKOffset, mDModel };
-							Tensor::TensorView kh = { k.data() + headOffset, mHeadsPerDModel };
+							const auto& kout = layer.mCAttnActivations.spanT(m);
+							k = { kout.data() + mKOffset, mDModel };
+							kh = { k.data() + headOffset, mHeadsPerDModel };
 
 							float dot = 0.0f;
 
@@ -529,37 +530,41 @@ public:
 						}
 						};
 
-					auto softmaxQ = [&](auto& input, auto& output) {
+					auto softmaxQ = [&](const auto& input, const auto& output) {
 
 						const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
 
 						float softmaxSum = 0.0f;
+						float softmaxExp = 0.0f;
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto softmaxExp = std::expf(attnOut[m] - softmaxMax);
+							softmaxExp = std::expf(attnOut[m] - softmaxMax);
 
 							output[m] = softmaxExp;
 
 							softmaxSum += softmaxExp;
 						}
 
-						auto r_softmaxSum = 1.0f / softmaxSum;
+						const auto r_softmaxSum = 1.0f / softmaxSum;
 
 						for (std::size_t m = 0; m <= q_i; ++m)
 							output[m] *= r_softmaxSum;
 						};
 
 					auto calculateVAtten = [&]() {
+
 						Tensor::TensorView zh = { zout.data() + headOffset, mHeadsPerDModel };
+						Tensor::TensorView v, vh;
+						auto factor = 0.0f;
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto vout = layer.mCAttnActivations.spanT(m);
-							Tensor::TensorView v = { vout.data() + mVOffset, mDModel };
-							Tensor::TensorView vh = { v.data() + headOffset, mHeadsPerDModel };
+							const auto& vout = layer.mCAttnActivations.spanT(m);
+							v = { vout.data() + mVOffset, mDModel };
+							vh = { v.data() + headOffset, mHeadsPerDModel };
 
-							auto factor = softmaxOut[m];
+							factor = softmaxOut[m];
 
 							for (std::size_t n = 0; n < vh.size(); ++n) {
 								zh[n] += vh[n] * factor;
@@ -574,7 +579,8 @@ public:
 			}
 
 			layer.mAttnZ.forward(layer.mCProjActivations, layer.mCProjWeight, layer.mCProjBias);
-		}
+
+			});
 
 		auto checkSum = [&](auto& layer) {
 
