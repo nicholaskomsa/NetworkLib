@@ -539,7 +539,7 @@ public:
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							softmaxExp = std::expf(attnOut[m] - softmaxMax);
+							softmaxExp = std::expf(input[m] - softmaxMax);
 
 							output[m] = softmaxExp;
 
