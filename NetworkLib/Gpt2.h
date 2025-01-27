@@ -132,6 +132,33 @@ struct GPT2 {
 	struct LinearLayer {
 		Tensor mBias, mWeight;
 		Tensor mActivations;
+
+		void normalise(auto& input) {
+
+			for (std::size_t i = 0; i < mTestInputSize; ++i) {
+
+				auto wActivations = input.spanT(i);
+
+				auto mean = std::reduce(wActivations.begin(), wActivations.end()) / wActivations.size();
+
+				auto meanDiffSq = std::reduce(wActivations.begin(), wActivations.end(), 0.0f,
+					[&](auto sum, auto w) {
+						auto diff = w - mean;
+						return sum + diff * diff;
+					}) / wActivations.size();
+
+				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
+
+				auto ln1Bias = mBias.span();
+				auto ln1Weight = mWeight.span();
+				auto layerOut = mActivations.spanT(i);
+
+				for (std::size_t w = 0; w < wActivations.size(); ++w) {
+					auto inNorm = (wActivations[w] - mean) * r_stdDev;
+					layerOut[w] = inNorm * ln1Weight[w] + ln1Bias[w];
+				}
+			}
+		}
 	};
 	struct AttnLayer {
 
@@ -449,7 +476,7 @@ public:
 			Token token = mData.mTokens[i];
 
 			//wte dvocab * dmodel
-			auto wte = mWteWeight.spanT(token);//this is transposed span over mDModel
+			auto wte = mWteWeight.spanT(token);
 			//wpe dseq * dmodel
 			auto wpe = mWpeWeight.spanT(i);
 
@@ -462,30 +489,8 @@ public:
 		for (std::size_t layer_i = 0; layer_i < 1/*mAttnLayers.size()*/; ++layer_i) {
 
 			auto& layer = mAttnLayers[layer_i];
-			for (std::size_t i = 0; i < mTestInputSize; ++i) {
 
-				auto wActivations = mWActivations.spanT(i);
-
-				auto mean = std::reduce(wActivations.begin(), wActivations.end()) / wActivations.size();
-
-				auto meanDiffSq = std::reduce(wActivations.begin(), wActivations.end(), 0.0f,
-					[&](auto sum, auto w) {
-						auto diff = w - mean;
-						return sum + diff * diff;
-					}) / wActivations.size();
-
-				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
-
-				auto ln1Bias = layer.mL1.mBias.span();
-				auto ln1Weight = layer.mL1.mWeight.span();
-				auto layerOut = layer.mL1.mActivations.spanT(i);
-
-				for (std::size_t w = 0; w < wActivations.size(); ++w) {
-					auto inNorm = (wActivations[w] - mean) * r_stdDev;
-					layerOut[w] = inNorm * ln1Weight[w] + ln1Bias[w];
-				}
-			}
-
+			layer.mL1.normalise(mWActivations);
 			layer.mL1.mActivations.forward(layer.mCAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
 
 			//activations z cleared here
