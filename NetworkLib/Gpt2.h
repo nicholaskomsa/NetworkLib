@@ -509,12 +509,13 @@ public:
 					auto softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
 
 					auto calculateQKAtten = [&]() {
+
 						Tensor::TensorView q = { qout.data() + mQOffset, mDModel };
 						Tensor::TensorView qh = { q.data() + headOffset, mHeadsPerDModel };
 
-						for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
+						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto kout = layer.mCAttnActivations.spanT(k_i);
+							auto kout = layer.mCAttnActivations.spanT(m);
 							Tensor::TensorView k = { kout.data() + mKOffset, mDModel };
 							Tensor::TensorView kh = { k.data() + headOffset, mHeadsPerDModel };
 
@@ -524,63 +525,41 @@ public:
 								dot += qh[n] * kh[n];
 							}
 
-							attnOut[k_i] = dot * r_sqrtHeadsPerDModel;
+							attnOut[m] = dot * r_sqrtHeadsPerDModel;
 						}
 						};
+
 					auto softmaxQ = [&](auto& input, auto& output) {
 
 						const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
 
 						float softmaxSum = 0.0f;
 
-						for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
+						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto softmaxExp = std::expf(attnOut[k_i] - softmaxMax);
+							auto softmaxExp = std::expf(attnOut[m] - softmaxMax);
 
-							output[k_i] = softmaxExp;
-
-							softmaxSum += softmaxExp;
-						}
-
-						auto r_softmaxSum = 1.0f / softmaxSum;
-
-						for (std::size_t k_i = 0; k_i <= q_i; ++k_i)
-							output[k_i] *= r_softmaxSum;
-						};
-					/*
-					auto qkAttnSoftmax = [&]() {
-
-						const auto softmaxMax = *std::max_element(attnOut.begin(), attnOut.begin() + q_i);
-
-						float softmaxSum = 0.0f;
-
-						for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
-
-							auto softmaxExp = std::expf(attnOut[k_i] - softmaxMax);
-
-							softmaxOut[k_i] = softmaxExp;
+							output[m] = softmaxExp;
 
 							softmaxSum += softmaxExp;
 						}
 
 						auto r_softmaxSum = 1.0f / softmaxSum;
 
-						for (std::size_t k_i = 0; k_i <= q_i; ++k_i)
-							softmaxOut[k_i] *= r_softmaxSum;
+						for (std::size_t m = 0; m <= q_i; ++m)
+							output[m] *= r_softmaxSum;
 						};
-
-						*/
 
 					auto calculateVAtten = [&]() {
 						Tensor::TensorView zh = { zout.data() + headOffset, mHeadsPerDModel };
 
-						for (std::size_t v_i = 0; v_i <= q_i; ++v_i) {
+						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							auto vout = layer.mCAttnActivations.spanT(v_i);
+							auto vout = layer.mCAttnActivations.spanT(m);
 							Tensor::TensorView v = { vout.data() + mVOffset, mDModel };
 							Tensor::TensorView vh = { v.data() + headOffset, mHeadsPerDModel };
 
-							auto factor = softmaxOut[v_i];
+							auto factor = softmaxOut[m];
 
 							for (std::size_t n = 0; n < vh.size(); ++n) {
 								zh[n] += vh[n] * factor;
