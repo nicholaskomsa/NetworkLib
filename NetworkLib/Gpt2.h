@@ -527,6 +527,27 @@ public:
 							attnOut[k_i] = dot * r_sqrtHeadsPerDModel;
 						}
 						};
+					auto softmaxQ = [&](auto& input, auto& output) {
+
+						const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
+
+						float softmaxSum = 0.0f;
+
+						for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
+
+							auto softmaxExp = std::expf(attnOut[k_i] - softmaxMax);
+
+							output[k_i] = softmaxExp;
+
+							softmaxSum += softmaxExp;
+						}
+
+						auto r_softmaxSum = 1.0f / softmaxSum;
+
+						for (std::size_t k_i = 0; k_i <= q_i; ++k_i)
+							output[k_i] *= r_softmaxSum;
+						};
+					/*
 					auto qkAttnSoftmax = [&]() {
 
 						const auto softmaxMax = *std::max_element(attnOut.begin(), attnOut.begin() + q_i);
@@ -547,6 +568,9 @@ public:
 						for (std::size_t k_i = 0; k_i <= q_i; ++k_i)
 							softmaxOut[k_i] *= r_softmaxSum;
 						};
+
+						*/
+
 					auto calculateVAtten = [&]() {
 						Tensor::TensorView zh = { zout.data() + headOffset, mHeadsPerDModel };
 
@@ -565,7 +589,7 @@ public:
 						};
 
 					calculateQKAtten();
-					qkAttnSoftmax();
+					softmaxQ(attnOut, softmaxOut);
 					calculateVAtten();
 				}
 			}
