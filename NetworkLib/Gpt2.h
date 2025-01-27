@@ -95,7 +95,7 @@ struct GPT2 {
 			return { &at(depth, row, 0), mX };
 		}
 		TensorView spanT(std::size_t depth, std::size_t col) {
-			return { &at(depth, 0, col), mX };
+			return { &at(depth, 0, col), mY };
 		}
 
 		TensorView span(std::size_t w, std::size_t z, std::size_t y) {
@@ -127,11 +127,13 @@ struct GPT2 {
 	LinearLayer mFinalLayer;
 	std::array<AttnLayer,12> mAttnLayers;
 
+	using Token = std::uint16_t;
+
 	struct Decoder {
 
 		using Word = std::string_view;
 		using Words = std::vector<Word>;
-		using WordMap= std::map<Word, std::uint16_t>;
+		using WordMap= std::map<Word, Token>;
 
 		Words mWords;
 		WordMap mWordMap;//map words to their index
@@ -182,7 +184,7 @@ struct GPT2 {
 			}
 		}
 
-		std::string decode(std::span<std::uint16_t> tokens) {
+		std::string decode(std::span<Token> tokens) {
 
 			std::string text;
 			text.reserve(tokens.size()*3); //avg word size == 3?
@@ -197,7 +199,6 @@ struct GPT2 {
 
 	struct Data {
 
-		using Token = std::uint16_t;
 		std::vector<Token> mTokens;
 
 		void readData() {
@@ -339,7 +340,7 @@ public:
 			auto layerIdx = &attnLayer - mAttnLayers.data();
 			auto layer = std::format("h.{}.", layerIdx);
 
-			auto attnName = [&](const auto& postFix) {
+			auto attnName = [layer](const auto& postFix) {
 				return std::format("{}attn.{}", layer, postFix);
 				};
 
@@ -417,11 +418,11 @@ public:
 	void feedForward() {
 
 		constexpr auto testInputSize = 64; // vs mDSeq
-		const auto r_sqrtHeadsPerModel = 1.0f / std::sqrtf(mHeadsPerDModel);
+		const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
 		for (std::size_t i = 0; i < testInputSize; ++i) { //inputSize vs dseq
 
-			std::uint16_t token = mData.mTokens[i];
+			Token token = mData.mTokens[i];
 
 			//wte dvocab * dmodel
 			auto wte = mWteWeight.spanT(token);//this is transposed span over mDModel
@@ -439,6 +440,7 @@ public:
 
 
 		auto layer_i = 0;
+		auto& layer = mAttnLayers[layer_i];
 
 		for (std::size_t i = 0; i < testInputSize; ++i) {
 
@@ -454,7 +456,6 @@ public:
 
 			auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-			auto& layer = mAttnLayers[layer_i];
 			auto ln1Bias = layer.mL1.mBias.span();
 			auto ln1Weight = layer.mL1.mWeight.span();
 			auto layerOut = layer.mL1.mActivations.spanT(i);
@@ -470,8 +471,6 @@ public:
 		//std::println(std::cout, "sum: {}", sum); //== -334
 
 		for (std::size_t i = 0; i < testInputSize; ++i) {
-
-			auto& layer = mAttnLayers[layer_i];
 
 			auto layerInput = layer.mL1.mActivations.spanT(i);
 			auto bias = layer.mCAttnBias.span();
@@ -494,8 +493,6 @@ public:
 		//auto sum = std::reduce(layer.mCAttnActivations.mTensor.begin(), layer.mCAttnActivations.mTensor.end());
 		///std::println(std::cout, "sum: {}", sum); //== -3325
 
-		auto& layer = mAttnLayers[layer_i];
-
 		//activations z cleared here
 		auto zoutTensor = layer.mAttnZ.mTensor;
 		std::fill(zoutTensor.begin(), zoutTensor.end(), 0.0f);
@@ -512,7 +509,7 @@ public:
 				auto softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
 
 				auto calculateQKAtten = [&]() {
-					Tensor::TensorView q = { qout.data(), mDModel };
+					Tensor::TensorView q = { qout.data() + mQOffset, mDModel };
 					Tensor::TensorView qh = { q.data() + headOffset, mHeadsPerDModel };
 
 					for (std::size_t k_i = 0; k_i <= q_i; ++k_i) {
@@ -527,12 +524,12 @@ public:
 							dot += qh[n] * kh[n];
 						}
 
-						attnOut[k_i] = dot * r_sqrtHeadsPerModel;
+						attnOut[k_i] = dot * r_sqrtHeadsPerDModel;
 					}
 					};
 				auto qkAttnSoftmax = [&]() {
 
-					auto softmaxMax = *std::max_element(softmaxOut.begin(), softmaxOut.end());
+					auto softmaxMax = *std::max_element(attnOut.begin(), attnOut.begin()+q_i);
 
 					float softmaxSum = 0.0f;
 
