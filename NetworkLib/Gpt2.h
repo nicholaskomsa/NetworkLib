@@ -105,14 +105,14 @@ struct GPT2 {
 
 		void forward(const auto& outputTensor, const auto& weightTensor, const auto& biasTensor) const {
 
-			const auto& bias = biasTensor.span();
+			const auto& b = biasTensor.span();
 
 			for (std::size_t i = 0; i < mTestInputSize; ++i) {
 
 				const auto& input = spanT(i);
 				const auto& output = outputTensor.spanT(i);
 
-				std::copy(bias.begin(), bias.end(), output.begin());
+				std::copy(b.begin(), b.end(), output.begin());
 
 				for (std::size_t m = 0; m < input.size(); ++m) {
 
@@ -490,12 +490,17 @@ public:
 
 		std::for_each(mAttnLayers.begin(), mAttnLayers.begin()+1 /*vs end*/, [&](auto& layer) {
 
+			auto& cAttnActivations = layer.mCAttnActivations;
+
 			layer.mL1.normalise(mWActivations);
-			layer.mL1.mActivations.forward(layer.mCAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
+			layer.mL1.mActivations.forward(cAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
+
+			auto& attnActivations = layer.mAttnActivations;
+			auto& attnZ = layer.mAttnZ;
+			auto& attnZSoftmaxActivations = layer.mAttnSoftmaxActivations;
 
 			//activations z cleared here
-			const auto& attnZTensor = layer.mAttnZ.mTensor;
-			std::fill(attnZTensor.begin(), attnZTensor.end(), 0.0f);
+			std::fill(attnZ.mTensor.begin(), attnZ.mTensor.end(), 0.0f);
 
 			for (std::size_t h = 0; h < mHeadNum; ++h) {
 
@@ -503,10 +508,11 @@ public:
 
 				for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) {
 
-					const auto& q = layer.mCAttnActivations.spanT(q_i);
-					const auto& attnOut = layer.mAttnActivations.spanT(h, q_i);
-					const auto& z = layer.mAttnZ.spanT(q_i);
-					const auto& attnOutSoftmax = layer.mAttnSoftmaxActivations.spanT(h, q_i);
+					const auto& q = cAttnActivations.spanT(q_i);
+					const auto& z = attnZ.spanT(q_i);
+
+					const auto& attnOut = attnActivations.spanT(h, q_i);
+					const auto& attnOutSoftmax = attnZSoftmaxActivations.spanT(h, q_i);
 
 					auto calculateQKAtten = [&]() {
 
@@ -516,7 +522,7 @@ public:
 						const auto kOffset = mKOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& k = layer.mCAttnActivations.spanT(m);
+							const auto& k = cAttnActivations.spanT(m);
 							kh = { k.data() + kOffset, mHeadsPerDModel };
 
 							float dot = 0.0f;
@@ -559,7 +565,7 @@ public:
 						const auto vOffset = mVOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& v = layer.mCAttnActivations.spanT(m);
+							const auto& v = cAttnActivations.spanT(m);
 							vh = { v.data() + vOffset, mHeadsPerDModel };
 
 							factor = attnOutSoftmax[m];
@@ -576,17 +582,20 @@ public:
 				}
 			}
 
-			layer.mAttnZ.forward(layer.mCProjActivations, layer.mCProjWeight, layer.mCProjBias);
+			attnZ.forward(layer.mCProjActivations, layer.mCProjWeight, layer.mCProjBias);
 
 			});
 
-		auto checkSum = [&](auto& layer) {
+		auto checkSum = [&]() {
 
 			auto getSum = [&](auto& tensor) {
 				return std::int64_t(std::reduce(tensor.begin(), tensor.end()));
 			};
 
 			assert( -30 == getSum(mWActivations.mTensor));
+
+			auto layer = mAttnLayers.front();
+
 			assert( -334 == getSum(layer.mL1.mActivations.mTensor));
 			assert( -3325 == getSum(layer.mCAttnActivations.mTensor));
 			assert( 454 == getSum(layer.mAttnZ.mTensor));
@@ -594,6 +603,6 @@ public:
 
 			};
 
-		checkSum(mAttnLayers.front());
+		checkSum();
 	}
 };
