@@ -20,6 +20,7 @@ namespace FloatSpaceConvert {
 		GREYSCALE,
 		BINARY
 	};
+	using ColorNames = std::map<ColorizeMode, std::string>;
 
 	std::uint32_t rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 
@@ -212,19 +213,15 @@ namespace FloatSpaceConvert {
 				FreeImage_Unload(convertedImage);
 				};
 
-			auto stripes = { 1,2,10,20,50,100 };
-			auto colorizeModes = { ColorizeMode::GREYSCALE, ColorizeMode::ROYGBIV, ColorizeMode::NICKRGB, ColorizeMode::BINARY, ColorizeMode::SHORTNRGB };
+			ColorNames colorNames = {
+				{ ColorizeMode::NICKRGB, "nickrgb"}
+				,{ ColorizeMode::SHORTNRGB, "shortnrgb" }
+				,{ ColorizeMode::ROYGBIV, "roygbiv" }
+				,{ ColorizeMode::GREYSCALE, "greyscale" }
+				,{ ColorizeMode::BINARY, "binary" }
+			};
 
-			auto colorizeModeStr = [&](auto colorizeMode) {
-				switch (colorizeMode) {
-				case ColorizeMode::NICKRGB: return "nickrgb";
-				case ColorizeMode::ROYGBIV: return "roygbiv";
-				case ColorizeMode::GREYSCALE: return "greyscale";
-				case ColorizeMode::BINARY: return "binary";
-				case ColorizeMode::SHORTNRGB: return "snrgb";
-				}
-				return "unknown";
-				};
+			auto stripes = { 1,2,10,20,50,100 };
 
 			FreeImage_Initialise();
 
@@ -232,11 +229,11 @@ namespace FloatSpaceConvert {
 
 				std::vector<uint32_t> converted(width * height); //adjust to texture min size
 
-				for (auto colorizeMode : colorizeModes) {
+				for (auto& [mode, name] : colorNames) {
 
-					floatSpaceConvert(image, converted, colorizeMode, 0.0f, 1.0f, stripeNum);
+					floatSpaceConvert(image, converted, mode, 0.0f, 1.0f, stripeNum);
 
-					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", baseFileName, colorizeModeStr(colorizeMode), stripeNum);
+					auto completeFileNameWithColorMode = std::format("{}_{}_{}.bmp", baseFileName, name, stripeNum);
 					saveToBmpFile(completeFileNameWithColorMode, converted);
 				}
 
