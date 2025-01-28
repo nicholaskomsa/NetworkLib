@@ -16,7 +16,7 @@ struct GPT2 {
 	static constexpr std::size_t mDVocab = 50257
 		, mDModel = 768, mDModel3 = mDModel * 3
 		, mDSeq = 1024
-		, mHeadNum = 12
+		, mHeadNum = 12, mAttnLayersNum = 12
 		, mHeadsPerDModel = mDModel / mHeadNum
 		, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
 		, mTestInputSize = 64;	//vs dSeq for full size or 64 for test size
@@ -103,7 +103,7 @@ struct GPT2 {
 			return { &at(w, z, y, 0), mX };
 		}
 
-		void forward(auto& outputTensor, auto& weightTensor, auto& biasTensor) const {
+		void forward(const auto& outputTensor, const auto& weightTensor, const auto& biasTensor) const {
 
 			const auto& bias = biasTensor.span();
 
@@ -176,7 +176,7 @@ struct GPT2 {
 
 	Tensor mWpeWeight, mWteWeight, mWActivations;
 	LinearLayer mFinalLayer;
-	std::array<AttnLayer,12> mAttnLayers;
+	std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 
 	using Token = std::uint16_t;
 

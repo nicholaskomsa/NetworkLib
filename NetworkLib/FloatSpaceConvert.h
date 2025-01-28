@@ -222,7 +222,7 @@ namespace FloatSpaceConvert {
 				,{ ColorizeMode::BINARY, "binary" }
 			};
 
-			auto stripes = { 1,2,10,20,50,100 };
+			auto stripes = { 1,2,10,100 };
 
 			FreeImage_Initialise();
 
