@@ -494,8 +494,8 @@ public:
 			layer.mL1.mActivations.forward(layer.mCAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
 
 			//activations z cleared here
-			const auto& zoutTensor = layer.mAttnZ.mTensor;
-			std::fill(zoutTensor.begin(), zoutTensor.end(), 0.0f);
+			const auto& attnZTensor = layer.mAttnZ.mTensor;
+			std::fill(attnZTensor.begin(), attnZTensor.end(), 0.0f);
 
 			for (std::size_t h = 0; h < mHeadNum; ++h) {
 
@@ -510,12 +510,14 @@ public:
 
 					auto calculateQKAtten = [&]() {
 
-						Tensor::TensorView kh, qh = { q.data() + mQOffset + headOffset, mHeadsPerDModel };
+						const auto qOffset = mQOffset + headOffset;
+						Tensor::TensorView kh, qh = { q.data() + qOffset, mHeadsPerDModel };
 
+						const auto kOffset = mKOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
 							const auto& k = layer.mCAttnActivations.spanT(m);
-							kh = { k.data() + mKOffset + headOffset, mHeadsPerDModel };
+							kh = { k.data() + kOffset, mHeadsPerDModel };
 
 							float dot = 0.0f;
 
@@ -554,10 +556,11 @@ public:
 						Tensor::TensorView vh, zh = { z.data() + headOffset, mHeadsPerDModel };
 						auto factor = 0.0f;
 
+						const auto vOffset = mVOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
 							const auto& v = layer.mCAttnActivations.spanT(m);
-							vh = { v.data() + mVOffset + headOffset, mHeadsPerDModel };
+							vh = { v.data() + vOffset, mHeadsPerDModel };
 
 							factor = attnOutSoftmax[m];
 
