@@ -38,8 +38,7 @@ namespace FloatSpaceConvert {
 		//produce a three bytes (rgb) max value
 		constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
 
-		std::uint32_t value = maxValue * percent;
-		return value;
+		return maxValue * percent;
 		};
 
 	auto snrgb = [&](auto percent)->std::uint32_t {

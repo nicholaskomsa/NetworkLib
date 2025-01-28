@@ -8,6 +8,7 @@ int main() {
 	GPT2 gpt2;
 	
 	try {
+
 		gpt2.readSafeTensors();
 		//FloatSpaceConvert::colorizeFloatSpace("gpt2", gpt2.mFloatSpace);
 		gpt2.mDecoder.readEnc();

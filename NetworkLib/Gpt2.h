@@ -503,22 +503,19 @@ public:
 
 				for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) {
 
-					const auto& qout = layer.mCAttnActivations.spanT(q_i);
+					const auto& q = layer.mCAttnActivations.spanT(q_i);
 					const auto& attnOut = layer.mAttnActivations.spanT(h, q_i);
-					const auto& zout = layer.mAttnZ.spanT(q_i);
-					const auto& softmaxOut = layer.mAttnSoftmaxActivations.spanT(h, q_i);
+					const auto& z = layer.mAttnZ.spanT(q_i);
+					const auto& attnOutSoftmax = layer.mAttnSoftmaxActivations.spanT(h, q_i);
 
 					auto calculateQKAtten = [&]() {
 
-						Tensor::TensorView q = { qout.data() + mQOffset, mDModel };
-						Tensor::TensorView qh = { q.data() + headOffset, mHeadsPerDModel };
-						Tensor::TensorView k, kh;
+						Tensor::TensorView kh, qh = { q.data() + mQOffset + headOffset, mHeadsPerDModel };
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& kout = layer.mCAttnActivations.spanT(m);
-							k = { kout.data() + mKOffset, mDModel };
-							kh = { k.data() + headOffset, mHeadsPerDModel };
+							const auto& k = layer.mCAttnActivations.spanT(m);
+							kh = { k.data() + mKOffset + headOffset, mHeadsPerDModel };
 
 							float dot = 0.0f;
 
@@ -554,17 +551,15 @@ public:
 
 					auto calculateVAtten = [&]() {
 
-						Tensor::TensorView zh = { zout.data() + headOffset, mHeadsPerDModel };
-						Tensor::TensorView v, vh;
+						Tensor::TensorView vh, zh = { z.data() + headOffset, mHeadsPerDModel };
 						auto factor = 0.0f;
 
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& vout = layer.mCAttnActivations.spanT(m);
-							v = { vout.data() + mVOffset, mDModel };
-							vh = { v.data() + headOffset, mHeadsPerDModel };
+							const auto& v = layer.mCAttnActivations.spanT(m);
+							vh = { v.data() + mVOffset + headOffset, mHeadsPerDModel };
 
-							factor = softmaxOut[m];
+							factor = attnOutSoftmax[m];
 
 							for (std::size_t n = 0; n < vh.size(); ++n) {
 								zh[n] += vh[n] * factor;
@@ -573,7 +568,7 @@ public:
 						};
 
 					calculateQKAtten();
-					softmaxQ(attnOut, softmaxOut);
+					softmaxQ(attnOut, attnOutSoftmax);
 					calculateVAtten();
 				}
 			}
