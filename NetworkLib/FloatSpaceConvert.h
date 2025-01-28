@@ -203,9 +203,10 @@ namespace FloatSpaceConvert {
 					return rgba;
 					};
 
+				//given windows do this transform else consider free image file format
 				std::transform(image.begin(), image.end(), image.begin(), bgra);
 
-				//correct byte order for free image write
+				//consider byte order for free image write unless windows
 				FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 
 				FreeImage_Save(FIF_BMP, convertedImage, fileName.c_str(), 0);
