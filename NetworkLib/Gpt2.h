@@ -105,25 +105,27 @@ struct GPT2 {
 
 		void forward(const auto& outputTensor, const auto& weightTensor, const auto& biasTensor) const {
 
-			const auto& b = biasTensor.span();
+			const auto b = biasTensor.span();
+
+			Tensor::TensorView input, output, w;
 
 			for (std::size_t i = 0; i < mTestInputSize; ++i) {
 
-				const auto& input = spanT(i);
-				const auto& output = outputTensor.spanT(i);
+				input = spanT(i);
+				output = outputTensor.spanT(i);
 
 				std::copy(b.begin(), b.end(), output.begin());
 
 				for (std::size_t m = 0; m < input.size(); ++m) {
 
 					const auto& in = input[m];
-					const auto& w = weightTensor.spanT(m);
+					w = weightTensor.spanT(m);
 
 					for (std::size_t n = 0; n < output.size(); ++n)
 						output[n] += w[n] * in;
 				}
 			}
-			};
+		}
 	};
 
 	struct MLP {
@@ -136,10 +138,12 @@ struct GPT2 {
 
 		void normalise(auto& input) {
 
+			Tensor::TensorView i, o, b, w;
+
 			for (std::size_t m = 0; m < mTestInputSize; ++m) {
 
-				const auto& i = input.spanT(m);
-				const auto& o = mActivations.spanT(m);
+				i = input.spanT(m);
+				o = mActivations.spanT(m);
 
 				const auto mean = std::reduce(i.begin(), i.end()) / i.size();
 
@@ -151,8 +155,8 @@ struct GPT2 {
 
 				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-				const auto& b = mBias.span();
-				const auto& w = mWeight.span();
+				b = mBias.span();
+				w = mWeight.span();
 
 				float inNorm = 0.0f;
 				for (std::size_t n = 0; n < i.size(); ++n) {
@@ -173,14 +177,8 @@ struct GPT2 {
 
 		void attention() {
 
-			const auto& cAttnActivations = mCAttnActivations;
-
-			const auto& attnZ = mAttnZ;
-			const auto& attnActivations = mAttnActivations;
-			const auto& attnZSoftmaxActivations = mAttnSoftmaxActivations;
-
 			//activations z cleared here
-			std::fill(attnZ.mTensor.begin(), attnZ.mTensor.end(), 0.0f);
+			std::fill(mAttnZ.mTensor.begin(), mAttnZ.mTensor.end(), 0.0f);
 
 			const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
@@ -190,21 +188,21 @@ struct GPT2 {
 
 				for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) {
 
-					const auto& q = cAttnActivations.spanT(q_i);
-					const auto& z = attnZ.spanT(q_i);
+					Tensor::TensorView q = mCAttnActivations.spanT(q_i)
+							, z = mAttnZ.spanT(q_i)
 
-					const auto& attnOut = attnActivations.spanT(h, q_i);
-					const auto& attnOutSoftmax = attnZSoftmaxActivations.spanT(h, q_i);
+							, attnOut = mAttnActivations.spanT(h, q_i)
+							, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, q_i);
 
 					auto calculateQKAtten = [&]() {
 
 						const auto qOffset = mQOffset + headOffset;
-						Tensor::TensorView kh, qh = { q.data() + qOffset, mHeadsPerDModel };
+						Tensor::TensorView k, kh, qh = { q.data() + qOffset, mHeadsPerDModel };
 
 						const auto kOffset = mKOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& k = cAttnActivations.spanT(m);
+							k = mCAttnActivations.spanT(m);
 							kh = { k.data() + kOffset, mHeadsPerDModel };
 
 							float dot = 0.0f;
@@ -240,13 +238,13 @@ struct GPT2 {
 
 					auto calculateVAtten = [&]() {
 
-						Tensor::TensorView vh, zh = { z.data() + headOffset, mHeadsPerDModel };
+						Tensor::TensorView v, vh, zh = { z.data() + headOffset, mHeadsPerDModel };
 						auto factor = 0.0f;
 
 						const auto vOffset = mVOffset + headOffset;
 						for (std::size_t m = 0; m <= q_i; ++m) {
 
-							const auto& v = cAttnActivations.spanT(m);
+							v = mCAttnActivations.spanT(m);
 							vh = { v.data() + vOffset, mHeadsPerDModel };
 
 							factor = attnOutSoftmax[m];
@@ -264,6 +262,17 @@ struct GPT2 {
 			}
 			};
 
+		Tensor& forward(const auto& inputTensor ) {
+
+			mL1.normalise(inputTensor);
+			mL1.mActivations.forward(mCAttnActivations, mCAttnWeight, mCAttnBias);
+
+			attention();
+
+			mAttnZ.forward(mCProjActivations, mCProjWeight, mCProjBias);
+
+			return mAttnZ;
+		}
 	};
 
 	Floats mTensorSpace, mActivationSpace;
@@ -307,7 +316,7 @@ struct GPT2 {
 				mWords.resize(mDVocab);
 				mDenseWords.resize(mDenseWordsSize);
 
-				fin.read(reinterpret_cast<char*>(offsets.data()),  mDVocab * sizeof(Offset));
+				fin.read(reinterpret_cast<char*>(offsets.data()), mDVocab * sizeof(Offset));
 				fin.read(mDenseWords.data(), mDenseWordsSize);
 
 				fin.close();
@@ -585,14 +594,10 @@ public:
 
 		embedInput();
 
+		Tensor* input = &mWActivations;
 		std::for_each(mAttnLayers.begin(), mAttnLayers.begin()+1 /*vs end*/, [&](auto& layer) {
 
-			layer.mL1.normalise(mWActivations);
-			layer.mL1.mActivations.forward(layer.mCAttnActivations, layer.mCAttnWeight, layer.mCAttnBias);
-			
-			layer.attention();
-
-			layer.mAttnZ.forward(layer.mCProjActivations, layer.mCProjWeight, layer.mCProjBias);
+			*input = layer.forward(*input);
 
 			});
 
