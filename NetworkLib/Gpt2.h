@@ -576,16 +576,17 @@ public:
 
 		auto embedInput = [&]() {
 
+			Tensor::TensorView wte, wpe, wActivations;
+			Token token;
+
 			for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
 
-				Token token = mData.mTokens[i];
+				token = mData.mTokens[i];
 
-				//wte dvocab * dmodel
-				const auto& wte = mWteWeight.spanT(token);
-				//wpe dseq * dmodel
-				const auto& wpe = mWpeWeight.spanT(i);
+				wte = mWteWeight.spanT(token);
+				wpe = mWpeWeight.spanT(i);
 
-				const auto& wActivations = mWActivations.spanT(i);
+				wActivations = mWActivations.spanT(i);
 
 				for (std::size_t w = 0; w < mDModel; ++w)
 					wActivations[w] = wte[w] + wpe[w];
@@ -597,7 +598,7 @@ public:
 		Tensor* input = &mWActivations;
 		std::for_each(mAttnLayers.begin(), mAttnLayers.begin()+1 /*vs end*/, [&](auto& layer) {
 
-			*input = layer.forward(*input);
+			input = &layer.forward(*input);
 
 			});
 
