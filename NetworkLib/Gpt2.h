@@ -14,7 +14,7 @@ struct GPT2 {
 
 	static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
 	static constexpr std::size_t mDVocab = 50257
-		, mDModel = 768, mDModel3 = mDModel * 3
+		, mDModel = 768, mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
 		, mDSeq = 1024
 		, mHeadNum = 12, mAttnLayersNum = 12
 		, mHeadsPerDModel = mDModel / mHeadNum
@@ -130,7 +130,7 @@ struct GPT2 {
 
 	struct MLP {
 		Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
-		Tensor mActivations;
+		Tensor mCFCActivations, mCProjActivations, mGeluActivations;
 	};
 	struct LinearLayer {
 		Tensor mBias, mWeight;
@@ -172,6 +172,7 @@ struct GPT2 {
 
 		Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
 		Tensor mCAttnActivations, mAttnActivations, mAttnSoftmaxActivations, mAttnZ, mCProjActivations;
+		Tensor mResidualActivations;
 
 		MLP mMLP;
 
@@ -261,7 +262,20 @@ struct GPT2 {
 				}
 			}
 			};
+		void residual(const Tensor& inputTensor ){
 
+			Tensor::TensorView p, input, o;
+
+			for (std::size_t i = 0; i < mTestInputSize; ++i) {
+
+				p = mCProjActivations.spanT(i);
+				input = inputTensor.spanT(i);
+				o = mResidualActivations.spanT(i);
+
+				for (std::size_t m = 0; m < o.size(); ++m)
+					o[m] = p[m] + input[m];
+			}
+		}
 		Tensor& forward(const auto& inputTensor ) {
 
 			mL1.normalise(inputTensor);
@@ -270,6 +284,11 @@ struct GPT2 {
 			attention();
 
 			mAttnZ.forward(mCProjActivations, mCProjWeight, mCProjBias);
+
+			residual(inputTensor);
+
+			mL2.normalise(mResidualActivations);
+			mL2.mActivations.forward(mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias );
 
 			return mAttnZ;
 		}
@@ -535,38 +554,53 @@ public:
 
 		auto createActivationSpace = [&]() {
 
-			auto embedSize = mDSeq * mDModel;
-			auto cAttnSize = mDSeq * mDModel3;
-			auto attnSize = mDSeq * mDSeq * mHeadNum;
-			auto attnSoftMaxSize = attnSize;
-			auto zSize = mDSeq * mDModel;
+			auto seqModel = mDSeq * mDModel;
+			auto seqModel3 = mDSeq * mDModel3;
+			auto seqModel4 = mDSeq * mDModel4;
+			auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
 
-			mActivationSpace.resize(embedSize + (embedSize + cAttnSize + attnSize + attnSoftMaxSize + zSize + zSize) * mAttnLayers.size());
+			mActivationSpace.resize(seqModel + (seqModel*5 + seqModel3 + seqSeqHead*2 + seqModel4 * 3) * mAttnLayers.size());
 
 			auto begin = mActivationSpace.begin();
 
-			mWActivations = { {begin, embedSize}, mDSeq, mDModel };
-			std::advance(begin, embedSize);
+			mWActivations = { {begin, seqModel}, mDSeq, mDModel };
+			std::advance(begin, seqModel);
 
 			for (auto& layer : mAttnLayers) {
 
-				layer.mL1.mActivations = { {begin, embedSize}, mDSeq, mDModel };
-				std::advance(begin, embedSize);
+				layer.mL1.mActivations = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
 
-				layer.mCAttnActivations = { {begin, cAttnSize}, mDSeq, mDModel3 };
-				std::advance(begin, cAttnSize);
+				layer.mCAttnActivations = { {begin, seqModel3}, mDSeq, mDModel3 };
+				std::advance(begin, seqModel3);
 
-				layer.mAttnActivations = { {begin, attnSize}, mDSeq, mDSeq, mHeadNum };
-				std::advance(begin, attnSize);
+				layer.mAttnActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, seqSeqHead);
 
-				layer.mAttnSoftmaxActivations = { {begin, attnSoftMaxSize}, mDSeq, mDSeq, mHeadNum };
-				std::advance(begin, attnSoftMaxSize);
+				layer.mAttnSoftmaxActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, seqSeqHead);
 
-				layer.mAttnZ = { {begin, zSize}, mDSeq, mDModel };
-				std::advance(begin, zSize);
+				layer.mAttnZ = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
 				
-				layer.mCProjActivations = { {begin, zSize}, mDSeq, mDModel };
-				std::advance(begin, zSize);
+				layer.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
+
+				layer.mResidualActivations = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
+
+				layer.mL2.mActivations = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
+
+				layer.mMLP.mCFCActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
+				std::advance(begin, seqModel4);
+
+				layer.mMLP.mGeluActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
+				std::advance(begin, seqModel4);
+
+				layer.mMLP.mCProjActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
+				std::advance(begin, seqModel4);
+
 			}
 			};
 		createActivationSpace();
@@ -604,18 +638,23 @@ public:
 
 		auto checkSum = [&]() {
 
-			auto getSum = [&](auto& tensor) {
-				return std::int64_t(std::reduce(tensor.begin(), tensor.end()));
+			auto getSum = [&](const auto& tensor) {
+				return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end()));
 			};
 
-			assert( -30 == getSum(mWActivations.mTensor));
+			assert( -30 == getSum(mWActivations));
 
 			const auto& layer = mAttnLayers.front();
 
-			assert( -334 == getSum(layer.mL1.mActivations.mTensor));
-			assert( -3325 == getSum(layer.mCAttnActivations.mTensor));
-			assert( 454 == getSum(layer.mAttnZ.mTensor));
-			assert( 389 == getSum(layer.mCProjActivations.mTensor));
+			assert( -334 == getSum(layer.mL1.mActivations));
+			assert( -3325 == getSum(layer.mCAttnActivations));
+			assert( 454 == getSum(layer.mAttnZ));
+			assert( 389 == getSum(layer.mCProjActivations));
+			assert( 358 == getSum(layer.mResidualActivations));
+			assert( 280 == getSum(layer.mL2.mActivations));
+
+			std::println("l2 Sum: {}", getSum(layer.mL2.mActivations));
+
 
 			};
 
