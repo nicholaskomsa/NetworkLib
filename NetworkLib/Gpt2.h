@@ -172,7 +172,7 @@ struct GPT2 {
 
 		Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
 		Tensor mCAttnActivations, mAttnActivations, mAttnSoftmaxActivations, mAttnZ, mCProjActivations;
-		Tensor mResidualActivations;
+		Tensor mResidualActivation1, mResidualActivation2;
 
 		MLP mMLP;
 
@@ -262,15 +262,15 @@ struct GPT2 {
 				}
 			}
 			};
-		void residual(const Tensor& inputTensor ){
+		void residual(const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor ){
 
 			Tensor::TensorView p, input, o;
 
 			for (std::size_t i = 0; i < mTestInputSize; ++i) {
 
-				p = mCProjActivations.spanT(i);
+				p = projectionTensor.spanT(i);
 				input = inputTensor.spanT(i);
-				o = mResidualActivations.spanT(i);
+				o = residualTensor.spanT(i);
 
 				for (std::size_t m = 0; m < o.size(); ++m)
 					o[m] = p[m] + input[m];
@@ -285,12 +285,21 @@ struct GPT2 {
 
 			mAttnZ.forward(mCProjActivations, mCProjWeight, mCProjBias);
 
-			residual(inputTensor);
+			residual(inputTensor, mCProjActivations, mResidualActivation1);
 
-			mL2.normalise(mResidualActivations);
+			mL2.normalise(mResidualActivation1);
 			mL2.mActivations.forward(mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias );
 
-			return mAttnZ;
+			std::transform(mMLP.mCFCActivations.mTensor.begin(), mMLP.mCFCActivations.mTensor.end(), mMLP.mGeluActivations.mTensor.begin(),
+				[](auto x) {
+					return x * 0.5f * (1.0f + std::erff(x / std::sqrt(2.0f)));
+				});
+// 
+			mMLP.mGeluActivations.forward(mMLP.mCProjActivations, mMLP.mCProjWeight, mMLP.mCProjBias);
+
+			residual(mResidualActivation1, mMLP.mCProjActivations, mResidualActivation2);
+
+			return mResidualActivation2;
 		}
 	};
 
@@ -559,7 +568,7 @@ public:
 			auto seqModel4 = mDSeq * mDModel4;
 			auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
 
-			mActivationSpace.resize(seqModel + (seqModel*5 + seqModel3 + seqSeqHead*2 + seqModel4 * 3) * mAttnLayers.size());
+			mActivationSpace.resize(seqModel + (seqModel*7 + seqModel3 + seqSeqHead*2 + seqModel4 * 2) * mAttnLayers.size());
 
 			auto begin = mActivationSpace.begin();
 
@@ -586,7 +595,7 @@ public:
 				layer.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
 				std::advance(begin, seqModel);
 
-				layer.mResidualActivations = { {begin, seqModel}, mDSeq, mDModel };
+				layer.mResidualActivation1 = { {begin, seqModel}, mDSeq, mDModel };
 				std::advance(begin, seqModel);
 
 				layer.mL2.mActivations = { {begin, seqModel}, mDSeq, mDModel };
@@ -598,8 +607,11 @@ public:
 				layer.mMLP.mGeluActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
 				std::advance(begin, seqModel4);
 
-				layer.mMLP.mCProjActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
-				std::advance(begin, seqModel4);
+				layer.mMLP.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
+
+				layer.mResidualActivation2 = { {begin, seqModel}, mDSeq, mDModel };
+				std::advance(begin, seqModel);
 
 			}
 			};
@@ -630,13 +642,16 @@ public:
 		embedInput();
 
 		Tensor* input = &mWActivations;
-		std::for_each(mAttnLayers.begin(), mAttnLayers.begin()+1 /*vs end*/, [&](auto& layer) {
-
+		std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
+			
+			std::puts(".");
 			input = &layer.forward(*input);
 
 			});
 
 		auto checkSum = [&]() {
+
+			assert(64 == mTestInputSize);
 
 			auto getSum = [&](const auto& tensor) {
 				return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end()));
@@ -644,18 +659,32 @@ public:
 
 			assert( -30 == getSum(mWActivations));
 
-			const auto& layer = mAttnLayers.front();
+			auto testFrontLayer = [&]() {
 
-			assert( -334 == getSum(layer.mL1.mActivations));
-			assert( -3325 == getSum(layer.mCAttnActivations));
-			assert( 454 == getSum(layer.mAttnZ));
-			assert( 389 == getSum(layer.mCProjActivations));
-			assert( 358 == getSum(layer.mResidualActivations));
-			assert( 280 == getSum(layer.mL2.mActivations));
+				const auto& layer = mAttnLayers.front();
+				assert(-334 == getSum(layer.mL1.mActivations));
+				assert(-3325 == getSum(layer.mCAttnActivations));
+				assert(454 == getSum(layer.mAttnZ));
+				assert(389 == getSum(layer.mCProjActivations));
+				assert(358 == getSum(layer.mResidualActivation1));
+				assert(280 == getSum(layer.mL2.mActivations));
+				assert(-235461 == getSum(layer.mMLP.mCFCActivations));
+				assert(-10345 == getSum(layer.mMLP.mGeluActivations));
+				assert(-155 == getSum(layer.mResidualActivation2));
 
-			std::println("l2 Sum: {}", getSum(layer.mL2.mActivations));
+				};
+
+			auto testBackLayer = [&]() {
+
+				const auto& layer = mAttnLayers.back();
+
+				assert(-3859 == getSum(layer.mResidualActivation2));
+
+				};
 
 
+			testFrontLayer();
+			testBackLayer();
 			};
 
 		checkSum();
