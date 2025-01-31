@@ -568,7 +568,7 @@ public:
 			auto seqModel4 = mDSeq * mDModel4;
 			auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
 
-			mActivationSpace.resize(seqModel + (seqModel*7 + seqModel3 + seqSeqHead*2 + seqModel4 * 2) * mAttnLayers.size());
+			mActivationSpace.resize(seqModel + (seqModel*7 + seqModel3 + seqSeqHead*2 + seqModel4 * 2) * mAttnLayers.size() + seqModel);
 
 			auto begin = mActivationSpace.begin();
 
@@ -614,7 +614,12 @@ public:
 				std::advance(begin, seqModel);
 
 			}
+
+			mFinalLayer.mActivations = { {begin, seqModel}, mDSeq, mDModel };
+			std::advance(begin, seqModel);
+
 			};
+
 		createActivationSpace();
 	}	
 
@@ -649,15 +654,17 @@ public:
 
 			});
 
+		mFinalLayer.normalise(*input);
+
 		auto checkSum = [&]() {
 
 			assert(64 == mTestInputSize);
 
 			auto getSum = [&](const auto& tensor) {
 				return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end()));
-			};
+				};
 
-			assert( -30 == getSum(mWActivations));
+			assert(-30 == getSum(mWActivations));
 
 			auto testFrontLayer = [&]() {
 
@@ -682,9 +689,19 @@ public:
 
 				};
 
+			auto testOutput = [&]() {
+				
+				assert(16654 == getSum(mFinalLayer.mActivations));
+
+				std::println("{}", getSum(mFinalLayer.mActivations));
+
+				};
+
 
 			testFrontLayer();
 			testBackLayer();
+			testOutput();
+
 			};
 
 		checkSum();
