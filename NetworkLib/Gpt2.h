@@ -14,6 +14,56 @@
 
 namespace NetworkLib {
 
+	template<typename T>
+	T time(const auto& caption, auto&& functor) {
+		std::println("timing {}", caption);
+		auto start = std::chrono::high_resolution_clock::now();
+		functor();
+		auto end = std::chrono::high_resolution_clock::now();
+		auto elapsed = std::chrono::duration_cast<T>(end - start);
+		std::println("\t{} took {}", caption, elapsed.count());
+		return elapsed;
+	};
+
+	
+	struct Parallel {
+
+		static constexpr auto mHardwareThreads = 236;
+		using Offsets = std::pair<std::size_t, std::size_t>;
+		using Sections = std::vector<Offsets>;
+
+		using Functor = std::function<void(Offsets&)>;
+
+		Sections mSections;
+
+		Parallel(std::size_t size) {
+
+			auto sectionSize = size / mHardwareThreads;
+			if (sectionSize == 0) sectionSize = 1;
+			auto numSections = size / sectionSize;
+
+			std::size_t start = 0, end = 0;
+
+			mSections.resize(numSections);
+
+			for (auto s = 0; s < numSections; ++s) {
+
+				end = start + sectionSize;
+
+				mSections[s] = { start, end };
+
+				start = end;
+			}
+			mSections.back().second = size;
+		}
+
+		void operator()(Functor&& functor) {
+
+			std::for_each(std::execution::par_unseq, mSections.begin(), mSections.end(), [&]( auto& section) {
+				functor(section);
+				});
+		}
+	};
 
 	struct GPT2 {
 
@@ -33,8 +83,16 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		using Floats = std::vector<float>;
+		static void parallelInput(Parallel::Functor&& functor ) {
+			static Parallel input(mTestInputSize);
+			input(std::move(functor));
+		}
+		static void parallelHeads(Parallel::Functor&& functor) {
+			static Parallel heads(mHeadNum);
+			heads(std::move(functor));
+		}
 
+		using Floats = std::vector<float>;
 
 		struct MLP {
 			Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
@@ -47,32 +105,36 @@ namespace NetworkLib {
 
 			void normalise(auto& input) {
 
-				Tensor::TensorView i, o, b, w;
+				parallelInput([&](auto& offsets) {
 
-				for (std::size_t m = 0; m < mTestInputSize; ++m) { //inputSize vs dseq
+					Tensor::TensorView i, o, b, w;
 
-					i = input.spanT(m);
-					o = mActivations.spanT(m);
+					for (std::size_t m = offsets.first; m < offsets.second; ++m) { //inputSize vs dseq
 
-					const auto mean = std::reduce(i.begin(), i.end()) / i.size();
+						i = input.spanT(m);
+						o = mActivations.spanT(m);
 
-					auto meanDiffSq = std::reduce(i.begin(), i.end(), 0.0f,
-						[&](auto sum, auto x) {
-							auto diff = x - mean;
-							return sum + diff * diff;
-						}) / i.size();
+						const auto mean = std::reduce(i.begin(), i.end()) / i.size();
 
-					auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
+						auto meanDiffSq = std::reduce(i.begin(), i.end(), 0.0f,
+							[&](auto sum, auto x) {
+								auto diff = x - mean;
+								return sum + diff * diff;
+							}) / i.size();
 
-					b = mBias.span();
-					w = mWeight.span();
+						auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-					float inNorm = 0.0f;
-					for (std::size_t n = 0; n < i.size(); ++n) {
-						inNorm = (i[n] - mean) * r_stdDev;
-						o[n] = inNorm * w[n] + b[n];
+						b = mBias.span();
+						w = mWeight.span();
+
+						float inNorm = 0.0f;
+						for (std::size_t n = 0; n < i.size(); ++n) {
+							inNorm = (i[n] - mean) * r_stdDev;
+							o[n] = inNorm * w[n] + b[n];
+						}
+
 					}
-				}
+					});
 			}
 		};
 		struct AttnLayer {
@@ -92,122 +154,132 @@ namespace NetworkLib {
 
 				const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
-				for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) {
+				auto calculateQKAtten = [&](std::size_t headOffset, std::size_t q_i, auto& q, auto& attnOut) {
 
-					Tensor::TensorView q = mCAttnActivations.spanT(q_i)
-						, z = mAttnZ.spanT(q_i);
+					const auto qOffset = mQOffset + headOffset;
+					Tensor::TensorView k, kh, qh = { q.data() + qOffset, mHeadsPerDModel };
 
-					for (std::size_t h = 0; h < mHeadNum; ++h) {
+					const auto kOffset = mKOffset + headOffset;
+					for (std::size_t m = 0; m <= q_i; ++m) {
+
+						k = mCAttnActivations.spanT(m);
+						kh = { k.data() + kOffset, mHeadsPerDModel };
+
+						float dot = 0.0f;
+
+						for (std::size_t n = 0; n < qh.size(); ++n)
+							dot += qh[n] * kh[n];
+
+						attnOut[m] = dot * r_sqrtHeadsPerDModel;
+					}
+					};
+
+				auto softmaxQ = [&](std::size_t q_i, const auto& input, const auto& output) {
+
+					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
+
+					float softmaxSum = 0.0f;
+					float softmaxExp = 0.0f;
+
+					for (std::size_t m = 0; m <= q_i; ++m) {
+
+						softmaxExp = std::expf(input[m] - softmaxMax);
+
+						output[m] = softmaxExp;
+
+						softmaxSum += softmaxExp;
+					}
+
+					const auto r_softmaxSum = 1.0f / softmaxSum;
+
+					for (std::size_t m = 0; m <= q_i; ++m)
+						output[m] *= r_softmaxSum;
+					};
+
+				auto calculateVAtten = [&](std::size_t headOffset, std::size_t q_i, auto& attnOutSoftmax, auto& z) {
+
+					Tensor::TensorView v, vh, zh = { z.data() + headOffset, mHeadsPerDModel };
+					auto factor = 0.0f;
+
+					const auto vOffset = mVOffset + headOffset;
+					for (std::size_t m = 0; m <= q_i; ++m) {
+
+						v = mCAttnActivations.spanT(m);
+						vh = { v.data() + vOffset, mHeadsPerDModel };
+
+						factor = attnOutSoftmax[m];
+
+						for (std::size_t n = 0; n < vh.size(); ++n)
+							zh[n] += vh[n] * factor;
+
+					}
+					};
+
+				parallelHeads([&](auto& offsets) {
+
+					for (std::size_t h = offsets.first; h < offsets.second; ++h) {
 
 						const auto headOffset = h * mHeadsPerDModel;
-						Tensor::TensorView attnOut = mAttnActivations.spanT(h, q_i)
-							, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, q_i);
 
-						auto calculateQKAtten = [&]() {
+						for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) { //inputSize vs dseq
 
-							const auto qOffset = mQOffset + headOffset;
-							Tensor::TensorView k, kh, qh = { q.data() + qOffset, mHeadsPerDModel };
+							Tensor::TensorView q = mCAttnActivations.spanT(q_i)
+								, z = mAttnZ.spanT(q_i);
 
-							const auto kOffset = mKOffset + headOffset;
-							for (std::size_t m = 0; m <= q_i; ++m) {
+							Tensor::TensorView attnOut = mAttnActivations.spanT(h, q_i)
+								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, q_i);
 
-								k = mCAttnActivations.spanT(m);
-								kh = { k.data() + kOffset, mHeadsPerDModel };
-
-								float dot = 0.0f;
-
-								for (std::size_t n = 0; n < qh.size(); ++n)
-									dot += qh[n] * kh[n];
-
-								attnOut[m] = dot * r_sqrtHeadsPerDModel;
-							}
-							};
-
-						auto softmaxQ = [&](const auto& input, const auto& output) {
-
-							const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
-
-							float softmaxSum = 0.0f;
-							float softmaxExp = 0.0f;
-
-							for (std::size_t m = 0; m <= q_i; ++m) {
-
-								softmaxExp = std::expf(input[m] - softmaxMax);
-
-								output[m] = softmaxExp;
-
-								softmaxSum += softmaxExp;
-							}
-
-							const auto r_softmaxSum = 1.0f / softmaxSum;
-
-							for (std::size_t m = 0; m <= q_i; ++m)
-								output[m] *= r_softmaxSum;
-							};
-
-						auto calculateVAtten = [&]() {
-
-							Tensor::TensorView v, vh, zh = { z.data() + headOffset, mHeadsPerDModel };
-							auto factor = 0.0f;
-
-							const auto vOffset = mVOffset + headOffset;
-							for (std::size_t m = 0; m <= q_i; ++m) {
-
-								v = mCAttnActivations.spanT(m);
-								vh = { v.data() + vOffset, mHeadsPerDModel };
-
-								factor = attnOutSoftmax[m];
-
-								for (std::size_t n = 0; n < vh.size(); ++n)
-									zh[n] += vh[n] * factor;
-
-							}
-							};
-
-						calculateQKAtten();
-						softmaxQ(attnOut, attnOutSoftmax);
-						calculateVAtten();
+							calculateQKAtten(headOffset, q_i, q, attnOut);
+							softmaxQ(q_i, attnOut, attnOutSoftmax);
+							calculateVAtten(headOffset, q_i, attnOutSoftmax, z);
+						}
 					}
-				}
+					});
 			};
 			void residual(const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor) {
 
-				Tensor::TensorView p, input, o;
+				parallelInput([&](auto& offsets) {
 
-				for (std::size_t i = 0; i < mTestInputSize; ++i) {
+					Tensor::TensorView p, input, o;
 
-					p = projectionTensor.spanT(i);
-					input = inputTensor.spanT(i);
-					o = residualTensor.spanT(i);
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) {
 
-					for (std::size_t m = 0; m < o.size(); ++m)
-						o[m] = p[m] + input[m];
-				}
+						p = projectionTensor.spanT(i);
+						input = inputTensor.spanT(i);
+						o = residualTensor.spanT(i);
+
+						for (std::size_t m = 0; m < o.size(); ++m)
+							o[m] = p[m] + input[m];
+					}
+
+					});
 			}
-
 
 			void forward(const auto& inputTensor, const auto& outputTensor, const auto& weightTensor, const auto& biasTensor) {
 
 				const auto b = biasTensor.span();
 
-				Tensor::TensorView input, output, w;
+				parallelInput([&](auto& offsets) {
 
-				for (std::size_t i = 0; i < mTestInputSize; ++i) {
+					Tensor::TensorView input, output, w;
 
-					input = inputTensor.spanT(i);
-					output = outputTensor.spanT(i);
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) {
 
-					std::copy(b.begin(), b.end(), output.begin());
+						input = inputTensor.spanT(i);
+						output = outputTensor.spanT(i);
 
-					for (std::size_t m = 0; m < input.size(); ++m) {
+						std::copy(b.begin(), b.end(), output.begin());
 
-						const auto& in = input[m];
-						w = weightTensor.spanT(m);
+						for (std::size_t m = 0; m < input.size(); ++m) {
 
-						for (std::size_t n = 0; n < output.size(); ++n)
-							output[n] += w[n] * in;
+							const auto& in = input[m];
+							w = weightTensor.spanT(m);
+
+							for (std::size_t n = 0; n < output.size(); ++n)
+								output[n] += w[n] * in;
+						}
 					}
-				}
+					});
 			}
 			Tensor& forward(const auto& inputTensor) {
 
@@ -223,7 +295,7 @@ namespace NetworkLib {
 				mL2.normalise(mResidualActivation1);
 				forward(mL2.mActivations, mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias);
 
-				std::transform(mMLP.mCFCActivations.mTensor.begin(), mMLP.mCFCActivations.mTensor.end(), mMLP.mGeluActivations.mTensor.begin(),
+				std::transform(std::execution::par_unseq, mMLP.mCFCActivations.mTensor.begin(), mMLP.mCFCActivations.mTensor.end(), mMLP.mGeluActivations.mTensor.begin(),
 					[](auto x) {
 						return x * 0.5f * (1.0f + std::erff(x / std::sqrt(2.0f)));
 					});
@@ -275,38 +347,48 @@ namespace NetworkLib {
 
 		void feedForward() {
 
+			std::println("TestInputSize = {}", mTestInputSize);
+
+			//Parallel parallelInput(mTestInputSize);
+
 			auto embedInput = [&]() {
 
 				Tensor::TensorView wte, wpe, wActivations;
 				Token token;
 
-				for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
+				GPT2::parallelInput([&](Parallel::Offsets& offsets) {
 
-					token = mData.mTokens[i];
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) { //inputSize vs dseq
 
-					wte = mWteWeight.spanT(token);
-					wpe = mWpeWeight.spanT(i);
+						token = mData.mTokens[i];
 
-					wActivations = mWActivations.spanT(i);
+						wte = mWteWeight.spanT(token);
+						wpe = mWpeWeight.spanT(i);
 
-					for (std::size_t w = 0; w < mDModel; ++w)
-						wActivations[w] = wte[w] + wpe[w];
-				}
+						wActivations = mWActivations.spanT(i);
 
+						for (std::size_t w = 0; w < mDModel; ++w)
+							wActivations[w] = wte[w] + wpe[w];
+					}
+				});
 
 				};
 
-			embedInput();
+			time<std::chrono::milliseconds>("feedforward", [&]() {
 
-			Tensor* input = &mWActivations;
-			std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
+				embedInput();
 
-				std::puts(".");
-				input = &layer.forward(*input);
+				Tensor* input = &mWActivations;
+				std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
+
+					std::cout << ".";
+					input = &layer.forward(*input);
+
+					});
+
+				mFinalLayer.normalise(*input);
 
 				});
-
-			mFinalLayer.normalise(*input);
 
 			auto checkSum64 = [&]() {
 
@@ -327,7 +409,7 @@ namespace NetworkLib {
 					assert(389 == getSum(layer.mCProjActivations));
 					assert(358 == getSum(layer.mResidualActivation1));
 					assert(280 == getSum(layer.mL2.mActivations));
-					assert(-235461 == getSum(layer.mMLP.mCFCActivations));
+					assert(-235462 == getSum(layer.mMLP.mCFCActivations));
 					assert(-10345 == getSum(layer.mMLP.mGeluActivations));
 					assert(-155 == getSum(layer.mResidualActivation2));
 
@@ -343,9 +425,11 @@ namespace NetworkLib {
 
 				auto testOutput = [&]() {
 
-					assert(16654 == getSum(mFinalLayer.mActivations));
+					auto testSum = getSum(mFinalLayer.mActivations);
 
-					std::println("{}", getSum(mFinalLayer.mActivations));
+					assert(16654 == testSum);
+
+					std::println("16654 == {} is {}", testSum, 16654==testSum);
 
 					};
 
@@ -353,7 +437,7 @@ namespace NetworkLib {
 				testFrontLayer();
 				testBackLayer();
 				testOutput();
-
+//
 				};
 
 			checkSum64();

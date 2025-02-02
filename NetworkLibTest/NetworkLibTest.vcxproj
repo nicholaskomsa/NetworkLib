@@ -44,7 +44,7 @@
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\include;$(IncludePath)</IncludePath>
     <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
-    <LibraryPath>F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\lib\$(Configuration);$(LibraryPath)</LibraryPath>
+    <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\lib\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\include;$(IncludePath)</IncludePath>
@@ -61,7 +61,7 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>FreeImage_d.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>NetworkLib.lib; FreeImage_d.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
