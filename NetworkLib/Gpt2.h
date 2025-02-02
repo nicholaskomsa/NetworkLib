@@ -353,10 +353,10 @@ namespace NetworkLib {
 
 			auto embedInput = [&]() {
 
-				Tensor::TensorView wte, wpe, wActivations;
-				Token token;
+				parallelInput([&](Parallel::Offsets& offsets) {
 
-				GPT2::parallelInput([&](Parallel::Offsets& offsets) {
+					Tensor::TensorView wte, wpe, wActivations;
+					Token token;
 
 					for (std::size_t i = offsets.first; i < offsets.second; ++i) { //inputSize vs dseq
 
