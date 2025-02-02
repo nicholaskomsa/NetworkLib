@@ -9,6 +9,7 @@
 #include <execution>
 #include <boost/json.hpp>
 #include <map>
+#include <numbers>
 
 #include "Tensor.h"
 
@@ -25,7 +26,6 @@ namespace NetworkLib {
 		return elapsed;
 	};
 
-	
 	struct Parallel {
 
 		static constexpr auto mHardwareThreads = 236;
@@ -295,9 +295,11 @@ namespace NetworkLib {
 				mL2.normalise(mResidualActivation1);
 				forward(mL2.mActivations, mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias);
 
+				constexpr auto r_sqrt2 = 1.0f / std::numbers::sqrt2;
+
 				std::transform(std::execution::par_unseq, mMLP.mCFCActivations.mTensor.begin(), mMLP.mCFCActivations.mTensor.end(), mMLP.mGeluActivations.mTensor.begin(),
-					[](auto x) {
-						return x * 0.5f * (1.0f + std::erff(x / std::sqrt(2.0f)));
+					[&](auto x) {
+						return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 					});
 
 				forward(mMLP.mGeluActivations, mMLP.mCProjActivations, mMLP.mCProjWeight, mMLP.mCProjBias);
@@ -348,8 +350,6 @@ namespace NetworkLib {
 		void feedForward() {
 
 			std::println("TestInputSize = {}", mTestInputSize);
-
-			//Parallel parallelInput(mTestInputSize);
 
 			auto embedInput = [&]() {
 
@@ -426,18 +426,18 @@ namespace NetworkLib {
 				auto testOutput = [&]() {
 
 					auto testSum = getSum(mFinalLayer.mActivations);
+					constexpr auto finalSum = 16654;
 
-					assert(16654 == testSum);
+					assert(finalSum == testSum);
 
-					std::println("16654 == {} is {}", testSum, 16654==testSum);
+					std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
 
 					};
-
 
 				testFrontLayer();
 				testBackLayer();
 				testOutput();
-//
+
 				};
 
 			checkSum64();
