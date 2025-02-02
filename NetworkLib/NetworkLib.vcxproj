@@ -43,6 +43,10 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\include;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2022\lib\ogre\ogre-deps\ogredeps\lib\$(Configuration);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
@@ -86,9 +90,11 @@
     <ClInclude Include="CpuNetwork.h" />
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
+    <ClInclude Include="Tensor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
+    <ClCompile Include="Gpt2.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

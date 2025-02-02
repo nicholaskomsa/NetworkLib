@@ -19,10 +19,16 @@
     <ClInclude Include="Gpt2.h">
       <Filter>Gpt</Filter>
     </ClInclude>
+    <ClInclude Include="Tensor.h">
+      <Filter>Gpt</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">
       <Filter>Network</Filter>
+    </ClCompile>
+    <ClCompile Include="Gpt2.cpp">
+      <Filter>Gpt</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

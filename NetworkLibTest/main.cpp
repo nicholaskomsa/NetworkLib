@@ -5,7 +5,7 @@
 
 int main() {
 
-	GPT2 gpt2;
+	NetworkLib::GPT2 gpt2;
 	
 	try {
 
@@ -21,7 +21,7 @@ int main() {
 
 		gpt2.feedForward();
 
-	}catch(const GPT2::Error& e){
+	}catch(const NetworkLib::GPT2::Error& e){
 		std::println(std::cerr, "{}", e.what());
 	}catch(...){
 		std::println(std::cerr, "Unknown error");
