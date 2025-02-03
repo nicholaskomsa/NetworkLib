@@ -55,7 +55,7 @@ void GPT2::Decoder::readEnc() {
 }
 
 
-std::string GPT2::Decoder::decode(std::span<Token> tokens) {
+std::string GPT2::Decoder::decode( TokensView tokens) {
 
 	std::string text;
 	text.reserve(tokens.size() * 3); //avg word size == 3?
@@ -247,8 +247,9 @@ void GPT2::readSafeTensors() {
 		auto seqModel3 = mDSeq * mDModel3;
 		auto seqModel4 = mDSeq * mDModel4;
 		auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
+		auto seqVocab = mDSeq * mDVocab;
 
-		mActivationSpace.resize(seqModel + (seqModel * 7 + seqModel3 + seqSeqHead * 2 + seqModel4 * 2) * mAttnLayers.size() + seqModel);
+		mActivationSpace.resize(seqModel + (seqModel * 7 + seqModel3 + seqSeqHead * 2 + seqModel4 * 2) * mAttnLayers.size() + seqModel + seqVocab);
 
 		auto begin = mActivationSpace.begin();
 
@@ -298,6 +299,8 @@ void GPT2::readSafeTensors() {
 		mFinalLayer.mActivations = { {begin, seqModel}, mDSeq, mDModel };
 		std::advance(begin, seqModel);
 
+		mUnembedActivations = { {begin, seqVocab}, mDSeq, mDVocab };
+		std::advance(begin, seqVocab);
 		};
 
 	createActivationSpace();

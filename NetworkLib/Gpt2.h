@@ -16,13 +16,14 @@
 namespace NetworkLib {
 
 	template<typename T>
-	T time(const auto& caption, auto&& functor) {
+	T time(const std::string& caption, auto&& functor) {
 		std::println("timing {}", caption);
 		auto start = std::chrono::high_resolution_clock::now();
 		functor();
 		auto end = std::chrono::high_resolution_clock::now();
 		auto elapsed = std::chrono::duration_cast<T>(end - start);
 		std::println("\t{} took {}", caption, elapsed.count());
+		
 		return elapsed;
 	};
 
@@ -36,9 +37,14 @@ namespace NetworkLib {
 
 		Sections mSections;
 
-		Parallel(std::size_t size) {
+		Parallel() = default;
+		Parallel(std::size_t size, std::size_t hardwareSections = 0) {
 
-			auto sectionSize = size / mHardwareThreads;
+			section(size, hardwareSections);
+		};
+		void section(std::size_t size, std::size_t hardwareSections = 0 ){
+
+			auto sectionSize = size / (hardwareSections == 0 ? mHardwareThreads: hardwareSections);
 			if (sectionSize == 0) sectionSize = 1;
 			auto numSections = size / sectionSize;
 
@@ -57,11 +63,15 @@ namespace NetworkLib {
 			mSections.back().second = size;
 		}
 
-		void operator()(Functor&& functor) {
-
-			std::for_each(std::execution::par_unseq, mSections.begin(), mSections.end(), [&]( auto& section) {
-				functor(section);
-				});
+		void operator()(Functor&& functor, bool single=false) {
+			if(single)
+				std::for_each(std::execution::seq, mSections.begin(), mSections.end(), [&](auto& section) {
+					functor(section);
+					});
+			else
+				std::for_each(std::execution::par_unseq, mSections.begin(), mSections.end(), [&]( auto& section) {
+					functor(section);
+					});
 		}
 	};
 
@@ -83,13 +93,13 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		static void parallelInput(Parallel::Functor&& functor ) {
+		static void parallelInput(Parallel::Functor&& functor, bool single = false) {
 			static Parallel input(mTestInputSize);
-			input(std::move(functor));
+			input(std::move(functor), single);
 		}
-		static void parallelHeads(Parallel::Functor&& functor) {
+		static void parallelHeads(Parallel::Functor&& functor, bool single = false) {
 			static Parallel heads(mHeadNum);
-			heads(std::move(functor));
+			heads(std::move(functor), single);
 		}
 
 		using Floats = std::vector<float>;
@@ -154,12 +164,15 @@ namespace NetworkLib {
 
 				const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
-				auto calculateQKAtten = [&](std::size_t headOffset, std::size_t q_i, auto& q, auto& attnOut) {
+				auto calculateQKAtten = [&](std::size_t headOffset, auto q_i, auto& q, auto& attnOut) {
 
 					const auto qOffset = mQOffset + headOffset;
-					Tensor::TensorView k, kh, qh = { q.data() + qOffset, mHeadsPerDModel };
+					Tensor::TensorView qh = { q.data() + qOffset, mHeadsPerDModel };
 
 					const auto kOffset = mKOffset + headOffset;
+
+					Tensor::TensorView k, kh;
+
 					for (std::size_t m = 0; m <= q_i; ++m) {
 
 						k = mCAttnActivations.spanT(m);
@@ -172,6 +185,7 @@ namespace NetworkLib {
 
 						attnOut[m] = dot * r_sqrtHeadsPerDModel;
 					}
+
 					};
 
 				auto softmaxQ = [&](std::size_t q_i, const auto& input, const auto& output) {
@@ -179,40 +193,44 @@ namespace NetworkLib {
 					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
 
 					float softmaxSum = 0.0f;
-					float softmaxExp = 0.0f;
 
-					for (std::size_t m = 0; m <= q_i; ++m) {
+					std::transform(std::execution::seq, input.begin(), input.begin() + q_i + 1, output.begin(), [&](auto& i) {
+						return std::expf(i - softmaxMax);
+						});
 
-						softmaxExp = std::expf(input[m] - softmaxMax);
-
-						output[m] = softmaxExp;
-
-						softmaxSum += softmaxExp;
-					}
-
+					softmaxSum = std::reduce(output.begin(), output.end());
+					
 					const auto r_softmaxSum = 1.0f / softmaxSum;
 
-					for (std::size_t m = 0; m <= q_i; ++m)
-						output[m] *= r_softmaxSum;
+					std::transform(std::execution::seq, output.begin(), output.begin() + q_i + 1, output.begin(), [&](auto& o) {
+						return o * r_softmaxSum;
+						});
+
 					};
 
-				auto calculateVAtten = [&](std::size_t headOffset, std::size_t q_i, auto& attnOutSoftmax, auto& z) {
+				auto calculateVAtten = [&](std::size_t headOffset, auto parallelQ, auto& attnOutSoftmax, auto& z) {
 
-					Tensor::TensorView v, vh, zh = { z.data() + headOffset, mHeadsPerDModel };
-					auto factor = 0.0f;
+					Tensor::TensorView zh = { z.data() + headOffset, mHeadsPerDModel };
 
 					const auto vOffset = mVOffset + headOffset;
-					for (std::size_t m = 0; m <= q_i; ++m) {
 
-						v = mCAttnActivations.spanT(m);
-						vh = { v.data() + vOffset, mHeadsPerDModel };
+					//parallelQ([&](auto& offsets) {
 
-						factor = attnOutSoftmax[m];
+						Tensor::TensorView v, vh;
+						auto factor = 0.0f;
 
-						for (std::size_t n = 0; n < vh.size(); ++n)
-							zh[n] += vh[n] * factor;
+						for (std::size_t m = 0; m <= parallelQ; ++m) {
 
-					}
+							v = mCAttnActivations.spanT(m);
+							vh = { v.data() + vOffset, mHeadsPerDModel };
+
+							factor = attnOutSoftmax[m];
+
+							for (std::size_t n = 0; n < vh.size(); ++n)
+								zh[n] += vh[n] * factor;
+
+						}
+					//	});
 					};
 
 				parallelHeads([&](auto& offsets) {
@@ -312,11 +330,13 @@ namespace NetworkLib {
 
 		Floats mTensorSpace, mActivationSpace;
 
-		Tensor mWpeWeight, mWteWeight, mWActivations;
+		Tensor mWpeWeight, mWteWeight, mWActivations, mUnembedActivations;
 		LinearLayer mFinalLayer;
 		std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 
 		using Token = std::uint16_t;
+		using Tokens = std::vector<Token>;
+		using TokensView = std::span<Token>;
 
 		struct Decoder {
 
@@ -331,13 +351,13 @@ namespace NetworkLib {
 			std::string mDenseWords;
 
 			void readEnc();
-			std::string decode(std::span<Token> tokens);
+			std::string decode( TokensView tokens);
 
 		} mDecoder;
 
 		struct Data {
 
-			std::vector<Token> mTokens;
+			Tokens mTokens;
 
 			void readData();
 
@@ -374,6 +394,33 @@ namespace NetworkLib {
 
 				};
 
+			auto unEmbedOutput = [&]() {
+
+				parallelInput([&](Parallel::Offsets& offsets) {
+
+					Tensor::TensorView input, wte, output;
+
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) { //inputSize vs dseq
+
+						input = mFinalLayer.mActivations.spanT(i);
+						output = mUnembedActivations.spanT(i);
+
+						for (std::size_t m = 0; m < output.size(); ++m) {
+							
+							wte = mWteWeight.spanT(m);
+
+							float dot = 0.0f;
+
+							for (std::size_t n = 0; n < input.size(); ++n)
+								dot += input[n] * wte[n];
+
+							output[m] = dot;
+						}
+					}
+					});
+
+				};
+
 			time<std::chrono::milliseconds>("feedforward", [&]() {
 
 				embedInput();
@@ -388,14 +435,39 @@ namespace NetworkLib {
 
 				mFinalLayer.normalise(*input);
 
+				unEmbedOutput();
+
 				});
+
+			auto getPrediction = [&]() {
+
+				auto unembedActivations = mUnembedActivations.spanT(mTestInputSize - 1);
+				auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
+				Token predicted = std::distance(unembedActivations.begin(), selected);
+
+				return predicted;
+				};
+
+			Token predicted = getPrediction();
+
+			auto writeCompletion = [&]() {
+
+				Tokens dataTokens = { mData.mTokens.begin(), mData.mTokens.begin() + mTestInputSize };
+				dataTokens.push_back(predicted);
+
+				auto outputText = mDecoder.decode(dataTokens);
+
+				std::println("{} == {}", outputText, predicted);
+				};
+
+			writeCompletion();
 
 			auto checkSum64 = [&]() {
 
 				assert(64 == mTestInputSize);
 
 				auto getSum = [&](const auto& tensor) {
-					return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end()));
+					return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
 					};
 
 				assert(-30 == getSum(mWActivations));
@@ -409,7 +481,7 @@ namespace NetworkLib {
 					assert(389 == getSum(layer.mCProjActivations));
 					assert(358 == getSum(layer.mResidualActivation1));
 					assert(280 == getSum(layer.mL2.mActivations));
-					assert(-235462 == getSum(layer.mMLP.mCFCActivations));
+					assert(-235461 == getSum(layer.mMLP.mCFCActivations));
 					assert(-10345 == getSum(layer.mMLP.mGeluActivations));
 					assert(-155 == getSum(layer.mResidualActivation2));
 
@@ -428,16 +500,27 @@ namespace NetworkLib {
 					auto testSum = getSum(mFinalLayer.mActivations);
 					constexpr auto finalSum = 16654;
 
+					//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
+
 					assert(finalSum == testSum);
 
-					std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
+					};
 
+				auto testUnEmbed = [&]() {
+
+					//inaccuracies/difference from reduce? std::println("-353845277 == {}", getSum(mUnembedActivations));
+					assert(-353845277 == getSum(mUnembedActivations));
+
+					};
+				auto testPrediction = [&]() {
+					assert(185 == predicted);
 					};
 
 				testFrontLayer();
 				testBackLayer();
 				testOutput();
-
+				testUnEmbed();
+				testPrediction();
 				};
 
 			checkSum64();
