@@ -164,7 +164,7 @@ namespace NetworkLib {
 
 				const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
-				auto calculateQKAtten = [&](std::size_t headOffset, auto q_i, auto& q, auto& attnOut) {
+				auto calculateQKAtten = [&](std::size_t headOffset, auto i, auto& q, auto& attnOut) {
 
 					const auto qOffset = mQOffset + headOffset;
 					Tensor::TensorView qh = { q.data() + qOffset, mHeadsPerDModel };
@@ -173,7 +173,7 @@ namespace NetworkLib {
 
 					Tensor::TensorView k, kh;
 
-					for (std::size_t m = 0; m <= q_i; ++m) {
+					for (std::size_t m = 0; m <= i; ++m) {
 
 						k = mCAttnActivations.spanT(m);
 						kh = { k.data() + kOffset, mHeadsPerDModel };
@@ -188,38 +188,36 @@ namespace NetworkLib {
 
 					};
 
-				auto softmaxQ = [&](std::size_t q_i, const auto& input, const auto& output) {
+				auto softmax = [&](std::size_t i, const auto& input, const auto& output) {
 
-					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + q_i);
+					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + i);
 
 					float softmaxSum = 0.0f;
 
-					std::transform(std::execution::seq, input.begin(), input.begin() + q_i + 1, output.begin(), [&](auto& i) {
-						return std::expf(i - softmaxMax);
+					std::transform(std::execution::seq, input.begin(), input.begin() + i + 1, output.begin(), [&](auto& in) {
+						return std::expf(in - softmaxMax);
 						});
 
 					softmaxSum = std::reduce(output.begin(), output.end());
 					
 					const auto r_softmaxSum = 1.0f / softmaxSum;
 
-					std::transform(std::execution::seq, output.begin(), output.begin() + q_i + 1, output.begin(), [&](auto& o) {
+					std::transform(std::execution::seq, output.begin(), output.begin() + i + 1, output.begin(), [&](auto& o) {
 						return o * r_softmaxSum;
 						});
 
 					};
 
-				auto calculateVAtten = [&](std::size_t headOffset, auto parallelQ, auto& attnOutSoftmax, auto& z) {
+				auto calculateVAtten = [&](std::size_t headOffset, std::size_t i, auto& attnOutSoftmax, auto& z) {
 
 					Tensor::TensorView zh = { z.data() + headOffset, mHeadsPerDModel };
 
 					const auto vOffset = mVOffset + headOffset;
 
-					//parallelQ([&](auto& offsets) {
-
 						Tensor::TensorView v, vh;
 						auto factor = 0.0f;
 
-						for (std::size_t m = 0; m <= parallelQ; ++m) {
+						for (std::size_t m = 0; m <= i; ++m) {
 
 							v = mCAttnActivations.spanT(m);
 							vh = { v.data() + vOffset, mHeadsPerDModel };
@@ -230,7 +228,7 @@ namespace NetworkLib {
 								zh[n] += vh[n] * factor;
 
 						}
-					//	});
+
 					};
 
 				parallelHeads([&](auto& offsets) {
@@ -239,17 +237,17 @@ namespace NetworkLib {
 
 						const auto headOffset = h * mHeadsPerDModel;
 
-						for (std::size_t q_i = 0; q_i < mTestInputSize; ++q_i) { //inputSize vs dseq
+						for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
 
-							Tensor::TensorView q = mCAttnActivations.spanT(q_i)
-								, z = mAttnZ.spanT(q_i);
+							Tensor::TensorView q = mCAttnActivations.spanT(i)
+								, z = mAttnZ.spanT(i);
 
-							Tensor::TensorView attnOut = mAttnActivations.spanT(h, q_i)
-								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, q_i);
+							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
+								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
 
-							calculateQKAtten(headOffset, q_i, q, attnOut);
-							softmaxQ(q_i, attnOut, attnOutSoftmax);
-							calculateVAtten(headOffset, q_i, attnOutSoftmax, z);
+							calculateQKAtten(headOffset, i, q, attnOut);
+							softmax(i, attnOut, attnOutSoftmax);
+							calculateVAtten(headOffset, i, attnOutSoftmax, z);
 						}
 					}
 					});
@@ -379,7 +377,7 @@ namespace NetworkLib {
 					Tensor::TensorView wte, wpe, wActivations;
 					Token token;
 
-					for (std::size_t i = offsets.first; i < offsets.second; ++i) { //inputSize vs dseq
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) {
 
 						token = mData.mTokens[i];
 
@@ -388,8 +386,8 @@ namespace NetworkLib {
 
 						wActivations = mWActivations.spanT(i);
 
-						for (std::size_t w = 0; w < mDModel; ++w)
-							wActivations[w] = wte[w] + wpe[w];
+						for (std::size_t m = 0; m < wActivations.size(); ++m)
+							wActivations[m] = wte[m] + wpe[m];
 					}
 				});
 
@@ -401,7 +399,7 @@ namespace NetworkLib {
 
 					Tensor::TensorView input, wte, output;
 
-					for (std::size_t i = offsets.first; i < offsets.second; ++i) { //inputSize vs dseq
+					for (std::size_t i = offsets.first; i < offsets.second; ++i) { 
 
 						input = mFinalLayer.mActivations.spanT(i);
 						output = mUnembedActivations.spanT(i);
