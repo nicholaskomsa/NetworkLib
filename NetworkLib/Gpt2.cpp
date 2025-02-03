@@ -66,7 +66,9 @@ std::string GPT2::Decoder::decode( TokensView tokens) {
 
 	return text;
 }
-
+std::string GPT2::Decoder::decode(Token token) {
+	return std::string( mWords[token] );
+}
 void GPT2::Data::readData() {
 
 	auto readFile = [&]() {

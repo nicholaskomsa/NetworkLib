@@ -352,6 +352,7 @@ namespace NetworkLib {
 
 			void readEnc();
 			std::string decode( TokensView tokens);
+			std::string decode(Token token);
 
 		} mDecoder;
 
@@ -452,12 +453,8 @@ namespace NetworkLib {
 
 			auto writeCompletion = [&]() {
 
-				Tokens dataTokens = { mData.mTokens.begin(), mData.mTokens.begin() + mTestInputSize };
-				dataTokens.push_back(predicted);
-
-				auto outputText = mDecoder.decode(dataTokens);
-
-				std::println("{} == {}", outputText, predicted);
+				auto outputText = mDecoder.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mTestInputSize});
+				std::println("{}{}", outputText, mDecoder.decode(predicted));
 				};
 
 			writeCompletion();
@@ -526,5 +523,4 @@ namespace NetworkLib {
 			checkSum64();
 		}
 	};
-
 }
