@@ -29,7 +29,7 @@ namespace NetworkLib {
 
 	struct Parallel {
 
-		static constexpr auto mHardwareThreads = 236;
+		static constexpr auto mHardwareThreads = 32;
 		using Offsets = std::pair<std::size_t, std::size_t>;
 		using Sections = std::vector<Offsets>;
 
@@ -63,13 +63,17 @@ namespace NetworkLib {
 			mSections.back().second = size;
 		}
 
-		void operator()(Functor&& functor, bool single=false) {
+		void operator()(Functor&& functor, std::size_t end = 0, bool single=false) {
+
+			if (end == 0) end = mSections.size();
+			end = std::min(end, mSections.size());
+
 			if(single)
-				std::for_each(std::execution::seq, mSections.begin(), mSections.end(), [&](auto& section) {
+				std::for_each(std::execution::seq, mSections.begin(), mSections.begin()+end, [&](auto& section) {
 					functor(section);
 					});
 			else
-				std::for_each(std::execution::par_unseq, mSections.begin(), mSections.end(), [&]( auto& section) {
+				std::for_each(std::execution::par_unseq, mSections.begin(), mSections.begin()+end, [&]( auto& section) {
 					functor(section);
 					});
 		}
@@ -84,7 +88,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = 64;	//vs dSeq for full size or 64 for test size
+			, mTestInputSize = 300;	//vs dSeq for full size or 64 for test size
 
 		struct Error : public std::system_error {
 
@@ -93,7 +97,7 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		static Parallel mParallelInput, mParallelHeads;
+		static Parallel mParallelInput, mParallelHeads, mParallelI;
 
 		using Floats = std::vector<float>;
 
@@ -150,14 +154,14 @@ namespace NetworkLib {
 
 			MLP mMLP;
 
+			static const float r_sqrtHeadsPerDModel;
+
 			void attention() {
 
 				//activations z cleared here
 				std::fill(mAttnZ.mTensor.begin(), mAttnZ.mTensor.end(), 0.0f);
 
-				const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
-
-				auto calculateQKAtten = [&](std::size_t headOffset, auto i, auto& attnOut) {
+				auto calculateQKAtten = [&](std::size_t headOffset, auto i, const auto& attnOut) {
 
 					const auto qOffset = mQOffset + headOffset;
 					Tensor::TensorView q = mCAttnActivations.spanT(i)
@@ -167,7 +171,7 @@ namespace NetworkLib {
 
 					Tensor::TensorView k, kh;
 
-					for (std::size_t m = 0; m <= i; ++m) {
+					for( std::size_t m = 0 ; m <= i; ++m) {
 
 						k = mCAttnActivations.spanT(m);
 						kh = { k.data() + kOffset, mHeadsPerDModel };
@@ -177,26 +181,24 @@ namespace NetworkLib {
 						for (std::size_t n = 0; n < qh.size(); ++n)
 							dot += qh[n] * kh[n];
 
-						attnOut[m] = dot * r_sqrtHeadsPerDModel;
+						attnOut[m] =  dot * r_sqrtHeadsPerDModel;
+						
 					}
 
 					};
 
 				auto softmax = [&](std::size_t i, const auto& input, const auto& output) {
 					
-					auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
+					const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
 
 					const auto softmaxMax = *std::max_element(ibegin, iend);
-
-					float softmaxSum = 0.0f;
 
 					std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
 						return std::expf(in - softmaxMax);
 						});
 
-					softmaxSum = std::reduce(obegin, oend);
-					
-					const auto r_softmaxSum = 1.0f / softmaxSum;
+					const auto softmaxSum = std::reduce(obegin, oend)
+						, r_softmaxSum = 1.0f / softmaxSum;
 
 					std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
 						return o * r_softmaxSum;
@@ -211,20 +213,20 @@ namespace NetworkLib {
 
 					const auto vOffset = mVOffset + headOffset;
 
-						Tensor::TensorView v, vh;
-						auto factor = 0.0f;
+					Tensor::TensorView v, vh;
+					auto factor = 0.0f;
+		
+					for( std::size_t m =0; m <= i; ++m){
 
-						for (std::size_t m = 0; m <= i; ++m) {
+						v = mCAttnActivations.spanT(m);
+						vh = { v.data() + vOffset, mHeadsPerDModel };
 
-							v = mCAttnActivations.spanT(m);
-							vh = { v.data() + vOffset, mHeadsPerDModel };
+						factor = attnOutSoftmax[m];
 
-							factor = attnOutSoftmax[m];
+						for (std::size_t n = 0; n < vh.size(); ++n)
+							zh[n] += vh[n] * factor;
+					}
 
-							for (std::size_t n = 0; n < vh.size(); ++n)
-								zh[n] += vh[n] * factor;
-
-						}
 					};
 
 				mParallelHeads([&](auto& offsets) {
@@ -234,10 +236,10 @@ namespace NetworkLib {
 						const auto headOffset = h * mHeadsPerDModel;
 
 						for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
-
+							
 							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
 								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
-
+							
 							calculateQKAtten(headOffset, i, attnOut);
 							softmax(i, attnOut, attnOutSoftmax);
 							calculateVAtten(headOffset, i, attnOutSoftmax);
@@ -359,20 +361,22 @@ namespace NetworkLib {
 
 		void readSafeTensors();
 
-		void feedForward() {
+		Token feedForward(TokensView tokens) {
 
-			std::println("TestInputSize = {}", mTestInputSize);
+			//std::println("feedForward input size = {}", tokens.size());
+
+			mParallelInput.section(tokens.size());
 
 			auto embedInput = [&]() {
 
-				mParallelInput([&](Parallel::Offsets& offsets) {
+				mParallelInput([&](auto& offsets) {
 
 					Tensor::TensorView wte, wpe, wActivations;
 					Token token;
 
 					for (std::size_t i = offsets.first; i < offsets.second; ++i) {
 
-						token = mData.mTokens[i];
+						token = tokens[i]; //mData.mTokens[i]
 
 						wte = mWteWeight.spanT(token);
 						wpe = mWpeWeight.spanT(i);
@@ -388,7 +392,7 @@ namespace NetworkLib {
 
 			auto unEmbedOutput = [&]() {
 
-				mParallelInput([&](Parallel::Offsets& offsets) {
+				mParallelInput([&](auto& offsets) {
 
 					Tensor::TensorView input, wte, output;
 
@@ -413,14 +417,14 @@ namespace NetworkLib {
 
 				};
 
-			time<std::chrono::milliseconds>("feedforward", [&]() {
+		//	time<std::chrono::milliseconds>("ff", [&]() {
 
 				embedInput();
 
 				Tensor* input = &mWActivations;
 				std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
 
-					std::cout << ".";
+					//std::cout << ".";
 					input = &layer.forward(*input);
 
 					});
@@ -429,7 +433,7 @@ namespace NetworkLib {
 
 				unEmbedOutput();
 
-				});
+			//	});
 
 			auto getPrediction = [&]() {
 
@@ -448,7 +452,7 @@ namespace NetworkLib {
 				std::println("{}{}", outputText, mDecoder.decode(predicted));
 				};
 
-			writeCompletion();
+			//writeCompletion();
 
 			auto checkSum64 = [&]() {
 
@@ -458,7 +462,9 @@ namespace NetworkLib {
 					return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
 					};
 
-				assert(-30 == getSum(mWActivations));
+				auto testEmbed = [&] {
+					assert(-30 == getSum(mWActivations));
+					};
 
 				auto testFrontLayer = [&]() {
 
@@ -473,7 +479,7 @@ namespace NetworkLib {
 					assert(-10345 == getSum(layer.mMLP.mGeluActivations));
 					assert(-155 == getSum(layer.mResidualActivation2));
 
-					};
+					}; 
 
 				auto testBackLayer = [&]() {
 
@@ -506,6 +512,7 @@ namespace NetworkLib {
 					assert(385 == predicted);
 					};
 
+				testEmbed();
 				testFrontLayer();
 				testBackLayer();
 				testOutput();
@@ -513,7 +520,27 @@ namespace NetworkLib {
 				testPrediction();
 				};
 
-			checkSum64();
+	//		checkSum64();
+
+			return predicted;
+		}
+
+		void slide(TokensView tokens,  std::size_t distance = 20) {
+
+			GPT2::Tokens testTokens(tokens.begin(), tokens.end());
+
+			GPT2::TokensView testTokensView = { testTokens.begin(), std::min(testTokens.size(), mTestInputSize) };
+
+			for (std::size_t s = 0; s < distance; ++s) {
+
+				testTokensView = { testTokens.begin() + s, testTokens.end() };
+
+				auto newToken = feedForward(testTokensView);
+
+				testTokens.push_back(newToken);
+
+				std::print("{}", mDecoder.decode(newToken));
+			}
 		}
 	};
 }
