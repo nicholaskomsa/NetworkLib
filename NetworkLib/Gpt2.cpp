@@ -5,6 +5,8 @@
 
 using namespace NetworkLib;
 
+Parallel GPT2::mParallelInput(GPT2::mTestInputSize), GPT2::mParallelHeads(GPT2::mHeadNum);
+
 GPT2::Error::Error(std::errc code, const std::string& message) : std::system_error(int(code), std::generic_category(), message) {}
 
 void GPT2::Error::fileNotFound(const std::string& fileName) {

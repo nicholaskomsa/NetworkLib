@@ -93,14 +93,7 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		static void parallelInput(Parallel::Functor&& functor, bool single = false) {
-			static Parallel input(mTestInputSize);
-			input(std::move(functor), single);
-		}
-		static void parallelHeads(Parallel::Functor&& functor, bool single = false) {
-			static Parallel heads(mHeadNum);
-			heads(std::move(functor), single);
-		}
+		static Parallel mParallelInput, mParallelHeads;
 
 		using Floats = std::vector<float>;
 
@@ -115,7 +108,7 @@ namespace NetworkLib {
 
 			void normalise(auto& input) {
 
-				parallelInput([&](auto& offsets) {
+				mParallelInput([&](auto& offsets) {
 
 					Tensor::TensorView i, o, b, w;
 
@@ -164,10 +157,11 @@ namespace NetworkLib {
 
 				const auto r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(mHeadsPerDModel);
 
-				auto calculateQKAtten = [&](std::size_t headOffset, auto i, auto& q, auto& attnOut) {
+				auto calculateQKAtten = [&](std::size_t headOffset, auto i, auto& attnOut) {
 
 					const auto qOffset = mQOffset + headOffset;
-					Tensor::TensorView qh = { q.data() + qOffset, mHeadsPerDModel };
+					Tensor::TensorView q = mCAttnActivations.spanT(i)
+						, qh = { q.data() + qOffset, mHeadsPerDModel };
 
 					const auto kOffset = mKOffset + headOffset;
 
@@ -190,7 +184,7 @@ namespace NetworkLib {
 
 				auto softmax = [&](std::size_t i, const auto& input, const auto& output) {
 
-					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + i);
+					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + i + 1);
 
 					float softmaxSum = 0.0f;
 
@@ -208,9 +202,10 @@ namespace NetworkLib {
 
 					};
 
-				auto calculateVAtten = [&](std::size_t headOffset, std::size_t i, auto& attnOutSoftmax, auto& z) {
+				auto calculateVAtten = [&](std::size_t headOffset, std::size_t i, auto& attnOutSoftmax) {
 
-					Tensor::TensorView zh = { z.data() + headOffset, mHeadsPerDModel };
+					Tensor::TensorView z = mAttnZ.spanT(i)
+						, zh = { z.data() + headOffset, mHeadsPerDModel };
 
 					const auto vOffset = mVOffset + headOffset;
 
@@ -228,10 +223,9 @@ namespace NetworkLib {
 								zh[n] += vh[n] * factor;
 
 						}
-
 					};
 
-				parallelHeads([&](auto& offsets) {
+				mParallelHeads([&](auto& offsets) {
 
 					for (std::size_t h = offsets.first; h < offsets.second; ++h) {
 
@@ -239,22 +233,19 @@ namespace NetworkLib {
 
 						for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
 
-							Tensor::TensorView q = mCAttnActivations.spanT(i)
-								, z = mAttnZ.spanT(i);
-
 							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
 								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
 
-							calculateQKAtten(headOffset, i, q, attnOut);
+							calculateQKAtten(headOffset, i, attnOut);
 							softmax(i, attnOut, attnOutSoftmax);
-							calculateVAtten(headOffset, i, attnOutSoftmax, z);
+							calculateVAtten(headOffset, i, attnOutSoftmax);
 						}
 					}
 					});
 			};
 			void residual(const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor) {
 
-				parallelInput([&](auto& offsets) {
+				mParallelInput([&](auto& offsets) {
 
 					Tensor::TensorView p, input, o;
 
@@ -275,7 +266,7 @@ namespace NetworkLib {
 
 				const auto b = biasTensor.span();
 
-				parallelInput([&](auto& offsets) {
+				mParallelInput([&](auto& offsets) {
 
 					Tensor::TensorView input, output, w;
 
@@ -372,7 +363,7 @@ namespace NetworkLib {
 
 			auto embedInput = [&]() {
 
-				parallelInput([&](Parallel::Offsets& offsets) {
+				mParallelInput([&](Parallel::Offsets& offsets) {
 
 					Tensor::TensorView wte, wpe, wActivations;
 					Token token;
@@ -395,7 +386,7 @@ namespace NetworkLib {
 
 			auto unEmbedOutput = [&]() {
 
-				parallelInput([&](Parallel::Offsets& offsets) {
+				mParallelInput([&](Parallel::Offsets& offsets) {
 
 					Tensor::TensorView input, wte, output;
 
@@ -503,12 +494,14 @@ namespace NetworkLib {
 
 				auto testUnEmbed = [&]() {
 
-					//inaccuracies/difference from reduce? std::println("-353845277 == {}", getSum(mUnembedActivations));
-					assert(-353845277 == getSum(mUnembedActivations));
+					//inaccuracies/difference from reduce?
+				//	std::println("-353845315 == {}", getSum(mUnembedActivations));
+					assert(-353845315 == getSum(mUnembedActivations));
 
 					};
 				auto testPrediction = [&]() {
-					assert(185 == predicted);
+					//385 == us
+					assert(385 == predicted);
 					};
 
 				testFrontLayer();
