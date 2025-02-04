@@ -183,20 +183,22 @@ namespace NetworkLib {
 					};
 
 				auto softmax = [&](std::size_t i, const auto& input, const auto& output) {
+					
+					auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
 
-					const auto softmaxMax = *std::max_element(input.begin(), input.begin() + i + 1);
+					const auto softmaxMax = *std::max_element(ibegin, iend);
 
 					float softmaxSum = 0.0f;
 
-					std::transform(std::execution::seq, input.begin(), input.begin() + i + 1, output.begin(), [&](auto& in) {
+					std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
 						return std::expf(in - softmaxMax);
 						});
 
-					softmaxSum = std::reduce(output.begin(), output.end());
+					softmaxSum = std::reduce(obegin, oend);
 					
 					const auto r_softmaxSum = 1.0f / softmaxSum;
 
-					std::transform(std::execution::seq, output.begin(), output.begin() + i + 1, output.begin(), [&](auto& o) {
+					std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
 						return o * r_softmaxSum;
 						});
 
