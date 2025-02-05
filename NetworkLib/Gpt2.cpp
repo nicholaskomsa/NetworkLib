@@ -5,7 +5,7 @@
 
 using namespace NetworkLib;
 
-Parallel GPT2::mParallelInput(GPT2::mTestInputSize), GPT2::mParallelHeads(GPT2::mHeadNum), GPT2::mParallelI(GPT2::mTestInputSize);
+Parallel GPT2::mParallelInput(GPT2::mTestInputSize), GPT2::mParallelHeads(GPT2::mHeadNum);
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 

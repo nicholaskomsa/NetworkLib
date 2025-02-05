@@ -21,10 +21,10 @@ int main() {
 
 		auto& tokens = gpt2.mData.mTokens;
 
-		std::print("{}", gpt2.mDecoder.decode(tokens));
+		//GPT2::TokensView tokensView(tokens.end() - GPT2::mTestInputSize, tokens.end());
+		GPT2::TokensView tokensView(tokens.begin()+ GPT2::mTestInputSize, GPT2::mTestInputSize);
 
-		GPT2::TokensView tokensView(tokens.begin(), tokens.begin() + GPT2::mTestInputSize );
-		gpt2.slide(tokensView, 2000);
+		gpt2.slide(tokensView, 20000);
 
 	}catch(const NetworkLib::GPT2::Error& e){
 		std::println(std::cerr, "{}", e.what());

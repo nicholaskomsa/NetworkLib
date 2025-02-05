@@ -10,6 +10,8 @@
 #include <boost/json.hpp>
 #include <map>
 #include <numbers>
+#include <deque>
+#include <random>
 
 #include "Tensor.h"
 
@@ -36,6 +38,7 @@ namespace NetworkLib {
 		using Functor = std::function<void(Offsets&)>;
 
 		Sections mSections;
+		std::size_t mSize{ 0 };
 
 		Parallel() = default;
 		Parallel(std::size_t size, std::size_t hardwareSections = 0) {
@@ -43,6 +46,7 @@ namespace NetworkLib {
 			section(size, hardwareSections);
 		};
 		void section(std::size_t size, std::size_t hardwareSections = 0 ){
+			mSize = size;
 
 			auto sectionSize = size / (hardwareSections == 0 ? mHardwareThreads: hardwareSections);
 			if (sectionSize == 0) sectionSize = 1;
@@ -63,17 +67,14 @@ namespace NetworkLib {
 			mSections.back().second = size;
 		}
 
-		void operator()(Functor&& functor, std::size_t end = 0, bool single=false) {
-
-			if (end == 0) end = mSections.size();
-			end = std::min(end, mSections.size());
+		void operator()(Functor&& functor, bool single=false) {
 
 			if(single)
-				std::for_each(std::execution::seq, mSections.begin(), mSections.begin()+end, [&](auto& section) {
+				std::for_each(std::execution::seq, mSections.begin(), mSections.end(), [&](auto& section) {
 					functor(section);
 					});
 			else
-				std::for_each(std::execution::par_unseq, mSections.begin(), mSections.begin()+end, [&]( auto& section) {
+				std::for_each(std::execution::par_unseq, mSections.begin(), mSections.end(), [&](auto& section) {
 					functor(section);
 					});
 		}
@@ -88,7 +89,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = 300;	//vs dSeq for full size or 64 for test size
+			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
 
 		struct Error : public std::system_error {
 
@@ -97,7 +98,7 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		static Parallel mParallelInput, mParallelHeads, mParallelI;
+		static Parallel mParallelInput, mParallelHeads;
 
 		using Floats = std::vector<float>;
 
@@ -171,7 +172,7 @@ namespace NetworkLib {
 
 					Tensor::TensorView k, kh;
 
-					for( std::size_t m = 0 ; m <= i; ++m) {
+					for( std::size_t m = 0; m <= i; ++m) {
 
 						k = mCAttnActivations.spanT(m);
 						kh = { k.data() + kOffset, mHeadsPerDModel };
@@ -235,7 +236,7 @@ namespace NetworkLib {
 
 						const auto headOffset = h * mHeadsPerDModel;
 
-						for (std::size_t i = 0; i < mTestInputSize; ++i) { //inputSize vs dseq
+						for (std::size_t i = 0; i < mParallelInput.mSize; ++i) {
 							
 							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
 								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
@@ -330,6 +331,7 @@ namespace NetworkLib {
 		using Token = std::uint16_t;
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
+		using TokenDeque = std::deque<Token>;
 
 		struct Decoder {
 
@@ -437,7 +439,7 @@ namespace NetworkLib {
 
 			auto getPrediction = [&]() {
 
-				auto unembedActivations = mUnembedActivations.spanT(mTestInputSize - 1);
+				auto unembedActivations = mUnembedActivations.spanT(mParallelInput.mSize - 1);
 				auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
 				Token predicted = std::distance(unembedActivations.begin(), selected);
 
@@ -448,7 +450,7 @@ namespace NetworkLib {
 
 			auto writeCompletion = [&]() {
 
-				auto outputText = mDecoder.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mTestInputSize});
+				auto outputText = mDecoder.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mParallelInput.mSize });
 				std::println("{}{}", outputText, mDecoder.decode(predicted));
 				};
 
@@ -529,17 +531,15 @@ namespace NetworkLib {
 
 			GPT2::Tokens testTokens(tokens.begin(), tokens.end());
 
-			GPT2::TokensView testTokensView = { testTokens.begin(), std::min(testTokens.size(), mTestInputSize) };
-
 			for (std::size_t s = 0; s < distance; ++s) {
 
-				testTokensView = { testTokens.begin() + s, testTokens.end() };
+				auto newToken = feedForward(testTokens);
 
-				auto newToken = feedForward(testTokensView);
+				std::shift_left(testTokens.begin(), testTokens.end(), 1);
 
-				testTokens.push_back(newToken);
+				testTokens.back() = newToken;
 
-				std::print("{}", mDecoder.decode(newToken));
+				std::print("{}", mDecoder.decode(testTokens));
 			}
 		}
 	};
