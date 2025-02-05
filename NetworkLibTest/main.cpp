@@ -21,8 +21,10 @@ int main() {
 
 		auto& tokens = gpt2.mData.mTokens;
 
+
 		//GPT2::TokensView tokensView(tokens.end() - GPT2::mTestInputSize, tokens.end());
-		GPT2::TokensView tokensView(tokens.begin()+ GPT2::mTestInputSize, GPT2::mTestInputSize);
+		GPT2::TokensView tokensView(tokens.begin(), GPT2::mTestInputSize);
+		std::print("{}",gpt2.mDecoder.decode(tokensView));
 
 		gpt2.slide(tokensView, 20000);
 

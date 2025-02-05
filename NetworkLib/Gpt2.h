@@ -539,7 +539,7 @@ namespace NetworkLib {
 
 				testTokens.back() = newToken;
 
-				std::print("{}", mDecoder.decode(testTokens));
+				std::print("{}", mDecoder.decode(newToken));
 			}
 		}
 	};
