@@ -18,5 +18,8 @@
     <ClCompile Include="tf_1.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="tf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

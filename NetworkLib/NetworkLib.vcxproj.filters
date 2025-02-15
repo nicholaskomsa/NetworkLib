@@ -4,28 +4,29 @@
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="Network">
-      <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Gpt">
       <UniqueIdentifier>{ccdcc16a-697f-4b51-bf1f-2c89a90a730a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gpt\Network">
+      <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CpuNetwork.h">
-      <Filter>Network</Filter>
+      <Filter>Gpt\Network</Filter>
     </ClInclude>
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h">
       <Filter>Gpt</Filter>
     </ClInclude>
+    <ClInclude Include="Parallel.h" />
     <ClInclude Include="Tensor.h">
-      <Filter>Gpt</Filter>
+      <Filter>Gpt\Network</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">
-      <Filter>Network</Filter>
+      <Filter>Gpt\Network</Filter>
     </ClCompile>
     <ClCompile Include="Gpt2.cpp">
       <Filter>Gpt</Filter>

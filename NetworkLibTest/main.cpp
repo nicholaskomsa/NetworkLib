@@ -27,7 +27,10 @@ int main() {
 		
 		gpt2.slide({ tokensView.begin(), tokensView.end() });
 
-	}catch(const NetworkLib::GPT2::Error& e){
+	}
+	catch (const NetworkLib::GPT2::Error& e) {
+		std::println(std::cerr, "{}", e.what());
+	}catch( const std::exception& e){
 		std::println(std::cerr, "{}", e.what());
 	}catch(...){
 		std::println(std::cerr, "Unknown error");

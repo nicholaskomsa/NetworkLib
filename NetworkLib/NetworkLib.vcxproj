@@ -92,6 +92,7 @@
     <ClInclude Include="CpuNetwork.h" />
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
+    <ClInclude Include="Parallel.h" />
     <ClInclude Include="Tensor.h" />
   </ItemGroup>
   <ItemGroup>
