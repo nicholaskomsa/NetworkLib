@@ -9,6 +9,7 @@
 #include <numbers>
 #include <deque>
 #include <random>
+#include <sstream>
 
 #include "Parallel.h";
 #include "Tensor.h"
@@ -410,6 +411,57 @@ namespace NetworkLib {
 			std::string decode( TokensView tokens);
 			std::string decode(Token token);
 
+			Tokens encode(const std::string& text) {
+
+				std::string_view remaining(text);
+
+				Tokens tokens;
+
+				auto getWord = [&]() {
+
+					const std::string delims = " \n\t\r";
+
+					auto getWordSize = [&](auto remaining) {
+
+						std::size_t endOfWord = remaining.find_first_of(delims);
+
+						if (endOfWord == std::string::npos) 
+							endOfWord = remaining.size();
+
+						return endOfWord;
+					};
+
+					auto wordSize = 0;
+					if (remaining.front() == ' ')
+						wordSize = 1 + getWordSize(remaining.substr(1));
+					else
+						wordSize = getWordSize(remaining);
+
+					std::string_view testWord;
+
+					auto wordExists = mWordMap.end();
+
+					for (std::size_t size = wordSize; size >= 1; --size) {
+
+						testWord = remaining.substr(0, size);
+
+						wordExists = mWordMap.find(testWord);
+						if (wordExists != mWordMap.end())
+							break;
+					}
+
+					auto& [word, token] = *wordExists;
+
+					tokens.push_back(token);
+					remaining = remaining.substr(word.size());
+				};
+
+				while (remaining.size())
+					getWord();
+			
+				return tokens;
+
+			}
 		} mDecoder;
 
 		struct Data {
@@ -633,8 +685,34 @@ namespace NetworkLib {
 
 			return predicted;
 		}
+		void chat() {
 
-		void slide(Tokens tokens, std::size_t distance = 30) {
+			bool chatting = true;
+			Tokens scrollingTokens;
+			std::string introChat = "What is the best time to drink coffee?";
+			const Token endl = mDecoder.mWordMap["\n"];
+			std::string line;
+			
+			do {
+			
+				scrollingTokens.clear();
+
+				std::getline(std::cin, line);
+				if (line == "exit") break;
+
+				auto userTokens = mDecoder.encode(line);
+				userTokens.push_back(endl);
+
+				scrollingTokens.insert(scrollingTokens.end(), userTokens.begin(), userTokens.end());
+				slide(scrollingTokens);
+				scrollingTokens.push_back(endl);
+
+				std::cout << mDecoder.decode(scrollingTokens);
+				std::cout << std::endl;
+
+			} while (chatting);
+		}
+		void slide(Tokens& tokens, std::size_t distance = 50) {
 
 			//first ensure that tokens is at most mTestInputSize
 			if (tokens.size() > mTestInputSize) {
@@ -642,9 +720,13 @@ namespace NetworkLib {
 				tokens.erase(tokens.begin(), tokens.end() - mTestInputSize);
 			}
 
+			bool endOfSentence = false;
+
 			auto putWord = [&](Token token) {
 				auto decode = mDecoder.decode(token);
-				std::print("{}", decode);
+			//	std::print("{}", decode);
+				auto end = decode.back();
+				if( end == '.' || end == '?' || end == '!') endOfSentence = true;
 				};
 
 			auto addToken = [&]( Token token) {
@@ -670,13 +752,12 @@ namespace NetworkLib {
 				return scrolled;
 				};
 
-
 			bool scrolled = true;
 			Token newToken = 0;
 			std::chrono::milliseconds ffAvg(0), fmAvg(0);
 			std::size_t ffCount = 0, fmCount = 0;
 
-			for (std::size_t s = 0; s < distance; ++s) {
+			for (std::size_t s = 0; s < distance && !endOfSentence; ++s) {
 			
 				if (scrolled)
 					ffAvg += time<std::chrono::milliseconds>("", [&]() {
@@ -688,7 +769,7 @@ namespace NetworkLib {
 								++fmCount;
 								newToken = feedMore(tokens);
 								});
-
+			
 				
 				//std::print("({})", scrolled ? ffAvg.count() / ffCount : fmAvg.count() / fmCount);
 				
@@ -696,7 +777,6 @@ namespace NetworkLib {
 			}
 			
 			//std::println("ffAvg: {:.2f} fmAvg: {:.2f}", ffAvg.count() / float(ffCount), fmAvg.count() / float(fmCount));
-			std::cout << std::endl;
 		}
 	};
 }

@@ -12,21 +12,20 @@ int main() {
 
 		gpt2.readSafeTensors();
 		//FloatSpaceConvert::colorizeFloatSpace("gpt2", gpt2.mFloatSpace);
+
+		gpt2.mDecoder.readEnc();
 		
-		auto& decoder = gpt2.mDecoder;
+	//	gpt2.mData.readData();
 
-		decoder.readEnc();
+	//	auto& tokens = gpt2.mData.mTokens;
+
+	//	GPT2::TokensView tokensView(tokens.begin(), GPT2::mTestInputSize * 0.9);
+
+	//	std::print("{}",gpt2.mDecoder.decode(tokensView));
 		
-		gpt2.mData.readData();
+	//	gpt2.slide({ tokensView.begin(), tokensView.end() });
 
-		auto& tokens = gpt2.mData.mTokens;
-
-		GPT2::TokensView tokensView(tokens.begin(), GPT2::mTestInputSize * 0.9);
-
-		std::print("{}",gpt2.mDecoder.decode(tokensView));
-		
-		gpt2.slide({ tokensView.begin(), tokensView.end() });
-
+		gpt2.chat();
 	}
 	catch (const NetworkLib::GPT2::Error& e) {
 		std::println(std::cerr, "{}", e.what());
