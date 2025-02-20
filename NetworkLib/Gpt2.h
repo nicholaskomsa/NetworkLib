@@ -490,9 +490,15 @@ namespace NetworkLib {
 		} mData;
 
 	public:
-		GPT2() {
 
+		GPT2() = default;
 
+		void setup() {
+
+			readSafeTensors();
+			//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
+
+			mTranslator.readEnc();
 		}
 
 		void readSafeTensors();
