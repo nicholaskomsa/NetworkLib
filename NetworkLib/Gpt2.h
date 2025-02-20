@@ -412,7 +412,7 @@ namespace NetworkLib {
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
 
-		struct Decoder {
+		struct Translator {
 
 			using Word = std::string_view;
 			using Words = std::vector<Word>;
@@ -455,7 +455,6 @@ namespace NetworkLib {
 						wordSize = getWordSize(remaining);
 
 					std::string_view testWord;
-
 					auto wordExists = mWordMap.end();
 
 					for (std::size_t size = wordSize; size >= 1; --size) {
@@ -480,7 +479,7 @@ namespace NetworkLib {
 				return tokens;
 			}
 
-		} mDecoder;
+		} mTranslator;
 
 		struct Data {
 
@@ -490,13 +489,12 @@ namespace NetworkLib {
 
 		} mData;
 
-		Tokens mPredictions;
-
 	public:
 		GPT2() {
 
 
 		}
+
 		void readSafeTensors();
 
 		//tokens max size == dseq
@@ -522,7 +520,6 @@ namespace NetworkLib {
 					embedInput( i, tokens[i] );
 				
 				});
-				
 		}
 
 		void unEmbedOutput(std::size_t i) {
@@ -595,8 +592,8 @@ namespace NetworkLib {
 
 			auto writeCompletion = [&]() {
 
-				auto outputText = mDecoder.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mParallelInput.mSize });
-				std::println("{}{}", outputText, mDecoder.decode(predicted));
+				auto outputText = mTranslator.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mParallelInput.mSize });
+				std::println("{}{}", outputText, mTranslator.decode(predicted));
 				};
 
 			//writeCompletion();
@@ -708,7 +705,7 @@ namespace NetworkLib {
 
 			bool chatting = true;
 			Tokens scrollingTokens;
-			const Token endl = mDecoder.mWordMap["\n"];
+			const Token endl = mTranslator.mWordMap["\n"];
 			std::string line;
 			
 			do {
@@ -719,14 +716,14 @@ namespace NetworkLib {
 				if (line == "exit") break;
 				std::cout << std::endl;
 
-				auto userTokens = mDecoder.encode(line);
+				auto userTokens = mTranslator.encode(line);
 				userTokens.push_back(endl);
 
 				scrollingTokens.insert(scrollingTokens.end(), userTokens.begin(), userTokens.end());
 				slide(scrollingTokens);
 				scrollingTokens.push_back(endl);
 
-				std::cout << mDecoder.decode(scrollingTokens);
+				std::cout << mTranslator.decode(scrollingTokens);
 				std::cout << std::endl;
 
 			} while (chatting);
@@ -743,9 +740,9 @@ namespace NetworkLib {
 			bool endOfSentence = false;
 
 			auto putWord = [&](Token token) {
-				auto decode = mDecoder.decode(token);
+				auto word = mTranslator.decode(token);
 				//	std::print("{}", decode);
-				auto end = decode.back();
+				auto end = word.back();
 				if (end == '.' || end == '?' || end == '!') endOfSentence = true;
 				};
 
@@ -791,7 +788,7 @@ namespace NetworkLib {
 				auto printAvgTime = [&]() {
 
 					auto& updated = scrolled ? ffAvg : fmAvg;
-					std::print("({})", updated.average() );
+					std::print("{},", updated.average() );
 					};
 				printAvgTime();
 

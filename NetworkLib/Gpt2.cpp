@@ -15,7 +15,7 @@ void GPT2::Error::fileNotFound(const std::string& fileName) {
 	throw Error(std::errc::no_such_file_or_directory, std::format("File Not Found: {}", fileName));
 }
 
-void GPT2::Decoder::readEnc() {
+void GPT2::Translator::readEnc() {
 
 	auto readFile = [&]() {
 
@@ -59,7 +59,7 @@ void GPT2::Decoder::readEnc() {
 }
 
 
-std::string GPT2::Decoder::decode( TokensView tokens) {
+std::string GPT2::Translator::decode( TokensView tokens) {
 
 	std::string text;
 	text.reserve(tokens.size() * 5); //avg word size == 5?
@@ -70,7 +70,7 @@ std::string GPT2::Decoder::decode( TokensView tokens) {
 
 	return text;
 }
-std::string GPT2::Decoder::decode(Token token) {
+std::string GPT2::Translator::decode(Token token) {
 	return std::string( mWords[token] );
 }
 void GPT2::Data::readData() {
