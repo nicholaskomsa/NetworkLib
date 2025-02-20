@@ -62,7 +62,7 @@ void GPT2::Decoder::readEnc() {
 std::string GPT2::Decoder::decode( TokensView tokens) {
 
 	std::string text;
-	text.reserve(tokens.size() * 3); //avg word size == 3?
+	text.reserve(tokens.size() * 5); //avg word size == 5?
 
 	for (auto token : tokens) {
 		text += mWords[token];

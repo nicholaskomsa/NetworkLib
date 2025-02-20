@@ -16,19 +16,36 @@
 
 namespace NetworkLib {
 
+	using namespace std::chrono;
 	template<typename T>
 	T time(const std::string& caption, auto&& functor) {
-		
-		if( caption.size() ) std::println("timing {}", caption);
-		
+
+		if (caption.size()) std::println("timing {}", caption);
+
 		auto start = std::chrono::high_resolution_clock::now();
 		functor();
 		auto end = std::chrono::high_resolution_clock::now();
 		auto elapsed = std::chrono::duration_cast<T>(end - start);
-		
-		if(caption.size() ) std::println("\t{} took {}", caption, elapsed.count());
-		
+
+		if (caption.size()) std::println("\t{} took {}", caption, elapsed.count());
+
 		return elapsed;
+	}
+
+	template<typename TimeType>
+	struct TimeAverage {
+
+		TimeType sum = TimeType(0);
+		std::size_t count = 0;
+
+		void accumulateTime(const std::string& caption, auto&& functor) {
+			sum = sum + time<TimeType>(caption, std::move(functor));
+			++count;
+		}
+
+		std::size_t average() const {
+			return sum.count() / count;
+		}
 	};
 
 	struct GPT2 {
@@ -409,7 +426,7 @@ namespace NetworkLib {
 
 			void readEnc();
 			std::string decode( TokensView tokens);
-			std::string decode(Token token);
+			std::string decode( Token token);
 
 			Tokens encode(const std::string& text) {
 
@@ -417,7 +434,7 @@ namespace NetworkLib {
 
 				Tokens tokens;
 
-				auto getWord = [&]() {
+				auto getToken = [&]() {
 
 					const std::string delims = " \n\t\r";
 
@@ -454,14 +471,15 @@ namespace NetworkLib {
 
 					tokens.push_back(token);
 					remaining = remaining.substr(word.size());
+
+					return remaining.size();
 				};
 
-				while (remaining.size())
-					getWord();
+				while (getToken());
 			
 				return tokens;
-
 			}
+
 		} mDecoder;
 
 		struct Data {
@@ -685,11 +703,11 @@ namespace NetworkLib {
 
 			return predicted;
 		}
+
 		void chat() {
 
 			bool chatting = true;
 			Tokens scrollingTokens;
-			std::string introChat = "What is the best time to drink coffee?";
 			const Token endl = mDecoder.mWordMap["\n"];
 			std::string line;
 			
@@ -699,6 +717,7 @@ namespace NetworkLib {
 
 				std::getline(std::cin, line);
 				if (line == "exit") break;
+				std::cout << std::endl;
 
 				auto userTokens = mDecoder.encode(line);
 				userTokens.push_back(endl);
@@ -712,6 +731,7 @@ namespace NetworkLib {
 
 			} while (chatting);
 		}
+
 		void slide(Tokens& tokens, std::size_t distance = 50) {
 
 			//first ensure that tokens is at most mTestInputSize
@@ -724,27 +744,28 @@ namespace NetworkLib {
 
 			auto putWord = [&](Token token) {
 				auto decode = mDecoder.decode(token);
-			//	std::print("{}", decode);
+				//	std::print("{}", decode);
 				auto end = decode.back();
-				if( end == '.' || end == '?' || end == '!') endOfSentence = true;
+				if (end == '.' || end == '?' || end == '!') endOfSentence = true;
 				};
 
-			auto addToken = [&]( Token token) {
+			auto addToken = [&](Token token) {
 
 				bool scrolled = false;
 
 				constexpr auto scrollDistance = mTestInputSize * 0.9f;
 
 				if (tokens.size() == mTestInputSize) {
-					
+
 					std::shift_left(tokens.begin(), tokens.end(), scrollDistance);
 					tokens.resize(mTestInputSize - scrollDistance);
 
 					tokens.back() = token;
 
 					scrolled = true;
-					
-				}else
+
+				}
+				else
 					tokens.push_back(token);
 
 				putWord(token);
@@ -754,29 +775,28 @@ namespace NetworkLib {
 
 			bool scrolled = true;
 			Token newToken = 0;
-			std::chrono::milliseconds ffAvg(0), fmAvg(0);
-			std::size_t ffCount = 0, fmCount = 0;
+			TimeAverage<milliseconds> ffAvg, fmAvg;
 
 			for (std::size_t s = 0; s < distance && !endOfSentence; ++s) {
 			
 				if (scrolled)
-					ffAvg += time<std::chrono::milliseconds>("", [&]() {
-								++ffCount;
-								newToken = feedForward(tokens);
-								});
+					ffAvg.accumulateTime("", [&]() {
+						newToken = feedForward(tokens);
+						});
 				else
-					fmAvg += time<std::chrono::milliseconds>("", [&]() {
-								++fmCount;
-								newToken = feedMore(tokens);
-								});
+					fmAvg.accumulateTime("", [&]() {
+						newToken = feedMore(tokens);
+						});
 			
-				
-				//std::print("({})", scrolled ? ffAvg.count() / ffCount : fmAvg.count() / fmCount);
-				
+				auto printAvgTime = [&]() {
+
+					auto& updated = scrolled ? ffAvg : fmAvg;
+					std::print("({})", updated.average() );
+					};
+				printAvgTime();
+
 				scrolled = addToken(newToken);
 			}
-			
-			//std::println("ffAvg: {:.2f} fmAvg: {:.2f}", ffAvg.count() / float(ffCount), fmAvg.count() / float(fmCount));
 		}
 	};
 }
