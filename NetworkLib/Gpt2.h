@@ -10,11 +10,16 @@
 #include <deque>
 #include <random>
 #include <sstream>
+#include <ranges>
 
 #include "Parallel.h";
 #include "Tensor.h"
 
 namespace NetworkLib {
+
+
+
+
 
 	using namespace std::chrono;
 	template<typename T>
@@ -82,30 +87,29 @@ namespace NetworkLib {
 
 			void normalise( std::size_t m, auto& input) {
 
-				Tensor::TensorView i, o, b, w;
+				Tensor::TensorView in, out;
 
-				i = input.spanT(m);
-				o = mActivations.spanT(m);
+				in = input.spanT(m);
+				out = mActivations.spanT(m);
 
-				const auto mean = std::reduce(i.begin(), i.end()) / i.size();
+				const auto mean = std::reduce(in.begin(), in.end()) / in.size();
 
-				auto meanDiffSq = std::reduce(i.begin(), i.end(), 0.0f,
+				auto meanDiffSq = std::reduce(in.begin(), in.end(), 0.0f,
 					[&](auto sum, auto x) {
 						auto diff = x - mean;
 						return sum + diff * diff;
-					}) / i.size();
+					}) / in.size();
 
 				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-				b = mBias.span();
-				w = mWeight.span();
+				Tensor::TensorView b = mBias.span()
+						, w = mWeight.span();
 
-				float inNorm = 0.0f;
-				for (std::size_t n = 0; n < i.size(); ++n) {
-					inNorm = (i[n] - mean) * r_stdDev;
-					o[n] = inNorm * w[n] + b[n];
+				float norm = 0;
+				for (const auto& [i, w, b, o] : std::views::zip(in, w, b, out)) {
+					norm = (i - mean) * r_stdDev;
+					o = norm * w + b;
 				}
-
 			}
 
 			void normalise(auto& input, bool more = false) {
@@ -136,25 +140,20 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, auto i, Tensor::TensorView attnOut) {
 
 				const auto qOffset = mQOffset + headOffset;
-				Tensor::TensorView q = mCAttnActivations.spanT(i)
-					, qh = { q.data() + qOffset, mHeadsPerDModel };
+				Tensor::TensorView qh = { mCAttnActivations.spanT(i).data() + qOffset, mHeadsPerDModel };
 
 				const auto kOffset = mKOffset + headOffset;
 				
-				std::for_each(std::execution::seq, attnOut.begin(), attnOut.begin() + 1 + i, [&](auto& out) {
-					
-					std::size_t m = &out - attnOut.data();
+				for (std::size_t m = 0; m <= i; ++m) {
 
 					Tensor::TensorView kh = { mCAttnActivations.spanT(m).data() + kOffset, mHeadsPerDModel };
-
 					float dot = 0.0f;
 
-					for (std::size_t n = 0; n < qh.size(); ++n)
-						dot += qh[n] * kh[n];
+					for( const auto& [q, k] : std::views::zip(qh, kh))
+						dot += q * k;
 
-					out = dot * r_sqrtHeadsPerDModel;
-					
-					});
+					attnOut[m] = dot * r_sqrtHeadsPerDModel;
+				};
 			}
 			void softmax(std::size_t i, const auto& input, const auto& output) {
 
@@ -175,22 +174,18 @@ namespace NetworkLib {
 			}
 			void calculateVAtten(std::size_t headOffset, std::size_t i, auto& attnOutSoftmax) {
 
-				Tensor::TensorView z = mAttnZ.spanT(i)
-					, zh = { z.data() + headOffset, mHeadsPerDModel };
+				Tensor::TensorView zh = { mAttnZ.spanT(i).data() + headOffset, mHeadsPerDModel };
 
 				const auto vOffset = mVOffset + headOffset;
 					
 				//mAttnZ zh has += in regards to parallel
 				for (std::size_t m = 0; m <= i; ++m) {
 
-					Tensor::TensorView v, vh;
-					v = mCAttnActivations.spanT(m);
-					vh = { v.data() + vOffset, mHeadsPerDModel };
-
+					Tensor::TensorView vh = { mCAttnActivations.spanT(m).data() + vOffset, mHeadsPerDModel };
 					float factor = attnOutSoftmax[m];
 
-					for (std::size_t n = 0; n < vh.size(); ++n)
-						zh[n] += vh[n] * factor;
+					for( const auto& [z, v] : std::views::zip(zh, vh))
+						z += v * factor;
 				}
 			}
 			
@@ -249,15 +244,8 @@ namespace NetworkLib {
 
 			void residual(std::size_t i, const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor) {
 
-				Tensor::TensorView p, input, o;
-
-				p = projectionTensor.spanT(i);
-				input = inputTensor.spanT(i);
-				o = residualTensor.spanT(i);
-
-				for (std::size_t m = 0; m < o.size(); ++m)
-					o[m] = p[m] + input[m];
-				
+				for( const auto& [out, p, in ] : std::views::zip(residualTensor.spanT(i), projectionTensor.spanT(i), inputTensor.spanT(i)))
+					out = p + in;
 			}
 			void residual( const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor) {
 
@@ -300,11 +288,9 @@ namespace NetworkLib {
 					for (std::size_t m = first; m < second; ++m) {
 
 						const auto& in = input[m];
-						auto w = weightTensor.spanT(m);
-						auto o = outputs.begin();
-
-						for (std::size_t n = 0; n < output.size(); ++n)
-							o[n] += w[n] * in;
+	
+						for( const auto& [o, w] : std::views::zip(outputs, weightTensor.spanT(m)))
+							o += w * in;
 					}
 
 					}, single );
@@ -428,9 +414,7 @@ namespace NetworkLib {
 			std::string decode( TokensView tokens);
 			std::string decode( Token token);
 
-			Tokens encode(const std::string& text) {
-
-				std::string_view remaining(text);
+			Tokens encode(std::string_view remaining) {
 
 				Tokens tokens;
 
@@ -512,9 +496,8 @@ namespace NetworkLib {
 			wpe = mWpeWeight.spanT(i);
 
 			wActivations = mWActivations.spanT(i);
-
-			for (std::size_t m = 0; m < wActivations.size(); ++m)
-				wActivations[m] = wte[m] + wpe[m];
+			for (const auto& [a, t, p] : std::views::zip(wActivations, wte, wpe))
+				a = t + p;
 		}
 		void embedInputs(TokensView tokens) {
 
@@ -541,8 +524,8 @@ namespace NetworkLib {
 
 				float dot = 0.0f;
 
-				for (std::size_t n = 0; n < input.size(); ++n)
-					dot += input[n] * wte[n];
+				for( const auto& [in, w] : std::views::zip(input, wte))
+					dot += in * w;
 
 				output[m] = dot;
 			}
