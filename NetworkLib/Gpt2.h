@@ -48,8 +48,9 @@ namespace NetworkLib {
 		}
 	};
 
-	struct GPT2 {
-
+	class GPT2 {
+	public:
+		
 		static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
 		static constexpr std::size_t mDVocab = 50257
 			, mDModel = 768, mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
@@ -69,6 +70,8 @@ namespace NetworkLib {
 		static Parallel mParallelInput, mParallelHeads, mParallelI;
 
 		using Floats = std::vector<float>;
+
+	private:
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel, bool single = false) {
 			//this is a matrix multiply and add - "forward" o = w * i + b
@@ -90,29 +93,30 @@ namespace NetworkLib {
 					floats.resize(output.size(), 0.0f);
 				}
 
-				}, [&](auto& sections) {
+			}, [&](Parallel::Section& section) {
 
-					auto& outputs = std::any_cast<Floats&>(sections.mAny);
+				auto& outputs = std::any_cast<Floats&>(section.mAny);
 
-					auto& [first, second] = sections.mOffsets;
+				auto& [first, second] = section.mOffsets;
 
-					for (std::size_t m = first; m < second; ++m) {
+				for (std::size_t m = first; m < second; ++m) {
 
-						const auto& in = input[m];
+					const auto& in = input[m];
 
-						for (const auto& [o, w] : std::views::zip(outputs, weightTensor.spanT(m)))
-							o += w * in;
-					}
+					for (const auto& [o, w] : std::views::zip(outputs, weightTensor.spanT(m)))
+						o += w * in;
+				}
 
-					}, single);
+			}, [&](Parallel::SectionsView sections) {
 
-				for (auto& section : parallel.mSections) {
+				for (auto& section : sections) {
 
 					auto& sOutputs = std::any_cast<Floats&>(section.mAny);
 
 					for (std::size_t m = 0; m < output.size(); ++m)
 						output[m] += sOutputs[m];
 				}
+			}, single);
 		}
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 			
@@ -144,7 +148,7 @@ namespace NetworkLib {
 
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
 
-			void forward(const Tensor& input) {
+			const Tensor& forward(const Tensor& input) {
 
 				GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, mParallelInput);
 
@@ -154,9 +158,11 @@ namespace NetworkLib {
 					});
 
 				GPT2::forward(mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelInput);
+
+				return mCProjActivations;
 			}
 
-			void forward(std::size_t i, const Tensor& input) {
+			const Tensor& forward(std::size_t i, const Tensor& input) {
 
 				GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, mParallelI);
 
@@ -169,6 +175,8 @@ namespace NetworkLib {
 
 				mParallelI.section(mDModel4);
 				GPT2::forward(i, mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelI);
+
+				return mCProjActivations;
 			}
 		};
 		struct LinearLayer {
@@ -198,7 +206,7 @@ namespace NetworkLib {
 					o = norm * w + b;
 				}
 			}
-			void normalise(auto& input, bool more = false) {
+			void normalise(auto& input) {
 
 				mParallelInput([&](auto& sections) {
 
