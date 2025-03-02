@@ -10,7 +10,6 @@ namespace NetworkLib {
 
 	struct Parallel {
 
-		//static constexpr auto mLargeHardwareThreads = 64;
 		static constexpr auto mHardwareThreads = 8, mLargeHardwareThreads = 32;
 
 		using Offsets = std::pair<std::size_t, std::size_t>;
@@ -31,14 +30,12 @@ namespace NetworkLib {
 		std::size_t mSize{ 0 };
 
 		Parallel() = default;
-		Parallel(std::size_t size, std::size_t hardwareSections = 0) {
+		Parallel(std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
 
 			section(size, hardwareSections);
 		};
 
-		void section(std::size_t size, std::size_t hardwareSections = 0) {
-
-			hardwareSections = hardwareSections == 0 ? mHardwareThreads : hardwareSections;
+		void section(std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
 
 			mSize = size;
 
@@ -83,6 +80,12 @@ namespace NetworkLib {
 
 			sectionsFunctor(mSectionsView);
 			operator()(std::move(functor), single);
+		}
+		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, SectionsFunctor&& finale, bool single = false) {
+
+			setup(mSectionsView);
+			operator()(std::move(functor), single);
+			finale(mSectionsView);
 		}
 	};
 }

@@ -17,20 +17,16 @@
 
 namespace NetworkLib {
 
-
-
-
-
 	using namespace std::chrono;
-	template<typename T>
-	T time(const std::string& caption, auto&& functor) {
+	template<typename TimeType>
+	TimeType time(const std::string& caption, auto&& functor) {
 
 		if (caption.size()) std::println("timing {}", caption);
 
-		auto start = std::chrono::high_resolution_clock::now();
+		auto start = high_resolution_clock::now();
 		functor();
-		auto end = std::chrono::high_resolution_clock::now();
-		auto elapsed = std::chrono::duration_cast<T>(end - start);
+		auto end = high_resolution_clock::now();
+		auto elapsed = duration_cast<TimeType>(end - start);
 
 		if (caption.size()) std::println("\t{} took {}", caption, elapsed.count());
 
@@ -47,7 +43,6 @@ namespace NetworkLib {
 			sum = sum + time<TimeType>(caption, std::move(functor));
 			++count;
 		}
-
 		std::size_t average() const {
 			return sum.count() / count;
 		}
@@ -71,14 +66,110 @@ namespace NetworkLib {
 			static void fileNotFound(const std::string& fileName);
 		};
 
-		static Parallel mParallelInput;
-		static Parallel mParallelHeads;
+		static Parallel mParallelInput, mParallelHeads, mParallelI;
 
 		using Floats = std::vector<float>;
+
+		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel, bool single = false) {
+			//this is a matrix multiply and add - "forward" o = w * i + b
+			Tensor::TensorView input, output, b = biasTensor.span();
+
+			input = inputTensor.spanT(i);
+			output = outputTensor.spanT(i);
+
+			std::copy(b.begin(), b.end(), output.begin());
+
+			parallel([&](Parallel::SectionsView sections) {
+
+				for (auto& section : sections) {
+					if (section.mAny.has_value() == false)
+						section.mAny = Floats(output.size(), 0.0f);
+
+					auto& floats = std::any_cast<Floats&>(section.mAny);
+					floats.clear();
+					floats.resize(output.size(), 0.0f);
+				}
+
+				}, [&](auto& sections) {
+
+					auto& outputs = std::any_cast<Floats&>(sections.mAny);
+
+					auto& [first, second] = sections.mOffsets;
+
+					for (std::size_t m = first; m < second; ++m) {
+
+						const auto& in = input[m];
+
+						for (const auto& [o, w] : std::views::zip(outputs, weightTensor.spanT(m)))
+							o += w * in;
+					}
+
+					}, single);
+
+				for (auto& section : parallel.mSections) {
+
+					auto& sOutputs = std::any_cast<Floats&>(section.mAny);
+
+					for (std::size_t m = 0; m < output.size(); ++m)
+						output[m] += sOutputs[m];
+				}
+		}
+		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
+			
+			parallel([&](Parallel::SectionsView sections) {
+
+				for (auto& section : sections) {
+
+					if (section.mAny.has_value() == false)
+						section.mAny = Parallel();
+
+					auto& parallel = std::any_cast<Parallel&>(section.mAny);
+					parallel.section(inputTensor.mY, Parallel::mLargeHardwareThreads);
+				}
+
+				}, [&](auto& sections) {
+
+					auto& [first, second] = sections.mOffsets;
+					auto& parallel = std::any_cast<Parallel&>(sections.mAny);
+
+					for (std::size_t i = first; i < second; ++i)
+						forward(i, inputTensor, outputTensor, weightTensor, biasTensor, parallel);
+
+					});
+		}
 
 		struct MLP {
 			Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
 			Tensor mCFCActivations, mCProjActivations, mGeluActivations;
+
+			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
+
+			void forward(const Tensor& input) {
+
+				GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, mParallelInput);
+
+				std::transform(std::execution::par_unseq, mCFCActivations.mTensor.begin(), mCFCActivations.spanT(mParallelInput.mSize-1).end(), mGeluActivations.mTensor.begin(),
+					[&](auto x) {
+						return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
+					});
+
+				GPT2::forward(mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelInput);
+			}
+
+			void forward(std::size_t i, const Tensor& input) {
+
+				GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, mParallelI);
+
+				Tensor::TensorView mlpActivations = mCFCActivations.spanT(i), geluActivations = mGeluActivations.spanT(i);
+
+				std::transform(std::execution::par_unseq, mlpActivations.begin(), mlpActivations.end(), geluActivations.begin(),
+					[&](auto x) {
+						return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
+					});
+
+				mParallelI.section(mDModel4);
+				GPT2::forward(i, mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelI);
+			}
 		};
 		struct LinearLayer {
 
@@ -87,10 +178,7 @@ namespace NetworkLib {
 
 			void normalise( std::size_t m, auto& input) {
 
-				Tensor::TensorView in, out;
-
-				in = input.spanT(m);
-				out = mActivations.spanT(m);
+				Tensor::TensorView in = input.spanT(m), out = mActivations.spanT(m);
 
 				const auto mean = std::reduce(in.begin(), in.end()) / in.size();
 
@@ -102,16 +190,14 @@ namespace NetworkLib {
 
 				auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
 
-				Tensor::TensorView b = mBias.span()
-						, w = mWeight.span();
+				Tensor::TensorView bias = mBias.span(), weight = mWeight.span();
 
 				float norm = 0;
-				for (const auto& [i, w, b, o] : std::views::zip(in, w, b, out)) {
+				for (const auto& [i, w, b, o] : std::views::zip(in, weight, bias, out)) {
 					norm = (i - mean) * r_stdDev;
 					o = norm * w + b;
 				}
 			}
-
 			void normalise(auto& input, bool more = false) {
 
 				mParallelInput([&](auto& sections) {
@@ -155,7 +241,7 @@ namespace NetworkLib {
 					attnOut[m] = dot * r_sqrtHeadsPerDModel;
 				};
 			}
-			void softmax(std::size_t i, const auto& input, const auto& output) {
+			void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
 
 				const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
 
@@ -175,10 +261,8 @@ namespace NetworkLib {
 			void calculateVAtten(std::size_t headOffset, std::size_t i, auto& attnOutSoftmax) {
 
 				Tensor::TensorView zh = { mAttnZ.spanT(i).data() + headOffset, mHeadsPerDModel };
-
 				const auto vOffset = mVOffset + headOffset;
-					
-				//mAttnZ zh has += in regards to parallel
+
 				for (std::size_t m = 0; m <= i; ++m) {
 
 					Tensor::TensorView vh = { mCAttnActivations.spanT(m).data() + vOffset, mHeadsPerDModel };
@@ -192,7 +276,7 @@ namespace NetworkLib {
 			void attention(std::size_t m) {
 
 				Tensor::TensorView z = mAttnZ.spanT(m);
-				std::fill(z.begin(),z.end(), 0.0f);
+				std::fill(z.begin(), z.end(), 0.0f);
 
 				mParallelHeads([&](auto& section) {
 
@@ -218,7 +302,7 @@ namespace NetworkLib {
 			void attention() {
 
 				//activations z cleared here
-				std::fill(mAttnZ.mTensor.begin(), mAttnZ.mTensor.end(), 0.0f);
+				std::fill(mAttnZ.mTensor.begin(), mAttnZ.spanT(mParallelInput.mSize - 1).end(), 0.0f);
 
 				mParallelHeads([&](auto& section) {
 
@@ -259,128 +343,41 @@ namespace NetworkLib {
 					});
 			}
 		
-			void forward(std::size_t i, const auto& inputTensor, const auto& outputTensor, const auto& weightTensor, const auto& biasTensor, Parallel& parallel, bool single=false) {
-				//this is a matrix multiply and add - "forward" o = w * i + b
-				Tensor::TensorView input, output, b = biasTensor.span();
-			
-				input = inputTensor.spanT(i);
-				output = outputTensor.spanT(i);
-
-				std::copy(b.begin(), b.end(), output.begin());
-
-				parallel([&](Parallel::SectionsView sections) {
-
-					for (auto& section : sections) {
-						if (section.mAny.has_value() == false) 
-							section.mAny = Floats(output.size(), 0.0f);
-						
-						auto& floats = std::any_cast<Floats&>(section.mAny);
-						floats.clear();
-						floats.resize(output.size(), 0.0f);
-					}
-
-					}, [&](auto& sections) {
-
-					auto& outputs = std::any_cast<Floats&>(sections.mAny);
-
-					auto& [first, second] = sections.mOffsets;
-
-					for (std::size_t m = first; m < second; ++m) {
-
-						const auto& in = input[m];
-	
-						for( const auto& [o, w] : std::views::zip(outputs, weightTensor.spanT(m)))
-							o += w * in;
-					}
-
-					}, single );
-
-				for (auto& section : parallel.mSections) {
-
-					auto& sOutputs = std::any_cast<Floats&>(section.mAny);
-
-					for(std::size_t m = 0; m < output.size(); ++m)
-						output[m] += sOutputs[m];
-				}
-			}
-			void forward(const auto& inputTensor, const auto& outputTensor, const auto& weightTensor, const auto& biasTensor) {
-				
-				mParallelInput([&](Parallel::SectionsView sections) {
-
-					for (auto& section : sections) {
-
-						if (section.mAny.has_value() == false)
-							section.mAny = Parallel();
-
-						auto& parallel = std::any_cast<Parallel&>(section.mAny);
-						parallel.section(inputTensor.mY, Parallel::mLargeHardwareThreads);
-					}
-
-					}, [&](auto& sections) {
-
-					auto& [first, second] = sections.mOffsets;
-					auto& parallel = std::any_cast<Parallel&>(sections.mAny);
-
-					for (std::size_t i = first; i < second; ++i)
-						forward(i, inputTensor, outputTensor, weightTensor, biasTensor, parallel);
-
-					});
-			}
-
 			Tensor& forward(Tensor& inputTensor) {
 
 				mL1.normalise(inputTensor);
-				forward(mL1.mActivations, mCAttnActivations, mCAttnWeight, mCAttnBias);
+				GPT2::forward(mL1.mActivations, mCAttnActivations, mCAttnWeight, mCAttnBias, mParallelInput);
 
 				attention();
 
-				forward(mAttnZ, mCProjActivations, mCProjWeight, mCProjBias);
+				GPT2::forward(mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, mParallelInput);
 
 				residual(inputTensor, mCProjActivations, mResidualActivation1);
 
 				mL2.normalise(mResidualActivation1);
-				forward(mL2.mActivations, mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias);
 
-				constexpr auto r_sqrt2 = 1.0f / std::numbers::sqrt2;
-
-				std::transform(std::execution::par_unseq, mMLP.mCFCActivations.mTensor.begin(), mMLP.mCFCActivations.mTensor.end(), mMLP.mGeluActivations.mTensor.begin(),
-					[&](auto x) {
-						return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
-					});
-
-				forward(mMLP.mGeluActivations, mMLP.mCProjActivations, mMLP.mCProjWeight, mMLP.mCProjBias);
+				mMLP.forward(mL2.mActivations);	
 
 				residual(mResidualActivation1, mMLP.mCProjActivations, mResidualActivation2);
 
 				return mResidualActivation2;
 			}
-			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel) {
+			Tensor& forward(std::size_t i, const Tensor& inputTensor) {
 
-				parallel.section(mDModel);
+				mParallelI.section(mDModel);
 
 				mL1.normalise(i, inputTensor); 
-				forward(i, mL1.mActivations, mCAttnActivations, mCAttnWeight, mCAttnBias, parallel);
+				GPT2::forward(i, mL1.mActivations, mCAttnActivations, mCAttnWeight, mCAttnBias, mParallelI);
 
 				attention(i);
 
-				forward(i, mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, parallel);
+				GPT2::forward(i, mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, mParallelI);
 
 				residual(i, inputTensor, mCProjActivations, mResidualActivation1);
 
 				mL2.normalise(i, mResidualActivation1);
-				forward(i, mL2.mActivations, mMLP.mCFCActivations, mMLP.mCFCWeight, mMLP.mCFCBias, parallel);
 
-				constexpr auto r_sqrt2 = 1.0f / std::numbers::sqrt2;
-
-				Tensor::TensorView mlpActivations = mMLP.mCFCActivations.spanT(i), geluActivations = mMLP.mGeluActivations.spanT(i);
-
-				std::transform(std::execution::par_unseq, mlpActivations.begin(), mlpActivations.end(), geluActivations.begin(),
-					[&](auto x) {
-						return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
-					});
-
-				parallel.section(mDModel4);
-				forward(i, mMLP.mGeluActivations, mMLP.mCProjActivations, mMLP.mCProjWeight, mMLP.mCProjBias, parallel);
+				mMLP.forward(i, mL2.mActivations);
 
 				residual(i, mResidualActivation1, mMLP.mCProjActivations, mResidualActivation2);
 
@@ -473,21 +470,7 @@ namespace NetworkLib {
 
 		} mData;
 
-	public:
-
-		GPT2() = default;
-
-		void setup() {
-
-			readSafeTensors();
-			//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
-
-			mTranslator.readEnc();
-		}
-
 		void readSafeTensors();
-
-		//tokens max size == dseq
 		void embedInput(std::size_t i, Token token) {
 
 			Tensor::TensorView wte, wpe, wActivations;
@@ -505,12 +488,11 @@ namespace NetworkLib {
 
 				auto& [first, second] = sections.mOffsets;
 
-				for (std::size_t i = first; i < second; ++i) 
-					embedInput( i, tokens[i] );
-				
+				for (std::size_t i = first; i < second; ++i)
+					embedInput(i, tokens[i]);
+
 				});
 		}
-
 		void unEmbedOutput(std::size_t i) {
 
 			Tensor::TensorView input, wte, output;
@@ -524,13 +506,12 @@ namespace NetworkLib {
 
 				float dot = 0.0f;
 
-				for( const auto& [in, w] : std::views::zip(input, wte))
+				for (const auto& [in, w] : std::views::zip(input, wte))
 					dot += in * w;
 
 				output[m] = dot;
 			}
 		}
-
 		void unEmbedOutputs() {
 
 			mParallelInput([&](auto& sections) {
@@ -539,10 +520,31 @@ namespace NetworkLib {
 
 				for (std::size_t i = first; i < second; ++i)
 					unEmbedOutput(i);
-		
+
 				});
 		}
 
+	public:
+
+		GPT2() = default;
+
+		void setup() {
+
+			readSafeTensors();
+			//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
+
+			mTranslator.readEnc();
+		}
+		Token getPrediction(std::size_t m){
+
+			auto unembedActivations = mUnembedActivations.spanT(m);
+			auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
+			Token predicted = std::distance(unembedActivations.begin(), selected);
+
+			return predicted;
+		}
+
+		//tokens max size == dseq
 		Token feedForward( TokensView tokens) {
 			//feedForward will feed all tokens fresh into the network, up to dseq number of tokens
 			//tokens max size == mTestInputSize
@@ -550,42 +552,18 @@ namespace NetworkLib {
 
 			mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
 
-		//	time<std::chrono::milliseconds>("ff", [&]() {
+			embedInputs(tokens);
 
-				embedInputs(tokens);
+			Tensor* input = &mWActivations;
+			std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
+				input = &layer.forward(*input);
+				});
 
-				Tensor* input = &mWActivations;
-				std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
+			mFinalLayer.normalise(*input);
 
-					//std::cout << ".";
-					input = &layer.forward(*input);
+			unEmbedOutputs();
 
-					});
-
-				mFinalLayer.normalise(*input);
-
-				unEmbedOutputs();
-
-			//	});
-
-			auto getPrediction = [&]() {
-
-				auto unembedActivations = mUnembedActivations.spanT(mParallelInput.mSize - 1);
-				auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
-				Token predicted = std::distance(unembedActivations.begin(), selected);
-
-				return predicted;
-				};
-
-			Token predicted = getPrediction();
-
-			auto writeCompletion = [&]() {
-
-				auto outputText = mTranslator.decode({ mData.mTokens.begin(), mData.mTokens.begin() + mParallelInput.mSize });
-				std::println("{}{}", outputText, mTranslator.decode(predicted));
-				};
-
-			//writeCompletion();
+			Token predicted = getPrediction(tokens.size() - 1);
 
 			auto checkSum64 = [&]() {
 
@@ -659,33 +637,21 @@ namespace NetworkLib {
 		}
 		Token feedMore( TokensView tokens ) {
 			//feedMore acts like all previous tokens are valid, and the back token, needs processed only
-			mParallelInput.section(tokens.size(), Parallel::mHardwareThreads);
+			mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
 			
 			int i = tokens.size() - 1;
 			embedInput( i, tokens.back());
 
-			Parallel parallel;
 			Tensor* input = &mWActivations;
 			std::for_each(mAttnLayers.begin(), mAttnLayers.end(), [&](auto& layer) {
-
-				input = &layer.forward(i, *input, parallel);
-					
+				input = &layer.forward(i, *input);
 				});
 
 			mFinalLayer.normalise(*input);
 
 			unEmbedOutput(i);
 
-			auto getPrediction = [&]() {
-
-				auto unembedActivations = mUnembedActivations.spanT(tokens.size()-1);
-				auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
-				Token predicted = std::distance(unembedActivations.begin(), selected);
-
-				return predicted;
-				};
-
-			Token predicted = getPrediction();
+			Token predicted = getPrediction(i);
 
 			return predicted;
 		}
@@ -717,7 +683,6 @@ namespace NetworkLib {
 
 			} while (chatting);
 		}
-
 		void slide(Tokens& tokens, std::size_t distance = 50) {
 
 			//first ensure that tokens is at most mTestInputSize
