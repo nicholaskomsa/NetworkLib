@@ -74,6 +74,63 @@ std::string GPT2::Translator::decode( TokensView tokens) {
 std::string GPT2::Translator::decode(Token token) {
 	return std::string( mWords[token] );
 }
+
+GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
+
+	Tokens tokens;
+
+	auto getToken = [&]() {
+
+		const std::string delims = " \n\t\r";
+
+		auto getWordSize = [&](auto remaining) {
+
+			std::size_t endOfWord = remaining.find_first_of(delims);
+
+			if (endOfWord == std::string::npos)
+				endOfWord = remaining.size();
+
+			return endOfWord;
+			};
+
+		auto wordSize = 0;
+		if (remaining.front() == ' ')
+			wordSize = 1 + getWordSize(remaining.substr(1));
+		else
+			wordSize = getWordSize(remaining);
+
+		std::string_view testWord;
+		auto wordExists = mWordMap.end();
+
+		for (std::size_t size = wordSize; size >= 1; --size) {
+
+			testWord = remaining.substr(0, size);
+
+			wordExists = mWordMap.find(testWord);
+			if (wordExists != mWordMap.end())
+				break;
+		}
+
+		auto& [word, token] = *wordExists;
+
+		tokens.push_back(token);
+		remaining = remaining.substr(word.size());
+
+		return remaining.size();
+		};
+
+	while (getToken());
+
+	return tokens;
+}
+
+
+
+
+
+
+
+
 void GPT2::Data::readData() {
 
 	auto readFile = [&]() {
@@ -154,6 +211,15 @@ void GPT2::readSafeTensors() {
 	boost::json::value j = boost::json::parse(header);
 	std::size_t floatsUsed = 0;
 
+	auto seqModel = mDSeq * mDModel;
+	auto seqModel3 = mDSeq * mDModel3;
+	auto seqModel4 = mDSeq * mDModel4;
+	auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
+	auto seqVocab = mDSeq * mDVocab;
+
+	mActivationSpace.resize(seqModel + (seqModel * 7 + seqModel3 + seqSeqHead * 2 + seqModel4 * 2) * mAttnLayers.size() + seqModel + seqVocab);
+	auto begin = mActivationSpace.begin();
+
 	auto readTensorByName = [&](const auto& name) {
 
 		auto& obj = j.at(name);
@@ -204,111 +270,85 @@ void GPT2::readSafeTensors() {
 	mWpeWeight = readTensorByName("wpe.weight");
 	mWteWeight = readTensorByName("wte.weight");
 
+	mWActivations = { {begin, seqModel}, mDSeq, mDModel };
+	std::advance(begin, seqModel);
+
 	auto createAttentionLayer = [&](auto& attnLayer) {
 
 		auto layerIdx = &attnLayer - mAttnLayers.data();
 		auto layer = std::format("h.{}.", layerIdx);
 
-		auto attnName = [layer](const auto& postFix) {
-			return std::format("{}attn.{}", layer, postFix);
+		auto attnTensor = [&](const auto& name) {
+			return readTensorByName(std::format("{}attn.{}", layer, name));
 			};
 
-		attnLayer.mBias = readTensorByName(attnName("bias"));
-		attnLayer.mCAttnBias = readTensorByName(attnName("c_attn.bias"));
-		attnLayer.mCAttnWeight = readTensorByName(attnName("c_attn.weight"));
-		attnLayer.mCProjBias = readTensorByName(attnName("c_proj.bias"));
-		attnLayer.mCProjWeight = readTensorByName(attnName("c_proj.weight"));
+		attnLayer.mBias = attnTensor("bias");
+		attnLayer.mCAttnBias = attnTensor("c_attn.bias");
+		attnLayer.mCAttnWeight = attnTensor("c_attn.weight");
+		attnLayer.mCProjBias = attnTensor("c_proj.bias");
+		attnLayer.mCProjWeight = attnTensor("c_proj.weight");
 
-		auto linearName = [&](auto idx, const auto& postFix) {
-			return std::format("{}ln_{}.{}", layer, idx, postFix);
+		attnLayer.mCAttnActivations = { {begin, seqModel3}, mDSeq, mDModel3 };
+		std::advance(begin, seqModel3);
+
+		attnLayer.mAttnActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
+		std::advance(begin, seqSeqHead);
+
+		attnLayer.mAttnSoftmaxActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
+		std::advance(begin, seqSeqHead);
+
+		attnLayer.mAttnZ = { {begin, seqModel}, mDSeq, mDModel };
+		std::advance(begin, seqModel);
+
+		auto linearTensor = [&](auto idx, const auto& name) {
+			return readTensorByName(std::format("{}ln_{}.{}", layer, idx, name));
 			};
 
-		attnLayer.mL1.mBias = readTensorByName(linearName(1, "bias"));
-		attnLayer.mL1.mWeight = readTensorByName(linearName(1, "weight"));
-		attnLayer.mL2.mBias = readTensorByName(linearName(2, "bias"));
-		attnLayer.mL2.mWeight = readTensorByName(linearName(2, "weight"));
+		attnLayer.mL1.load(linearTensor(1, "bias"), linearTensor(1, "weight"), { {begin, seqModel}, mDSeq, mDModel });
+		std::advance(begin, seqModel);
 
-		auto mlpName = [&](const auto& postFix) {
-			return std::format("{}mlp.{}", layer, postFix);
+		attnLayer.mL2.load(linearTensor(2, "bias"), linearTensor(2, "weight"), { {begin, seqModel}, mDSeq, mDModel });
+		std::advance(begin, seqModel);
+
+		auto mlpTensor = [&](const auto& name) {
+			return readTensorByName(std::format("{}mlp.{}", layer, name));
 			};
+		
+		attnLayer.mMLP.mCFCBias = mlpTensor("c_fc.bias");
+		attnLayer.mMLP.mCFCWeight = mlpTensor("c_fc.weight");
+		attnLayer.mMLP.mCProjBias = mlpTensor("c_proj.bias");
+		attnLayer.mMLP.mCProjWeight = mlpTensor("c_proj.weight");
 
-		attnLayer.mMLP.mCFCBias = readTensorByName(mlpName("c_fc.bias"));
-		attnLayer.mMLP.mCFCWeight = readTensorByName(mlpName("c_fc.weight"));
-		attnLayer.mMLP.mCProjBias = readTensorByName(mlpName("c_proj.bias"));
-		attnLayer.mMLP.mCProjWeight = readTensorByName(mlpName("c_proj.weight"));
+		attnLayer.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
+		std::advance(begin, seqModel);
+
+		attnLayer.mResidualActivation1 = { {begin, seqModel}, mDSeq, mDModel };
+		std::advance(begin, seqModel);
+
+		attnLayer.mMLP.mCFCActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
+		std::advance(begin, seqModel4);
+
+		attnLayer.mMLP.mGeluActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
+		std::advance(begin, seqModel4);
+
+		attnLayer.mMLP.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
+		std::advance(begin, seqModel);
+
+		attnLayer.mResidualActivation2 = { {begin, seqModel}, mDSeq, mDModel };
+		std::advance(begin, seqModel);
 
 		};
 
 	std::for_each(mAttnLayers.begin(), mAttnLayers.end(), createAttentionLayer);
 
-	mFinalLayer.mBias = readTensorByName("ln_f.bias");
-	mFinalLayer.mWeight = readTensorByName("ln_f.weight");
+	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), { {begin, seqModel}, mDSeq, mDModel });
+	std::advance(begin, seqModel);
+
+	mUnembedActivations = { {begin, seqVocab}, mDSeq, mDVocab };
+	std::advance(begin, seqVocab);
 
 	assert(floatsUsed == mTensorSpace.size());
+	assert( begin == mActivationSpace.end());
 
 	std::puts("Tensors read successfully");
-
-	auto createActivationSpace = [&]() {
-
-		auto seqModel = mDSeq * mDModel;
-		auto seqModel3 = mDSeq * mDModel3;
-		auto seqModel4 = mDSeq * mDModel4;
-		auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
-		auto seqVocab = mDSeq * mDVocab;
-
-		mActivationSpace.resize(seqModel + (seqModel * 7 + seqModel3 + seqSeqHead * 2 + seqModel4 * 2) * mAttnLayers.size() + seqModel + seqVocab);
-
-		auto begin = mActivationSpace.begin();
-
-		mWActivations = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		for (auto& layer : mAttnLayers) {
-
-			layer.mL1.mActivations = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mCAttnActivations = { {begin, seqModel3}, mDSeq, mDModel3 };
-			std::advance(begin, seqModel3);
-
-			layer.mAttnActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
-			std::advance(begin, seqSeqHead);
-
-			layer.mAttnSoftmaxActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
-			std::advance(begin, seqSeqHead);
-
-			layer.mAttnZ = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mResidualActivation1 = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mL2.mActivations = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mMLP.mCFCActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
-			std::advance(begin, seqModel4);
-
-			layer.mMLP.mGeluActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
-			std::advance(begin, seqModel4);
-
-			layer.mMLP.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-			layer.mResidualActivation2 = { {begin, seqModel}, mDSeq, mDModel };
-			std::advance(begin, seqModel);
-
-		}
-
-		mFinalLayer.mActivations = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		mUnembedActivations = { {begin, seqVocab}, mDSeq, mDVocab };
-		std::advance(begin, seqVocab);
-		};
-
-	createActivationSpace();
 }

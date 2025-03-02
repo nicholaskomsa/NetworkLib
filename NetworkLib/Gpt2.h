@@ -184,6 +184,12 @@ namespace NetworkLib {
 			Tensor mBias, mWeight;
 			Tensor mActivations;
 
+			void load(Tensor&& bias, Tensor&& weight, Tensor&& activations){
+				mBias = std::move(bias);
+				mWeight = std::move(weight);
+				mActivations = std::move(activations);
+			}
+
 			void normalise( std::size_t m, auto& input) {
 
 				Tensor::TensorView in = input.spanT(m), out = mActivations.spanT(m);
@@ -419,54 +425,7 @@ namespace NetworkLib {
 			std::string decode( TokensView tokens);
 			std::string decode( Token token);
 
-			Tokens encode(std::string_view remaining) {
-
-				Tokens tokens;
-
-				auto getToken = [&]() {
-
-					const std::string delims = " \n\t\r";
-
-					auto getWordSize = [&](auto remaining) {
-
-						std::size_t endOfWord = remaining.find_first_of(delims);
-
-						if (endOfWord == std::string::npos) 
-							endOfWord = remaining.size();
-
-						return endOfWord;
-					};
-
-					auto wordSize = 0;
-					if (remaining.front() == ' ')
-						wordSize = 1 + getWordSize(remaining.substr(1));
-					else
-						wordSize = getWordSize(remaining);
-
-					std::string_view testWord;
-					auto wordExists = mWordMap.end();
-
-					for (std::size_t size = wordSize; size >= 1; --size) {
-
-						testWord = remaining.substr(0, size);
-
-						wordExists = mWordMap.find(testWord);
-						if (wordExists != mWordMap.end())
-							break;
-					}
-
-					auto& [word, token] = *wordExists;
-
-					tokens.push_back(token);
-					remaining = remaining.substr(word.size());
-
-					return remaining.size();
-				};
-
-				while (getToken());
-			
-				return tokens;
-			}
+			Tokens encode(std::string_view remaining);
 
 		} mTranslator;
 
@@ -552,7 +511,6 @@ namespace NetworkLib {
 			return predicted;
 		}
 
-		//tokens max size == dseq
 		Token feedForward( TokensView tokens) {
 			//feedForward will feed all tokens fresh into the network, up to dseq number of tokens
 			//tokens max size == mTestInputSize
