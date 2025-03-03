@@ -24,6 +24,9 @@ void GPT2::Error::fileNotFound(std::string_view fileName) {
 void GPT2::Error::wordNotFound(std::string_view word) {
 	throw Error(std::errc::invalid_argument, std::format("Translator: Word Not Found: {}", word));
 }
+void GPT2::Error::tokenNotFound(Token token) {
+	throw Error(std::errc::invalid_argument, std::format("Translator: Token Not Found: {}", token));
+}
 
 void GPT2::Translator::load() {
 
@@ -43,7 +46,6 @@ void GPT2::Translator::load() {
 		std::vector<Offset> offsets;
 
 		offsets.resize(mDVocab);
-		mWords.resize(mDVocab);
 
 		constexpr auto mDenseWordsSize = 321428;
 		mDenseWords.resize(mDenseWordsSize);
@@ -59,29 +61,37 @@ void GPT2::Translator::load() {
 
 	auto offsets = readFile();
 
-	for (std::size_t i = 0; i < mWords.size(); ++i) {
+	for (Token token = 0; token < offsets.size(); ++token) {
 
-		auto& [offset, size] = offsets[i];
-		auto& word = mWords[i];
+		auto& [offset, size] = offsets[token];
 
-		word = { mDenseWords.data() + offset, size };
+		std::string_view word(mDenseWords.data() + offset, size);
 
-		mWordMap[word] = i;
+		mWordMap.insert({ word, token });
 	}
 }
-std::string GPT2::Translator::decode( TokensView tokens) {
+std::string GPT2::Translator::decode( TokensView tokens) const {
 
 	std::stringstream sstr;
 
 	for (auto token : tokens) 
-		sstr << mWords[token];
+		sstr << getWord(token);
 	
 	return sstr.str();
 }
-std::string GPT2::Translator::decode(Token token) {
-	return std::string( mWords[token] );
+std::string GPT2::Translator::decode(Token token) const {
+	return std::string( getWord(token) );
 }
-GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
+GPT2::Translator::Word GPT2::Translator::getWord(Token token) const {
+
+	auto found = mWordMap.right.find(token);
+	if (found == mWordMap.right.end())
+		Error::tokenNotFound(token);
+
+	return found->get_left();
+}
+
+GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 	Tokens tokens;
 
@@ -106,14 +116,14 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
 			wordSize = getWordSize(remaining);
 
 		std::string_view testWord;
-		auto wordExists = mWordMap.end();
+		auto wordExists = mWordMap.left.end();
 
 		for (std::size_t size = wordSize; size >= 1; --size) {
 
 			testWord = remaining.substr(0, size);
 
-			wordExists = mWordMap.find(testWord);
-			if (wordExists != mWordMap.end())
+			wordExists = mWordMap.left.find(testWord);
+			if (wordExists != mWordMap.left.end())
 				break;
 		}
 
@@ -129,16 +139,16 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
 
 	return tokens;
 }
-GPT2::Token GPT2::Translator::getToken(std::string_view word) {
+GPT2::Token GPT2::Translator::getToken(std::string_view word) const {
 
-	auto found = mWordMap.find(word);
-	if (found == mWordMap.end())
+	auto found = mWordMap.left.find(word);
+	if (found == mWordMap.left.end())
 		Error::wordNotFound(word);
 
-	return found->second;
+	return found->get_right();
 }
 
-void GPT2::Data::readData() {
+void GPT2::Data::load() {
 
 	auto readFile = [&]() {
 
@@ -171,7 +181,7 @@ void GPT2::Data::readData() {
 	std::println(std::cout, "Data Tokens size: {}", mTokens.size());
 }
 
-void GPT2::readSafeTensors() {
+void GPT2::load() {
 
 	constexpr float floatSize = sizeof(float);
 	using Header = std::string;
@@ -699,7 +709,7 @@ void GPT2::unEmbedOutputs() {
 
 void GPT2::setup() {
 
-	readSafeTensors();
+	load();
 	//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
 
 	mTranslator.load();

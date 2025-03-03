@@ -3,12 +3,13 @@
 #include <array>
 #include <iostream>
 #include <print>
-#include <map>
 #include <numbers>
 
 #include "Algorithms.h"
 #include "Tensor.h"
 #include "Parallel.h";
+
+#include <boost/bimap.hpp>
 
 namespace NetworkLib {
 
@@ -32,48 +33,45 @@ namespace NetworkLib {
 			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
 			, mSeqVocab = mDSeq * mDVocab;
 
-		struct Error : public std::system_error {
-
-			Error(std::errc code, const std::string& message);
-
-			static void fileNotFound(std::string_view fileName);
-			static void wordNotFound(std::string_view word);
-		};
-
-		static Parallel mParallelInput, mParallelHeads, mParallelI;
-
 		using Floats = std::vector<float>;
 
 		using Token = std::uint16_t;
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
 
+		struct Error : public std::system_error {
+
+			Error(std::errc code, const std::string& message);
+
+			static void fileNotFound(std::string_view fileName);
+			static void wordNotFound(std::string_view word);
+			static void tokenNotFound(Token token);
+		};
+
 		class Translator {
 		public:
 			using Word = std::string_view;
-			using Words = std::vector<Word>;
-			using WordMap = std::map<Word, Token>;
+			using WordMap = boost::bimap<Word, Token>;
 
 			void load();
-			std::string decode(TokensView tokens);
-			std::string decode(Token token);
+			std::string decode(TokensView tokens) const;
+			std::string decode(Token token) const;
 
-			Tokens encode(std::string_view remaining);
-
-			Token getToken(std::string_view word);
-
+			Tokens encode(std::string_view remaining) const;
+			Token getToken(std::string_view word) const;
+			Word getWord(Token token) const;
 		private:
-			Words mWords;
-			WordMap mWordMap;//map words to their index
 
+			WordMap mWordMap;
 			std::string mDenseWords;
+
 		} mTranslator;
 
 		struct Data {
 
 			Tokens mTokens;
 
-			void readData();
+			void load();
 
 		} mData;
 
@@ -83,6 +81,8 @@ namespace NetworkLib {
 		Token getPrediction(std::size_t i);
 
 	private:
+
+		static Parallel mParallelInput, mParallelHeads, mParallelI;
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
@@ -153,7 +153,7 @@ namespace NetworkLib {
 		std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 		LinearLayer mFinalLayer;
 
-		void readSafeTensors();
+		void load();
 		void embedInput(std::size_t i, Token token);
 		void embedInputs(TokensView tokens);
 		void unEmbedOutput(std::size_t i);
