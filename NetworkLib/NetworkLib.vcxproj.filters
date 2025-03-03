@@ -10,18 +10,28 @@
     <Filter Include="Gpt\Network">
       <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Algorithms">
+      <UniqueIdentifier>{cce24ee4-7847-4f0e-b575-dbce6a8dbf17}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CpuNetwork.h">
       <Filter>Gpt\Network</Filter>
     </ClInclude>
-    <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h">
       <Filter>Gpt</Filter>
     </ClInclude>
-    <ClInclude Include="Parallel.h" />
     <ClInclude Include="Tensor.h">
       <Filter>Gpt\Network</Filter>
+    </ClInclude>
+    <ClInclude Include="Parallel.h">
+      <Filter>Algorithms</Filter>
+    </ClInclude>
+    <ClInclude Include="FloatSpaceConvert.h">
+      <Filter>Algorithms</Filter>
+    </ClInclude>
+    <ClInclude Include="Algorithms.h">
+      <Filter>Algorithms</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
