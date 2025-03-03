@@ -11,8 +11,8 @@
 using namespace NetworkLib;
 
 Parallel GPT2::mParallelInput(GPT2::mTestInputSize)
-, GPT2::mParallelHeads(GPT2::mHeadNum, GPT2::mHeadNum)
-, GPT2::mParallelI(GPT2::mTestInputSize);
+	, GPT2::mParallelHeads(GPT2::mHeadNum, GPT2::mHeadNum)
+	, GPT2::mParallelI(GPT2::mTestInputSize);
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 
@@ -41,6 +41,8 @@ void GPT2::Translator::readEnc() {
 
 		offsets.resize(mDVocab);
 		mWords.resize(mDVocab);
+
+		constexpr auto mDenseWordsSize = 321428;
 		mDenseWords.resize(mDenseWordsSize);
 
 		fin.read(reinterpret_cast<char*>(offsets.data()), mDVocab * sizeof(Offset));
@@ -163,7 +165,7 @@ void GPT2::Data::readData() {
 
 void GPT2::readSafeTensors() {
 
-	constexpr auto floatSize = sizeof(float);
+	constexpr float floatSize = sizeof(float);
 	using Header = std::string;
 
 	auto readFile = [&]() -> Header {
@@ -584,7 +586,7 @@ Tensor& GPT2::AttnLayer::forward(std::size_t i, const Tensor& inputTensor) {
 	return mResidualActivation2;
 }
 
-void GPT2::AttnLayer::load(ReadTensorFunc&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace) {
+void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace) {
 
 	auto layer = std::format("h.{}.", layerIdx);
 

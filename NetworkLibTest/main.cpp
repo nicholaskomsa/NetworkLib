@@ -8,6 +8,7 @@ int main() {
 	using GPT2 = NetworkLib::GPT2;
 
 	try {
+
 		GPT2 gpt2;
 		
 		gpt2.setup();

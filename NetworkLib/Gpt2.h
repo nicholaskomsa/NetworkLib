@@ -7,8 +7,8 @@
 #include <numbers>
 
 #include "Algorithms.h"
-#include "Parallel.h";
 #include "Tensor.h"
+#include "Parallel.h";
 
 namespace NetworkLib {
 
@@ -56,7 +56,6 @@ namespace NetworkLib {
 			Words mWords;
 			WordMap mWordMap;//map words to their index
 
-			static constexpr auto mDenseWordsSize = 321428;
 			std::string mDenseWords;
 
 			void readEnc();
@@ -75,6 +74,11 @@ namespace NetworkLib {
 
 		} mData;
 
+		GPT2() = default;
+
+		void setup();
+		Token getPrediction(std::size_t i);
+
 	private:
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
@@ -86,14 +90,13 @@ namespace NetworkLib {
 			Tensor mCFCActivations, mCProjActivations, mGeluActivations;
 
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
-
 		public:
-			void forward(const Tensor& input);
-			void forward(std::size_t i, const Tensor& input);
-
-			const Tensor& getCProjActivations() const;
 
 			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& activationSpace);
+			const Tensor& getCProjActivations() const;
+
+			void forward(const Tensor& input);
+			void forward(std::size_t i, const Tensor& input);
 		};
 		class LinearLayer {
 
@@ -101,11 +104,10 @@ namespace NetworkLib {
 			Tensor mActivations;
 		public:
 
+			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
 			const Tensor& getActivations() const;
 
-			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
-
-			void normalise(std::size_t m, const Tensor& input);
+			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input);
 		};
 		class AttnLayer {
@@ -134,11 +136,11 @@ namespace NetworkLib {
 		
 		public:
 
+			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
+			void load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
+
 			Tensor& forward(Tensor& inputTensor);
 			Tensor& forward(std::size_t i, const Tensor& inputTensor);
-			
-			using ReadTensorFunc = std::function<Tensor(std::string_view)>;
-			void load(ReadTensorFunc&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
 		};
 
 		Floats mTensorSpace, mActivationSpace;
@@ -158,12 +160,6 @@ namespace NetworkLib {
 		Token feedMore(TokensView tokens);
 
 	public:
-
-		GPT2() = default;
-
-		void setup();
-
-		Token getPrediction(std::size_t m);
 
 		void chat() {
 
