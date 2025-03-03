@@ -18,11 +18,14 @@ const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHea
 
 GPT2::Error::Error(std::errc code, const std::string& message) : std::system_error(int(code), std::generic_category(), message) {}
 
-void GPT2::Error::fileNotFound(const std::string& fileName) {
+void GPT2::Error::fileNotFound(std::string_view fileName) {
 	throw Error(std::errc::no_such_file_or_directory, std::format("File Not Found: {}", fileName));
 }
+void GPT2::Error::wordNotFound(std::string_view word) {
+	throw Error(std::errc::invalid_argument, std::format("Translator: Word Not Found: {}", word));
+}
 
-void GPT2::Translator::readEnc() {
+void GPT2::Translator::load() {
 
 	auto readFile = [&]() {
 
@@ -66,8 +69,6 @@ void GPT2::Translator::readEnc() {
 		mWordMap[word] = i;
 	}
 }
-
-
 std::string GPT2::Translator::decode( TokensView tokens) {
 
 	std::stringstream sstr;
@@ -80,7 +81,6 @@ std::string GPT2::Translator::decode( TokensView tokens) {
 std::string GPT2::Translator::decode(Token token) {
 	return std::string( mWords[token] );
 }
-
 GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
 
 	Tokens tokens;
@@ -128,6 +128,14 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) {
 	while (getToken());
 
 	return tokens;
+}
+GPT2::Token GPT2::Translator::getToken(std::string_view word) {
+
+	auto found = mWordMap.find(word);
+	if (found == mWordMap.end())
+		Error::wordNotFound(word);
+
+	return found->second;
 }
 
 void GPT2::Data::readData() {
@@ -694,7 +702,7 @@ void GPT2::setup() {
 	readSafeTensors();
 	//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
 
-	mTranslator.readEnc();
+	mTranslator.load();
 }
 GPT2::Token GPT2::getPrediction(std::size_t m) {
 

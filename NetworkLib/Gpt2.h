@@ -36,7 +36,8 @@ namespace NetworkLib {
 
 			Error(std::errc code, const std::string& message);
 
-			static void fileNotFound(const std::string& fileName);
+			static void fileNotFound(std::string_view fileName);
+			static void wordNotFound(std::string_view word);
 		};
 
 		static Parallel mParallelInput, mParallelHeads, mParallelI;
@@ -47,23 +48,25 @@ namespace NetworkLib {
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
 
-		struct Translator {
-
+		class Translator {
+		public:
 			using Word = std::string_view;
 			using Words = std::vector<Word>;
 			using WordMap = std::map<Word, Token>;
 
-			Words mWords;
-			WordMap mWordMap;//map words to their index
-
-			std::string mDenseWords;
-
-			void readEnc();
+			void load();
 			std::string decode(TokensView tokens);
 			std::string decode(Token token);
 
 			Tokens encode(std::string_view remaining);
 
+			Token getToken(std::string_view word);
+
+		private:
+			Words mWords;
+			WordMap mWordMap;//map words to their index
+
+			std::string mDenseWords;
 		} mTranslator;
 
 		struct Data {
@@ -165,7 +168,7 @@ namespace NetworkLib {
 
 			bool chatting = true;
 			Tokens scrollingTokens;
-			const Token endl = mTranslator.mWordMap["\n"];
+			const Token endl = mTranslator.getToken("\n");
 			std::string line = "What color is the Sky?";
 			
 			do {
