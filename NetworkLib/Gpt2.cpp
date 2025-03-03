@@ -211,13 +211,7 @@ void GPT2::readSafeTensors() {
 	boost::json::value j = boost::json::parse(header);
 	std::size_t floatsUsed = 0;
 
-	auto seqModel = mDSeq * mDModel;
-	auto seqModel3 = mDSeq * mDModel3;
-	auto seqModel4 = mDSeq * mDModel4;
-	auto seqSeqHead = mDSeq * mDSeq * mHeadNum;
-	auto seqVocab = mDSeq * mDVocab;
-
-	mActivationSpace.resize(seqModel + (seqModel * 7 + seqModel3 + seqSeqHead * 2 + seqModel4 * 2) * mAttnLayers.size() + seqModel + seqVocab);
+	mActivationSpace.resize(mSeqModel + (mSeqModel * 7 + mSeqModel3 + mSeqSeqHead * 2 + mSeqModel4 * 2) * mAttnLayers.size() + mSeqModel + mSeqVocab);
 	auto begin = mActivationSpace.begin();
 
 	auto readTensorByName = [&](const auto& name) {
@@ -270,82 +264,16 @@ void GPT2::readSafeTensors() {
 	mWpeWeight = readTensorByName("wpe.weight");
 	mWteWeight = readTensorByName("wte.weight");
 
-	mWActivations = { {begin, seqModel}, mDSeq, mDModel };
-	std::advance(begin, seqModel);
+	mWActivations = { {begin, mSeqModel}, mDSeq, mDModel };
+	std::advance(begin, mSeqModel);
 
-	auto createAttentionLayer = [&](auto& attnLayer) {
+	for (std::size_t i = 0; i < mAttnLayers.size(); ++i)
+		mAttnLayers[i].load(readTensorByName, i, begin);
 
-		auto layerIdx = &attnLayer - mAttnLayers.data();
-		auto layer = std::format("h.{}.", layerIdx);
+	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), begin);
 
-		auto attnTensor = [&](const auto& name) {
-			return readTensorByName(std::format("{}attn.{}", layer, name));
-			};
-
-		attnLayer.mBias = attnTensor("bias");
-		attnLayer.mCAttnBias = attnTensor("c_attn.bias");
-		attnLayer.mCAttnWeight = attnTensor("c_attn.weight");
-		attnLayer.mCProjBias = attnTensor("c_proj.bias");
-		attnLayer.mCProjWeight = attnTensor("c_proj.weight");
-
-		attnLayer.mCAttnActivations = { {begin, seqModel3}, mDSeq, mDModel3 };
-		std::advance(begin, seqModel3);
-
-		attnLayer.mAttnActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
-		std::advance(begin, seqSeqHead);
-
-		attnLayer.mAttnSoftmaxActivations = { {begin, seqSeqHead}, mDSeq, mDSeq, mHeadNum };
-		std::advance(begin, seqSeqHead);
-
-		attnLayer.mAttnZ = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		auto linearTensor = [&](auto idx, const auto& name) {
-			return readTensorByName(std::format("{}ln_{}.{}", layer, idx, name));
-			};
-
-		attnLayer.mL1.load(linearTensor(1, "bias"), linearTensor(1, "weight"), { {begin, seqModel}, mDSeq, mDModel });
-		std::advance(begin, seqModel);
-
-		attnLayer.mL2.load(linearTensor(2, "bias"), linearTensor(2, "weight"), { {begin, seqModel}, mDSeq, mDModel });
-		std::advance(begin, seqModel);
-
-		auto mlpTensor = [&](const auto& name) {
-			return readTensorByName(std::format("{}mlp.{}", layer, name));
-			};
-		
-		attnLayer.mMLP.mCFCBias = mlpTensor("c_fc.bias");
-		attnLayer.mMLP.mCFCWeight = mlpTensor("c_fc.weight");
-		attnLayer.mMLP.mCProjBias = mlpTensor("c_proj.bias");
-		attnLayer.mMLP.mCProjWeight = mlpTensor("c_proj.weight");
-
-		attnLayer.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		attnLayer.mResidualActivation1 = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		attnLayer.mMLP.mCFCActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
-		std::advance(begin, seqModel4);
-
-		attnLayer.mMLP.mGeluActivations = { {begin, seqModel4}, mDSeq, mDModel4 };
-		std::advance(begin, seqModel4);
-
-		attnLayer.mMLP.mCProjActivations = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		attnLayer.mResidualActivation2 = { {begin, seqModel}, mDSeq, mDModel };
-		std::advance(begin, seqModel);
-
-		};
-
-	std::for_each(mAttnLayers.begin(), mAttnLayers.end(), createAttentionLayer);
-
-	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), { {begin, seqModel}, mDSeq, mDModel });
-	std::advance(begin, seqModel);
-
-	mUnembedActivations = { {begin, seqVocab}, mDSeq, mDVocab };
-	std::advance(begin, seqVocab);
+	mUnembedActivations = { {begin, mSeqVocab}, mDSeq, mDVocab };
+	std::advance(begin, mSeqVocab);
 
 	assert(floatsUsed == mTensorSpace.size());
 	assert( begin == mActivationSpace.end());

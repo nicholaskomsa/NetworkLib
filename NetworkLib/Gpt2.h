@@ -51,6 +51,7 @@ namespace NetworkLib {
 	class GPT2 {
 	public:
 		
+		//configuration chat gpt2 model here
 		static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
 		static constexpr std::size_t mDVocab = 50257
 			, mDModel = 768, mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
@@ -59,6 +60,13 @@ namespace NetworkLib {
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
 			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
+
+
+		static constexpr auto mSeqModel = mDSeq * mDModel
+			, mSeqModel3 = mDSeq * mDModel3
+			, mSeqModel4 = mDSeq * mDModel4
+			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
+			, mSeqVocab = mDSeq * mDVocab;
 
 		struct Error : public std::system_error {
 
@@ -131,10 +139,10 @@ namespace NetworkLib {
 					parallel.section(inputTensor.mY, Parallel::mLargeHardwareThreads);
 				}
 
-				}, [&](auto& sections) {
+				}, [&](auto& section) {
 
-					auto& [first, second] = sections.mOffsets;
-					auto& parallel = std::any_cast<Parallel&>(sections.mAny);
+					auto& [first, second] = section.mOffsets;
+					auto& parallel = std::any_cast<Parallel&>(section.mAny);
 
 					for (std::size_t i = first; i < second; ++i)
 						forward(i, inputTensor, outputTensor, weightTensor, biasTensor, parallel);
@@ -161,7 +169,6 @@ namespace NetworkLib {
 
 				return mCProjActivations;
 			}
-
 			const Tensor& forward(std::size_t i, const Tensor& input) {
 
 				GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, mParallelI);
@@ -178,16 +185,35 @@ namespace NetworkLib {
 
 				return mCProjActivations;
 			}
+
+
+			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& begin) {
+
+				mCFCBias = std::move(cfcBias);
+				mCFCWeight = std::move(cfcWeight);
+				mCProjBias = std::move(cProjBias);
+				mCProjWeight = std::move(cProjWeight);
+			
+				mCFCActivations = { {begin, mSeqModel4}, mDSeq, mDModel4 };
+				std::advance(begin, mSeqModel4);
+
+				mGeluActivations = { {begin, mSeqModel4}, mDSeq, mDModel4 };
+				std::advance(begin, mSeqModel4);
+
+				mCProjActivations = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
+			}
 		};
 		struct LinearLayer {
 
 			Tensor mBias, mWeight;
 			Tensor mActivations;
 
-			void load(Tensor&& bias, Tensor&& weight, Tensor&& activations){
+			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& begin){
 				mBias = std::move(bias);
 				mWeight = std::move(weight);
-				mActivations = std::move(activations);
+				mActivations = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
 			}
 
 			void normalise( std::size_t m, auto& input) {
@@ -287,10 +313,7 @@ namespace NetworkLib {
 				}
 			}
 			
-			void attention(std::size_t m) {
-
-				Tensor::TensorView z = mAttnZ.spanT(m);
-				std::fill(z.begin(), z.end(), 0.0f);
+			void multiHeadedAttn(std::size_t m){
 
 				mParallelHeads([&](auto& section) {
 
@@ -301,7 +324,7 @@ namespace NetworkLib {
 						const auto headOffset = h * mHeadsPerDModel;
 
 						for (std::size_t i = 0; i <= m; ++i) {
-						
+
 							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
 								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
 
@@ -313,31 +336,22 @@ namespace NetworkLib {
 
 					});
 			}
+
+			void attention(std::size_t m) {
+
+				Tensor::TensorView z = mAttnZ.spanT(m);
+				std::fill(z.begin(), z.end(), 0.0f);
+
+				multiHeadedAttn(m);
+			}
 			void attention() {
 
+				auto m = mParallelInput.mSize - 1;
+
 				//activations z cleared here
-				std::fill(mAttnZ.mTensor.begin(), mAttnZ.spanT(mParallelInput.mSize - 1).end(), 0.0f);
+				std::fill(mAttnZ.mTensor.begin(), mAttnZ.spanT(m).end(), 0.0f);
 
-				mParallelHeads([&](auto& section) {
-
-					auto& [first, second] = section.mOffsets;
-
-					for (std::size_t h = first; h < second; ++h) {
-
-						const auto headOffset = h * mHeadsPerDModel;
-
-						for (std::size_t i = 0; i < mParallelInput.mSize; ++i) {
-
-							Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
-								, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
-
-							calculateQKAtten(headOffset, i, attnOut);
-							softmax(i, attnOut, attnOutSoftmax);
-							calculateVAtten(headOffset, i, attnOutSoftmax);
-						}
-					}
-					
-					});
+				multiHeadedAttn(m);
 			};
 
 			void residual(std::size_t i, const Tensor& inputTensor, const auto& projectionTensor, const auto& residualTensor) {
@@ -396,6 +410,57 @@ namespace NetworkLib {
 				residual(i, mResidualActivation1, mMLP.mCProjActivations, mResidualActivation2);
 
 				return mResidualActivation2;
+			}
+			
+
+			void load(auto&& readTensorByName, std::size_t layerIdx, Floats::iterator& begin) {
+				
+				auto layer = std::format("h.{}.", layerIdx);
+
+				auto attnTensor = [&](const auto& name) {
+					return readTensorByName(std::format("{}attn.{}", layer, name));
+					};
+
+				mBias = attnTensor("bias");
+				mCAttnBias = attnTensor("c_attn.bias");
+				mCAttnWeight = attnTensor("c_attn.weight");
+				mCProjBias = attnTensor("c_proj.bias");
+				mCProjWeight = attnTensor("c_proj.weight");
+
+				mCAttnActivations = { {begin, mSeqModel3}, mDSeq, mDModel3 };
+				std::advance(begin, mSeqModel3);
+
+				mAttnActivations = { {begin, mSeqSeqHead}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, mSeqSeqHead);
+
+				mAttnSoftmaxActivations = { {begin, mSeqSeqHead}, mDSeq, mDSeq, mHeadNum };
+				std::advance(begin, mSeqSeqHead);
+
+				mAttnZ = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
+
+				auto linearTensor = [&](auto idx, const auto& name) {
+					return readTensorByName(std::format("{}ln_{}.{}", layer, idx, name));
+					};
+
+				mL1.load(linearTensor(1, "bias"), linearTensor(1, "weight"), begin);
+
+				mCProjActivations = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
+
+				mResidualActivation1 = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
+
+				mL2.load(linearTensor(2, "bias"), linearTensor(2, "weight"), begin);
+
+				auto mlpTensor = [&](const auto& name) {
+					return readTensorByName(std::format("{}mlp.{}", layer, name));
+					};
+
+				mMLP.load(mlpTensor("c_fc.bias"), mlpTensor("c_fc.weight"), mlpTensor("c_proj.bias"), mlpTensor("c_proj.weight"), begin);
+
+				mResidualActivation2 = { {begin, mSeqModel}, mDSeq, mDModel };
+				std::advance(begin, mSeqModel);
 			}
 		};
 
@@ -627,13 +692,13 @@ namespace NetworkLib {
 			bool chatting = true;
 			Tokens scrollingTokens;
 			const Token endl = mTranslator.mWordMap["\n"];
-			std::string line;
+			std::string line = "What color is the Sky?";
 			
 			do {
 			
 				scrollingTokens.clear();
 
-				std::getline(std::cin, line);
+				//std::getline(std::cin, line);
 				if (line == "exit") break;
 				std::cout << std::endl;
 
