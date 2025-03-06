@@ -766,7 +766,7 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	
 	//the parallel process operates over all tokens simultaneously
 	//for each input, there is large matrix work, and this is futher parallelised
-	//the best case performance is with fewer tokens, such as a short english scentence
+	//the best case performance is with fewer tokens, such as a short english sentence
 	//and worst case performace when tokens size = mDSeq, the maximum model size
 
 	mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
@@ -856,8 +856,8 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 }
 GPT2::Token GPT2::feedMore(TokensView tokens) {
 
-	//because many short english sentences are small, they are way smaller than the maxium model size of mDSeq
-	//and in fact perdictions fit inside basically "unallocated" "more" model space, so making predictions is very fast
+	//because many short english sentences are small, they are way smaller than the maximum model size of mDSeq
+	//and in fact predictions fit inside basically "unallocated" "more" model space, so making predictions is very fast
 	//until the model space is filled, at which feedMore becomes unfunctional
 	//the model has run out of "more" prediction space. 
 	//At this point you need to make external decisions about your input data, such as scrolling it to create "more" space.

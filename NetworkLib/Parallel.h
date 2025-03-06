@@ -10,6 +10,31 @@ namespace NetworkLib {
 
 	struct Parallel {
 
+		//this Parallal object is a functor which executes a parallel for loop over
+		//each parallel "section". Each section aims to complete a for loop "a to b" 
+		//for a total of N iterations
+		
+		//there are three types of operations which enable different amounts of 
+		//parallel-customization.
+		//the most simple is just a parallel feature, (SectionFunctor)
+		//next, there is a setup followed by a parallel feature: (SectionsFunctor, SectionFunctor)
+		//next, there could be a setup, parallel, and a finale, (SectionsFunctor, SectionFunctor, SectionsFunctor)
+
+		//there is an any object which represents the specific parallel data and is left entirely to external use
+		
+		//the section function is used to setup the specific parallel "a to b" sections and must be called before functor
+		//you pass your total data size "N" to section, and it will be iterated over, in parallel, in specific "a to b" sections.
+		//the "a to b" interface follows a simple process:
+		//Parallel paralle(N);
+		//parallel([&](auto& section){
+		// 
+		//	auto& [ a, b ] = section.mOffsets;
+		//
+		//	for(auto i = a; i < b; ++i){
+		//		func(i);
+		//	}
+		// });
+		
 		static constexpr auto mHardwareThreads = 8, mLargeHardwareThreads = 32;
 
 		using Offsets = std::pair<std::size_t, std::size_t>;
@@ -69,16 +94,16 @@ namespace NetworkLib {
 
 			if (single)
 				std::for_each(std::execution::seq, mSectionsView.begin(), mSectionsView.end(), [&](auto& section) {
-				functor(section);
+					functor(section);
 					});
 			else
 				std::for_each(std::execution::par_unseq, mSectionsView.begin(), mSectionsView.end(), [&](auto& section) {
-				functor(section);
+					functor(section);
 					});
 		}
-		void operator()(SectionsFunctor&& sectionsFunctor, SectionFunctor&& functor, bool single = false) {
+		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, bool single = false) {
 
-			sectionsFunctor(mSectionsView);
+			setup(mSectionsView);
 			operator()(std::move(functor), single);
 		}
 		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, SectionsFunctor&& finale, bool single = false) {
