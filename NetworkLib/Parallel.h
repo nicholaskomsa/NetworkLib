@@ -25,7 +25,7 @@ namespace NetworkLib {
 		//the section function is used to setup the specific parallel "a to b" sections and must be called before functor
 		//you pass your total data size "N" to section, and it will be iterated over, in parallel, in specific "a to b" sections.
 		//the "a to b" interface follows a simple process:
-		//Parallel paralle(N);
+		//Parallel parallel(N);
 		//parallel([&](auto& section){
 		// 
 		//	auto& [ a, b ] = section.mOffsets;
@@ -44,6 +44,8 @@ namespace NetworkLib {
 		struct Section {
 			Offsets mOffsets;
 			std::any mAny;
+
+			Section() = default;
 		};
 
 		using Sections = std::vector<Section>;
@@ -76,12 +78,11 @@ namespace NetworkLib {
 				//shrink without destruct
 			}
 			else //grow
-				mSections.resize(numSections, { {}, {} });
+				mSections.resize(numSections, {});
 
 			mSectionsView = { mSections.begin(), numSections };
 
-			std::size_t s = 0;
-			for (s = 0; s < numSections; ++s) {
+			for (std::size_t s = 0; s < numSections; ++s) {
 
 				end = start + sectionSize;
 

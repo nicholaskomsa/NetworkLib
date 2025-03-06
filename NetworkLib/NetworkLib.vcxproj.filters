@@ -21,9 +21,6 @@
     <ClInclude Include="Gpt2.h">
       <Filter>Gpt</Filter>
     </ClInclude>
-    <ClInclude Include="Tensor.h">
-      <Filter>Gpt\Network</Filter>
-    </ClInclude>
     <ClInclude Include="Parallel.h">
       <Filter>Algorithms</Filter>
     </ClInclude>
@@ -32,6 +29,9 @@
     </ClInclude>
     <ClInclude Include="Algorithms.h">
       <Filter>Algorithms</Filter>
+    </ClInclude>
+    <ClInclude Include="Tensor.h">
+      <Filter>Gpt</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

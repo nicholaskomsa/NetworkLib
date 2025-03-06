@@ -4,6 +4,12 @@
 
 struct Tensor {
 
+	//A tensor is a float object of one to four dimensions
+	//where the first dimension is X, and can be spanned over width
+	//the second dimension is Y, and can be spanned over height (instead of width ) in the case of spanT
+	//the third dimension is Z
+	//the fourth dimension is W
+
 	using TensorView = std::span<float>;
 	TensorView mTensor;
 
@@ -72,6 +78,4 @@ struct Tensor {
 	TensorView span(std::size_t w, std::size_t z, std::size_t y) const {
 		return { &at(w, z, y, 0), mX };
 	}
-
-
 };

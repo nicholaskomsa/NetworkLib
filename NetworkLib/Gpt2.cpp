@@ -174,7 +174,7 @@ void GPT2::Data::load() {
 
 	auto readFile = [&]() {
 
-		//enc file https://github.com/rkaehn/gpt-2/blob/main/assets/data
+		//data file https://github.com/rkaehn/gpt-2/blob/main/assets/data
 		auto fileName = std::format("{}data", mFilePath);
 
 		std::println("Reading file: {}", fileName);
@@ -215,8 +215,7 @@ void GPT2::load() {
 
 	auto readFile = [&]() {
 
-		//the gpt file consists of a header segment, a json string, and a data segment which is the remaining of the file
-		//gpt2 tensors https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
+		//the gpt file consists of a header segment, a json string, and a floatspace segment which is the remaining of the file
 		auto fileName = std::format("{}model.safeTensors", mFilePath);
 
 		std::println("Reading file: {}", fileName);
@@ -327,10 +326,12 @@ void GPT2::load() {
 }
 void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
-	//this is a matrix multiply and add - "forward" o = w * i + b
+	//this is a "large matrix" or "fully connected" aka "forward" o = w * i + b
+
 	Tensor::TensorView input, output, b = biasTensor.span();
 
 	//a fully connected input and output with a bias
+	//this is a large parallelized operation
 
 	input = inputTensor.spanT(i);
 	output = outputTensor.spanT(i);
@@ -374,6 +375,9 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 				});
 }
 void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
+	
+	//each input is doing "large matrix" or "fully connected" work
+	//therefore it is highly parallelised
 
 	parallel([&](Parallel::SectionsView sections) {
 
@@ -487,6 +491,7 @@ void GPT2::LinearLayer::normalise(const Tensor& input) {
 
 void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOut) {
 
+
 	const auto qOffset = mQOffset + headOffset;
 	Tensor::TensorView qh = { mCAttnActivations.spanT(i).data() + qOffset, mHeadsPerDModel };
 
@@ -536,6 +541,11 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 }
 void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 
+	//attention is a "multi-headed" process, and the same "Attention" operations are repeated for each head.
+	//on each head, over the series of input, perform an accumulative attention process
+	//this process generates a sort of diagonal matrix where there is n, n+1, n+2, n+3 opposing zeros
+	//there are three types of vectors, Q, K, and V
+
 	mParallelHeads([&](auto& section) {
 
 		auto& [first, second] = section.mOffsets;
@@ -568,7 +578,7 @@ void GPT2::AttnLayer::attention() {
 
 	auto m = mParallelInput.mSize - 1;
 
-	//activations z cleared here
+	//activations z cleared here, attention generates mAttnZ (activations)
 	std::fill(mAttnZ.mTensor.begin(), mAttnZ.spanT(m).end(), 0.0f);
 
 	multiHeadedAttn(m);
@@ -609,6 +619,9 @@ Tensor& GPT2::AttnLayer::forward(Tensor& inputTensor) {
 	return mResidualActivation2;
 }
 Tensor& GPT2::AttnLayer::forward(std::size_t i, const Tensor& inputTensor) {
+
+	//a specific attention layer is a series of "forward", normalise, residual, MLP, and "attention" process.
+	//where forward is aka a "large matrix" or "fully connected" operation
 
 	mParallelI.section(mDModel);
 
