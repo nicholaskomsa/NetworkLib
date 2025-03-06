@@ -212,10 +212,10 @@ void GPT2::load() {
 	//but it could possibly be made faster still by moving from spanT to span?
 
 	constexpr float floatSize = sizeof(float);
-	using Header = std::string;
 
-	auto readFile = [&]() -> Header {
+	auto readFile = [&]() {
 
+		//the gpt file consists of a header segment, a json string, and a data segment which is the remaining of the file
 		//gpt2 tensors https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
 		auto fileName = std::format("{}model.safeTensors", mFilePath);
 
@@ -326,8 +326,11 @@ void GPT2::load() {
 	std::puts("Tensors read successfully");
 }
 void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
+	
 	//this is a matrix multiply and add - "forward" o = w * i + b
 	Tensor::TensorView input, output, b = biasTensor.span();
+
+	//a fully connected input and output with a bias
 
 	input = inputTensor.spanT(i);
 	output = outputTensor.spanT(i);
@@ -336,15 +339,15 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 
 	parallel([&](Parallel::SectionsView sections) {
 
-		for (auto& section : sections) {
-			if (section.mAny.has_value() == false)
+		for (auto& section : sections) 
+			if (!section.mAny.has_value())
 				section.mAny = Floats(output.size(), 0.0f);
-
-			auto& floats = std::any_cast<Floats&>(section.mAny);
-			floats.clear();
-			floats.resize(output.size(), 0.0f);
-		}
-
+			else {
+				auto& floats = std::any_cast<Floats&>(section.mAny);
+				floats.clear();
+				floats.resize(output.size(), 0.0f);
+			}
+	
 		}, [&](Parallel::Section& section) {
 
 			auto& outputs = std::any_cast<Floats&>(section.mAny);
