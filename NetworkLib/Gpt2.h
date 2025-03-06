@@ -19,7 +19,7 @@ namespace NetworkLib {
 		//configuration chat gpt2 model here
 		static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
 		static constexpr std::size_t mDVocab = 50257
-			, mDModel = 768, mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
+			, mDModel = 768
 			, mDSeq = 1024
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
@@ -27,7 +27,8 @@ namespace NetworkLib {
 			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
 
 
-		static constexpr auto mSeqModel = mDSeq * mDModel
+		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
+			, mSeqModel = mDSeq * mDModel
 			, mSeqModel3 = mDSeq * mDModel3
 			, mSeqModel4 = mDSeq * mDModel4
 			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
@@ -166,6 +167,8 @@ namespace NetworkLib {
 
 		void chat() {
 
+			//this function prompts chatgpt repeatedly for short single "sentences"
+
 			bool chatting = true;
 			Tokens scrollingTokens;
 			const Token endl = mTranslator.getToken("\n");
@@ -175,7 +178,7 @@ namespace NetworkLib {
 			
 				scrollingTokens.clear();
 
-				//std::getline(std::cin, line);
+				std::getline(std::cin, line);
 				if (line == "exit") break;
 				std::cout << std::endl;
 
@@ -193,6 +196,10 @@ namespace NetworkLib {
 		}
 		void slide(Tokens& tokens, std::size_t distance = 50) {
 
+			//this function takes input tokens, up to dseq in number
+			//and continues to predict until end of sentence or distance is reached
+			//end of sentence is "." or "?" or "!"
+			
 			//first ensure that tokens is at most mTestInputSize
 			if (tokens.size() > mTestInputSize) {
 				//get tail of tokens

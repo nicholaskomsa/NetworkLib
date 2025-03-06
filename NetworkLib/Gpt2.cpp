@@ -30,6 +30,10 @@ void GPT2::Error::tokenNotFound(Token token) {
 
 void GPT2::Translator::load() {
 
+	//we need to load the translator file, written by raffK project.
+	//in raffK project, the gpt2 python code exported all of its vocabulary to file
+	//we read this file to generate our vocabulary knowledge, "enc" file from raffK project
+
 	auto readFile = [&]() {
 
 		//enc file https://github.com/rkaehn/gpt-2/blob/main/assets/enc
@@ -72,6 +76,8 @@ void GPT2::Translator::load() {
 }
 std::string GPT2::Translator::decode( TokensView tokens) const {
 
+	//concat a series of tokens into a string
+
 	std::stringstream sstr;
 
 	for (auto token : tokens) 
@@ -84,14 +90,24 @@ std::string GPT2::Translator::decode(Token token) const {
 }
 GPT2::Translator::Word GPT2::Translator::getWord(Token token) const {
 
+	//this function will take a token and convert it into a gpt word
+	//this would only fail if token is larger than vocab size
+
 	auto found = mWordMap.right.find(token);
 	if (found == mWordMap.right.end())
 		Error::tokenNotFound(token);
 
 	return found->get_left();
 }
-
 GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
+
+	//take a string potentially containing many tokens, and generate all tokens
+	//many gpt "words" begin with a white space " ", 
+	//and this is the pause in vocabulary rather than delimiters of " " token between words
+	//therefore, " Hello" is one token and " World" is another, and the sentence " Hello World" converts to two tokens only.
+	//"Hello World" also converts to two tokens, many words have a " " variant and others do not
+	//auto tokens = gpt2.mTranslator.encode(" Hello World");
+	//std::println("Tokens: {}", tokens.size()); == 2
 
 	Tokens tokens;
 
@@ -141,6 +157,9 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 }
 GPT2::Token GPT2::Translator::getToken(std::string_view word) const {
 
+	//convert a word to a token
+	//this will only fail if for some reason word is not a true GPT "word" found in vocabulary
+
 	auto found = mWordMap.left.find(word);
 	if (found == mWordMap.left.end())
 		Error::wordNotFound(word);
@@ -149,6 +168,9 @@ GPT2::Token GPT2::Translator::getToken(std::string_view word) const {
 }
 
 void GPT2::Data::load() {
+
+	//this file loads the concerning first citizen test data set, the first 64 tokens is used by checksum
+	//this file is found at raffK project, "data"
 
 	auto readFile = [&]() {
 
@@ -182,6 +204,12 @@ void GPT2::Data::load() {
 }
 
 void GPT2::load() {
+	//the gpt2 model is found on huggingface website: https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
+	//we need to load gpt2 from file and create the activation space
+	//the order of the activation space affects speed same as the gpt model space itself
+	//so the layout follows forward process specifically
+	//the gpt2 model is loaded from file - in a memory layout openai saved to file
+	//but it could possibly be made faster still by moving from spanT to span?
 
 	constexpr float floatSize = sizeof(float);
 	using Header = std::string;
@@ -297,8 +325,7 @@ void GPT2::load() {
 
 	std::puts("Tensors read successfully");
 }
-
- void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
+void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	//this is a matrix multiply and add - "forward" o = w * i + b
 	Tensor::TensorView input, output, b = biasTensor.span();
 
@@ -343,7 +370,6 @@ void GPT2::load() {
 				}
 				});
 }
-
 void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 
 	parallel([&](Parallel::SectionsView sections) {
@@ -413,18 +439,15 @@ void GPT2::MLP::load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& 
 	std::advance(activationSpace, mSeqModel);
 }
 
-
 const Tensor& GPT2::LinearLayer::getActivations() const {
 	return mActivations;
 }
-
 void GPT2::LinearLayer::load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace) {
 	mBias = std::move(bias);
 	mWeight = std::move(weight);
 	mActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
 	std::advance(activationSpace, mSeqModel);
 }
-
 void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 
 	Tensor::TensorView in = input.spanT(m), out = mActivations.spanT(m);
@@ -603,7 +626,6 @@ Tensor& GPT2::AttnLayer::forward(std::size_t i, const Tensor& inputTensor) {
 
 	return mResidualActivation2;
 }
-
 void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace) {
 
 	auto layer = std::format("h.{}.", layerIdx);
@@ -655,17 +677,22 @@ void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t lay
 }
 
 void GPT2::embedInput(std::size_t i, Token token) {
-
+	
 	Tensor::TensorView wte, wpe, wActivations;
+	//weight token embed, weight position embed
+	//generates an activation combining token and position
 
 	wte = mWteWeight.spanT(token);
 	wpe = mWpeWeight.spanT(i);
-
 	wActivations = mWActivations.spanT(i);
+
 	for (const auto& [a, t, p] : std::views::zip(wActivations, wte, wpe))
 		a = t + p;
 }
 void GPT2::embedInputs(TokensView tokens) {
+
+	//for each token, generate a position+token embedding
+	//as a setup step before forward
 
 	mParallelInput([&](auto& sections) {
 
@@ -678,24 +705,31 @@ void GPT2::embedInputs(TokensView tokens) {
 }
 void GPT2::unEmbedOutput(std::size_t i) {
 
+	//after forward, generate the probability of a specific token
+
 	Tensor::TensorView input, wte, output;
+	//weight token embed seen in embedInput
+	//input is the output of earlier forward process
 
 	input = mFinalLayer.getActivations().spanT(i);
 	output = mUnembedActivations.spanT(i);
 
+	//this is a full-connect between input, output (no bias) and wte
 	for (std::size_t m = 0; m < output.size(); ++m) {
 
 		wte = mWteWeight.spanT(m);
 
-		float dot = 0.0f;
+		float sum = 0.0f;
 
 		for (const auto& [in, w] : std::views::zip(input, wte))
-			dot += in * w;
+			sum += in * w;
 
-		output[m] = dot;
+		output[m] = sum;
 	}
 }
 void GPT2::unEmbedOutputs() {
+
+	//after forward, generate each token probability
 
 	mParallelInput([&](auto& sections) {
 
@@ -706,15 +740,17 @@ void GPT2::unEmbedOutputs() {
 
 		});
 }
-
 void GPT2::setup() {
 
-	load();
-	//FloatSpaceConvert::colorizeFloatSpace("gpt2", mFloatSpace);
+	//we need to load our gpt data from file and also load the token translator file
 
+	load();
 	mTranslator.load();
 }
 GPT2::Token GPT2::getPrediction(std::size_t m) {
+
+	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
+	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
 
 	auto unembedActivations = mUnembedActivations.spanT(m);
 	auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
@@ -722,15 +758,17 @@ GPT2::Token GPT2::getPrediction(std::size_t m) {
 
 	return predicted;
 }
-
 GPT2::Token GPT2::feedForward(TokensView tokens) {
+	
 	//feedForward will feed all tokens fresh into the network, up to dseq number of tokens
 	//tokens max size == mTestInputSize
 	//if larger than maxsize, should scroll to tail-mTestInputSize
+	
+	//the parallel process operates over all tokens simultaneously
 
 	mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
 
-	embedInputs(tokens);
+	embedInputs(tokens); 
 
 	Tensor* input = &mWActivations;
 
@@ -745,6 +783,7 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	auto checkSum64 = [&]() {
 
+		//when concerning first citizen test data, this checksum tests the test size which is 64 tokens
 		assert(64 == mTestInputSize);
 
 		auto getSum = [&](const auto& tensor) {
@@ -813,7 +852,10 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	return predicted;
 }
 GPT2::Token GPT2::feedMore(TokensView tokens) {
+
 	//feedMore acts like all previous tokens are valid, and the back token, needs processed only
+	//identical to feedForward except for parallel processing which is instead oriented toward a single sample
+
 	mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
 
 	int i = tokens.size() - 1;
