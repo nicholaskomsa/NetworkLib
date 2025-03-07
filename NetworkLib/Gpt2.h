@@ -157,7 +157,7 @@ namespace NetworkLib {
 		void load();
 		void embedInput(std::size_t i, Token token);
 		void embedInputs(TokensView tokens);
-		void unEmbedOutput(std::size_t i);
+		void unEmbedOutput(std::size_t i, Parallel& parallel);
 		void unEmbedOutputs();
 
 		Token feedForward(TokensView tokens);
