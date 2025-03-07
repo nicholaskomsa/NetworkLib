@@ -51,9 +51,10 @@ namespace FloatSpaceConvert {
 		};
 	auto roygbiv = [&](auto percent) {
 
+		//https://www.particleincell.com/2014/colormap/
 		uint8_t r = 0, g = 0, b = 0;
 
-		/*plot short rainbow RGB*/
+		/*plot long rainbow RGB*/
 		float a = (1.0 - percent) / 0.20;	//invert and group
 		int X = std::floor(a);	//this is the integer part
 		float Y = std::floor(255.0 * (a - X)); //fractional part from 0 to 255
@@ -187,13 +188,8 @@ namespace FloatSpaceConvert {
 			if (image.size() == 0) return;
 
 			auto saveToBmpFile = [&](std::string fileName, std::span<uint32_t> image) {
-
-				uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
-				//converted data are four byte type (int32)
-				//r g b a
-
-				int pitch = width * (32 / 8);
-
+				//image is int32 r g b a
+				
 				//freeimage is writing in bgra format depending if you are windows vs apple, check your free image file format
 				auto bgra = [&](std::uint32_t rgba) {
 
@@ -206,6 +202,10 @@ namespace FloatSpaceConvert {
 				//given windows do this transform else consider free image file format
 				std::transform(image.begin(), image.end(), image.begin(), bgra);
 
+				uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
+				int pitch = width * (32 / 8);
+
+				//converted data are four byte type (int32)
 				//consider byte order for free image write unless windows
 				FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 

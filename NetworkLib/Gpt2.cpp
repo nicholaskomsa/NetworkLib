@@ -204,6 +204,7 @@ void GPT2::Data::load() {
 }
 
 void GPT2::load() {
+
 	//the gpt2 model is found on huggingface website: https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
 	//we need to load gpt2 from file and create the activation space
 	//the order of the activation space affects speed same as the gpt model space itself
@@ -326,7 +327,7 @@ void GPT2::load() {
 }
 void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
-	//this is a "large matrix" or "fully connected" aka "forward" o = w * i + b
+	//this is a "matrix * vector + vector" or "fully connected" aka "forward" o = w * i + b
 
 	Tensor::TensorView input, output, b = biasTensor.span();
 
@@ -376,7 +377,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 }
 void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
-	//each input is doing "large matrix" or "fully connected" work
+	//each input is doing "matrix * vector + vector" or is "fully connected"
 	//therefore it is highly parallelised
 
 	parallel([&](Parallel::SectionsView sections) {
@@ -405,6 +406,7 @@ void GPT2::MLP::forward(const Tensor& input) {
 
 	GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, mParallelInput);
 
+	//an activation function, gelu, is applied here
 	std::transform(std::execution::par_unseq, mCFCActivations.mTensor.begin(), mCFCActivations.spanT(mParallelInput.mSize - 1).end(), mGeluActivations.mTensor.begin(),
 		[&](auto x) {
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
@@ -491,6 +493,9 @@ void GPT2::LinearLayer::normalise(const Tensor& input) {
 
 void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOut) {
 
+	//q-head is taken from the q-tensor, Q is for query
+	//k-head is taken from the k-tensor, K is for key
+	//q and k are multiplied together and summed and scaled
 
 	const auto qOffset = mQOffset + headOffset;
 	Tensor::TensorView qh = { mCAttnActivations.spanT(i).data() + qOffset, mHeadsPerDModel };
@@ -527,6 +532,11 @@ void GPT2::AttnLayer::softmax(std::size_t i, Tensor::TensorView input, Tensor::T
 }
 void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOutSoftmax) {
 
+	//z-head is taken from the z-tensor, Z is for Activation
+	//v-head is taken from the v-tensor, V is for Value
+	//for each word, accumulate the v-attention into the z-head
+	//v-attention is based on attention-softmax and v-head
+
 	Tensor::TensorView zh = { mAttnZ.spanT(i).data() + headOffset, mHeadsPerDModel };
 	const auto vOffset = mVOffset + headOffset;
 
@@ -544,7 +554,9 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 	//attention is a "multi-headed" process, and the same "Attention" operations are repeated for each head.
 	//on each head, over the series of input, perform an accumulative attention process
 	//this process generates a sort of diagonal matrix where there is n, n+1, n+2, n+3 opposing zeros
-	//there are three types of vectors, Q, K, and V
+	//for each head, there are three types of segments of data, Q=query, K=key, and V=value
+	//all of these segments and heads are located adjacent to each other in a vector
+	//and referenced using offsets mQOffset, mKOffset, mVOffset, and headOffset
 
 	mParallelHeads([&](auto& section) {
 
