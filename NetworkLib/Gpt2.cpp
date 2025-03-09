@@ -786,7 +786,6 @@ void GPT2::setup() {
 	mParallelHeads.setup({}, mHeadNum, mHeadNum);
 
 	Floats floatAnyType;
-
 	Parallel inputAnyType; inputAnyType.setup(floatAnyType);
 	mParallelInput.setup(inputAnyType, mTestInputSize);
 	
@@ -829,74 +828,8 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	unEmbedOutputs();
 
 	Token predicted = getPrediction(tokens.size() - 1);
-
-	auto checkSum64 = [&]() {
-
-		//when concerning first citizen test data, this checksum tests the test size which is 64 tokens
-		assert(64 == mTestInputSize);
-
-		auto getSum = [&](const auto& tensor) {
-			return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
-			};
-
-		auto testEmbed = [&] {
-			assert(-30 == getSum(mWActivations));
-			};
-
-		auto testFrontLayer = [&]() {
-
-			const auto& layer = mAttnLayers.front();
-			assert(-334 == getSum(layer.mL1.mActivations));
-			assert(-3325 == getSum(layer.mCAttnActivations));
-			assert(454 == getSum(layer.mAttnZ));
-			assert(389 == getSum(layer.mCProjActivations));
-			assert(358 == getSum(layer.mResidualActivation1));
-			assert(280 == getSum(layer.mL2.mActivations));
-			assert(-235461 == getSum(layer.mMLP.mCFCActivations));
-			assert(-10345 == getSum(layer.mMLP.mGeluActivations));
-			assert(-155 == getSum(layer.mResidualActivation2));
-
-			};
-
-		auto testBackLayer = [&]() {
-
-			const auto& layer = mAttnLayers.back();
-
-			assert(-3859 == getSum(layer.mResidualActivation2));
-
-			};
-
-		auto testOutput = [&]() {
-
-			auto testSum = getSum(mFinalLayer.getActivations());
-			constexpr auto finalSum = 16654;
-
-			//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
-
-			assert(finalSum == testSum);
-
-			};
-
-		auto testUnEmbed = [&]() {
-
-			//inaccuracies/difference from reduce?
-		//	std::println("-353845315 == {}", getSum(mUnembedActivations));
-			assert(-353845315 == getSum(mUnembedActivations));
-
-			};
-		auto testPrediction = [&]() {
-			//385 == us
-			assert(385 == predicted);
-			};
-
-		testEmbed();
-		testFrontLayer();
-		testBackLayer();
-		testOutput();
-		testUnEmbed();
-		testPrediction();
-		};
-	//		checkSum64();
+	
+	//CheckSum64::test();
 
 	return predicted;
 }
