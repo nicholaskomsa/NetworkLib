@@ -829,7 +829,7 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	Token predicted = getPrediction(tokens.size() - 1);
 	
-	//CheckSum64::test();
+	CheckSum64::test(*this, predicted);
 
 	return predicted;
 }
@@ -862,7 +862,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	return predicted;
 }
 
-void GPT2::CheckSum64::test(const GPT2& gpt2) {
+void GPT2::CheckSum64::test(const GPT2& gpt2, Token predicted) {
 	//when concerning first citizen test data, this checksum tests the test size which is 64 tokens
 	assert(64 == mTestInputSize);
 
@@ -871,7 +871,7 @@ void GPT2::CheckSum64::test(const GPT2& gpt2) {
 		};
 
 	auto testEmbed = [&] {
-		assert(-30 == getSum(mWActivations));
+		assert(-30 == getSum(gpt2.mWActivations));
 		};
 
 	auto testFrontLayer = [&]() {
@@ -912,7 +912,7 @@ void GPT2::CheckSum64::test(const GPT2& gpt2) {
 
 		//inaccuracies/difference from reduce?
 		//std::println("-353845315 == {}", getSum(mUnembedActivations));
-		assert(-353845315 == getSum(mUnembedActivations));
+		assert(-353845315 == getSum(gpt2.mUnembedActivations));
 
 		};
 	auto testPrediction = [&]() {

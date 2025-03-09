@@ -82,8 +82,9 @@ namespace NetworkLib {
 		Token getPrediction(std::size_t i);
 
 		struct CheckSum64 {
-			static void test(const GPT2& gpt2);
+			static void test(const GPT2& gpt2, Token predicted);
 		};
+		friend class CheckSum64;
 
 	private:
 
