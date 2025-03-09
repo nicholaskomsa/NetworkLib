@@ -829,6 +829,8 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	Token predicted = getPrediction(tokens.size() - 1);
 
+	//Diagnostics::test64(*this, predicted);
+
 	return predicted;
 }
 GPT2::Token GPT2::feedMore(TokensView tokens) {
@@ -860,7 +862,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	return predicted;
 }
 
-void GPT2::CheckSum64::test(const GPT2& gpt2, Token predicted) {
+void GPT2::Diagnostics::test64(const GPT2& gpt2, Token predicted) {
 	//when concerning first citizen test data, this checksum tests the test size which is 64 tokens
 	assert(64 == mTestInputSize);
 

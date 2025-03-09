@@ -81,10 +81,10 @@ namespace NetworkLib {
 		void setup();
 		Token getPrediction(std::size_t i);
 
-		struct CheckSum64 {
-			static void test(const GPT2& gpt2, Token predicted);
+		struct Diagnostics {
+			static void test64(const GPT2& gpt2, Token predicted);
 		};
-		friend class CheckSum64;
+		friend class Diagnostics;
 
 	private:
 
@@ -95,7 +95,7 @@ namespace NetworkLib {
 		
 		class MLP {
 
-			friend class CheckSum64;
+			friend class Diagnostics;
 
 			Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
 			Tensor mCFCActivations, mCProjActivations, mGeluActivations;
@@ -111,7 +111,7 @@ namespace NetworkLib {
 		};
 		class LinearLayer {
 
-			friend class CheckSum64;
+			friend class Diagnostics;
 
 			Tensor mBias, mWeight;
 			Tensor mActivations;
@@ -125,7 +125,7 @@ namespace NetworkLib {
 		};
 		class AttnLayer {
 
-			friend class CheckSum64;
+			friend class Diagnostics;
 
 			LinearLayer mL1, mL2;
 
