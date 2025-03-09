@@ -82,7 +82,7 @@ namespace NetworkLib {
 		Token getPrediction(std::size_t i);
 
 		struct Diagnostics {
-			static void test64(const GPT2& gpt2, Token predicted);
+			static void firstCitizenTest64(const GPT2& gpt2, Token predicted);
 		};
 		friend class Diagnostics;
 
