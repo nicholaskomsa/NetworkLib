@@ -828,8 +828,6 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	unEmbedOutputs();
 
 	Token predicted = getPrediction(tokens.size() - 1);
-	
-	CheckSum64::test(*this, predicted);
 
 	return predicted;
 }
