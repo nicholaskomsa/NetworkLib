@@ -90,6 +90,8 @@ namespace NetworkLib {
 		
 		class MLP {
 
+			friend class GPT2;
+
 			Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
 			Tensor mCFCActivations, mCProjActivations, mGeluActivations;
 
@@ -104,6 +106,8 @@ namespace NetworkLib {
 		};
 		class LinearLayer {
 
+			friend class GPT2;
+
 			Tensor mBias, mWeight;
 			Tensor mActivations;
 		public:
@@ -115,6 +119,8 @@ namespace NetworkLib {
 			void normalise(const Tensor& input);
 		};
 		class AttnLayer {
+
+			friend class GPT2;
 
 			LinearLayer mL1, mL2;
 

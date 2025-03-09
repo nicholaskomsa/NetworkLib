@@ -10,9 +10,7 @@
 
 using namespace NetworkLib;
 
-Parallel GPT2::mParallelInput(GPT2::mTestInputSize)
-	, GPT2::mParallelHeads(GPT2::mHeadNum, GPT2::mHeadNum)
-	, GPT2::mParallelI(GPT2::mTestInputSize);
+Parallel GPT2::mParallelInput, GPT2::mParallelHeads, GPT2::mParallelI;
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 
@@ -341,15 +339,12 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 
 	parallel([&](Parallel::SectionsView sections) {
 
-		for (auto& section : sections) 
-			if (!section.mAny.has_value())
-				section.mAny = Floats(output.size(), 0.0f);
-			else {
-				auto& floats = std::any_cast<Floats&>(section.mAny);
-				floats.clear();
-				floats.resize(output.size(), 0.0f);
-			}
-	
+		for (auto& section : sections) {
+
+			auto& floats = std::any_cast<Floats&>(section.mAny);
+			floats.clear();
+			floats.resize(output.size(), 0.0f);
+		}
 		}, [&](Parallel::Section& section) {
 
 			auto& outputs = std::any_cast<Floats&>(section.mAny);
@@ -383,10 +378,6 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 	parallel([&](Parallel::SectionsView sections) {
 
 		for (auto& section : sections) {
-
-			if (section.mAny.has_value() == false)
-				section.mAny = Parallel();
-
 			auto& parallel = std::any_cast<Parallel&>(section.mAny);
 			parallel.section(inputTensor.mY, Parallel::mLargeHardwareThreads);
 		}
@@ -407,7 +398,11 @@ void GPT2::MLP::forward(const Tensor& input) {
 	GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, mParallelInput);
 
 	//an activation function, gelu, is applied here
-	std::transform(std::execution::par_unseq, mCFCActivations.mTensor.begin(), mCFCActivations.spanT(mParallelInput.mSize - 1).end(), mGeluActivations.mTensor.begin(),
+
+	auto begin = mCFCActivations.mTensor.begin()
+		, end = mCFCActivations.spanTEnd(mParallelInput.mSize -1 );
+
+	std::transform(std::execution::par_unseq, begin, end, mGeluActivations.mTensor.begin(),
 		[&](auto x) {
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 		});
@@ -591,8 +586,11 @@ void GPT2::AttnLayer::attention() {
 
 	auto m = mParallelInput.mSize - 1;
 
+	auto begin = mAttnZ.mTensor.begin();
+	auto end = mAttnZ.spanTEnd(m);
+
 	//activations z cleared here, attention generates mAttnZ (activations)
-	std::fill(mAttnZ.mTensor.begin(), mAttnZ.spanT(m).end(), 0.0f);
+	std::fill(begin, end , 0.0f);
 
 	multiHeadedAttn(m);
 }
@@ -763,41 +761,20 @@ void GPT2::unEmbedOutput(std::size_t i, Parallel& parallel) {
 		}
 
 		});
-
-/*
-	//this is a full-connect between input, output (no bias) and wte
-	for (std::size_t m = 0; m < output.size(); ++m) {
-
-		wte = mWteWeight.spanT(m);
-
-		float sum = 0.0f;
-
-		for (const auto& [in, w] : std::views::zip(input, wte))
-			sum += in * w;
-
-		output[m] = sum;
-	}
-	*/
 }
 void GPT2::unEmbedOutputs() {
 
 	//after forward, generate each token probability
 
-	mParallelInput([&](Parallel::SectionsView sections) {
+	mParallelInput([&](auto& section) {
 
-		for (auto& section : sections) 
-			if (section.mAny.has_value() == false)
-				section.mAny = Parallel();
+		auto& [first, second] = section.mOffsets;
+		auto& parallel = std::any_cast<Parallel&>(section.mAny);
 
-		},[&](auto& sections) {
+		for (std::size_t i = first; i < second; ++i)
+			unEmbedOutput(i, parallel);
 
-			auto& [first, second] = sections.mOffsets;
-			auto& parallel = std::any_cast<Parallel&>(sections.mAny);
-
-			for (std::size_t i = first; i < second; ++i)
-				unEmbedOutput(i, parallel);
-
-			});
+		});
 }
 void GPT2::setup() {
 
@@ -805,6 +782,16 @@ void GPT2::setup() {
 
 	load();
 	mTranslator.load();
+
+	mParallelHeads.setup({}, mHeadNum, mHeadNum);
+
+	Floats floatAnyType;
+
+	Parallel inputAnyType; inputAnyType.setup(floatAnyType);
+	mParallelInput.setup(inputAnyType, mTestInputSize);
+	
+	mParallelI.setup(floatAnyType, mTestInputSize);
+	
 }
 GPT2::Token GPT2::getPrediction(std::size_t m) {
 

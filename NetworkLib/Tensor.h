@@ -33,6 +33,14 @@ struct Tensor {
 		return mX * mY * mZ * mW;
 	}
 
+	TensorView::iterator spanTEnd(std::size_t col) const {
+
+		std::size_t offset = col * mY + mY;
+		auto begin = mTensor.begin();
+		auto end = std::next(begin, offset);
+		return end;
+	}
+
 	float& at(std::size_t col) const {
 		return mTensor[col];
 	}
@@ -79,4 +87,6 @@ struct Tensor {
 	TensorView span(std::size_t w, std::size_t z, std::size_t y) const {
 		return { &at(w, z, y, 0), mX };
 	}
+
+
 };

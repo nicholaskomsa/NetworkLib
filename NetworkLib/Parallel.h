@@ -41,11 +41,13 @@ namespace NetworkLib {
 
 		using Offsets = std::pair<std::size_t, std::size_t>;
 
+		std::any mDefaultAny;
+
 		struct Section {
 			Offsets mOffsets;
 			std::any mAny;
 
-			Section() = default;
+			Section(const std::any& any) : mAny(any) {};
 		};
 
 		using Sections = std::vector<Section>;
@@ -59,12 +61,14 @@ namespace NetworkLib {
 		std::size_t mSize{ 0 };
 
 		Parallel() = default;
-		Parallel(std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
 
+		void setup(std::any defaultAny, std::size_t size=1, std::size_t hardwareSections = mHardwareThreads) {
+
+			mDefaultAny = defaultAny;
 			section(size, hardwareSections);
-		};
+		}
 
-		void section(std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
+		void section(std::size_t size=1, std::size_t hardwareSections = mHardwareThreads) {
 
 			mSize = size;
 
@@ -78,7 +82,7 @@ namespace NetworkLib {
 				//shrink without destruct
 			}
 			else //grow
-				mSections.resize(numSections, {});
+				mSections.resize(numSections, { mDefaultAny });
 
 			mSectionsView = { mSections.begin(), numSections };
 
