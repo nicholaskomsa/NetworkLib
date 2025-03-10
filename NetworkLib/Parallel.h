@@ -61,6 +61,9 @@ namespace NetworkLib {
 		std::size_t mSize{ 0 };
 
 		Parallel() = default;
+		Parallel( std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
+			section(size, hardwareSections);
+		}
 
 		void setup(std::any defaultAny, std::size_t size=1, std::size_t hardwareSections = mHardwareThreads) {
 

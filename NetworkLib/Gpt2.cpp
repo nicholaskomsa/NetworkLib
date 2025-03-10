@@ -10,7 +10,7 @@
 
 using namespace NetworkLib;
 
-Parallel GPT2::mParallelHeads;
+Parallel GPT2::mParallelHeads( mHeadNum, mHeadNum);
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 
@@ -783,8 +783,6 @@ void GPT2::setup() {
 	load();
 	mTranslator.load();
 
-	mParallelHeads.setup({}, mHeadNum, mHeadNum);
-
 	Floats floatAnyType;
 	Parallel inputAnyType; inputAnyType.setup(floatAnyType);
 	mParallelInput.setup(inputAnyType, mTestInputSize);
@@ -845,7 +843,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	
 	auto& parallel = mParallelI;
 
-	parallel.section(tokens.size());
+	parallel.section(tokens.size(), Parallel::mLargeHardwareThreads);
 
 	int i = tokens.size() - 1;
 	embedInput(i, tokens.back());
