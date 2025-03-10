@@ -10,7 +10,7 @@
 
 using namespace NetworkLib;
 
-Parallel GPT2::mParallelInput, GPT2::mParallelHeads, GPT2::mParallelI;
+Parallel GPT2::mParallelHeads;
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 
@@ -165,9 +165,9 @@ GPT2::Token GPT2::Translator::getToken(std::string_view word) const {
 	return found->get_right();
 }
 
-void GPT2::Data::load() {
+void GPT2::TestData::load() {
 
-	//this file loads the concerning first citizen test data set, the first 64 tokens is used by checksum
+	//this file loads the concerning first citizen test data set, the first 64 tokens is used by Diagnostics
 	//this file is found at raffK project, "data"
 
 	auto readFile = [&]() {
@@ -393,25 +393,25 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 			});
 }
 
-void GPT2::MLP::forward(const Tensor& input) {
+void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 
-	GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, mParallelInput);
+	GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, parallel);
 
 	//an activation function, gelu, is applied here
 
 	auto begin = mCFCActivations.mTensor.begin()
-		, end = mCFCActivations.spanTEnd(mParallelInput.mSize -1 );
+		, end = mCFCActivations.spanTEnd(parallel.mSize -1 );
 
 	std::transform(std::execution::par_unseq, begin, end, mGeluActivations.mTensor.begin(),
 		[&](auto x) {
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 		});
 
-	GPT2::forward(mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelInput);
+	GPT2::forward(mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 }
-void GPT2::MLP::forward(std::size_t i, const Tensor& input) {
+void GPT2::MLP::forward(std::size_t i, const Tensor& input, Parallel& parallel) {
 
-	GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, mParallelI);
+	GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, parallel);
 
 	Tensor::TensorView mlpActivations = mCFCActivations.spanT(i), geluActivations = mGeluActivations.spanT(i);
 
@@ -420,8 +420,8 @@ void GPT2::MLP::forward(std::size_t i, const Tensor& input) {
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 		});
 
-	mParallelI.section(mDModel4);
-	GPT2::forward(i, mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, mParallelI);
+	parallel.section(mDModel4);
+	GPT2::forward(i, mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 }
 const Tensor& GPT2::MLP::getCProjActivations() const {
 	return mCProjActivations;
@@ -474,9 +474,9 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 		o = norm * w + b;
 	}
 }
-void GPT2::LinearLayer::normalise(const Tensor& input) {
+void GPT2::LinearLayer::normalise(const Tensor& input, Parallel& parallel) {
 
-	mParallelInput([&](auto& sections) {
+	parallel([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
 
@@ -575,16 +575,16 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 
 		});
 }
-void GPT2::AttnLayer::attention(std::size_t m) {
+void GPT2::AttnLayer::attention(std::size_t m ) {
 
 	Tensor::TensorView z = mAttnZ.spanT(m);
 	std::fill(z.begin(), z.end(), 0.0f);
 
 	multiHeadedAttn(m);
 }
-void GPT2::AttnLayer::attention() {
+void GPT2::AttnLayer::attention(Parallel& parallel) {
 
-	auto m = mParallelInput.mSize - 1;
+	auto m = parallel.mSize - 1;
 
 	auto begin = mAttnZ.mTensor.begin();
 	auto end = mAttnZ.spanTEnd(m);
@@ -601,9 +601,9 @@ void GPT2::AttnLayer::residual(std::size_t i, const Tensor& inputTensor, const T
 	for (const auto& [out, p, in] : std::views::zip(residualTensor.spanT(i), projectionTensor.spanT(i), inputTensor.spanT(i)))
 		out = p + in;
 }
-void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor) {
+void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor, Parallel& parallel) {
 
-	mParallelInput([&](auto& sections) {
+	parallel([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
 
@@ -612,44 +612,44 @@ void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projecti
 
 		});
 }
-Tensor& GPT2::AttnLayer::forward(Tensor& inputTensor) {
+Tensor& GPT2::AttnLayer::forward(Tensor& inputTensor, Parallel& parallel) {
 
-	mL1.normalise(inputTensor);
-	GPT2::forward(mL1.getActivations(), mCAttnActivations, mCAttnWeight, mCAttnBias, mParallelInput);
+	mL1.normalise(inputTensor, parallel);
+	GPT2::forward(mL1.getActivations(), mCAttnActivations, mCAttnWeight, mCAttnBias, parallel);
 
-	attention();
+	attention(parallel);
 
-	GPT2::forward(mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, mParallelInput);
+	GPT2::forward(mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 
-	residual(inputTensor, mCProjActivations, mResidualActivation1);
+	residual(inputTensor, mCProjActivations, mResidualActivation1, parallel);
 
-	mL2.normalise(mResidualActivation1);
+	mL2.normalise(mResidualActivation1, parallel);
 
-	mMLP.forward(mL2.getActivations());
+	mMLP.forward(mL2.getActivations(), parallel);
 
-	residual(mResidualActivation1, mMLP.getCProjActivations(), mResidualActivation2);
+	residual(mResidualActivation1, mMLP.getCProjActivations(), mResidualActivation2, parallel);
 
 	return mResidualActivation2;
 }
-Tensor& GPT2::AttnLayer::forward(std::size_t i, const Tensor& inputTensor) {
+Tensor& GPT2::AttnLayer::forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel) {
 
 	//a specific attention layer is a series of "forward", normalise, residual, MLP, and "attention" process.
 	//where forward is aka a "large matrix" or "fully connected" operation
 
-	mParallelI.section(mDModel);
+	parallel.section(mDModel);
 
 	mL1.normalise(i, inputTensor);
-	GPT2::forward(i, mL1.getActivations(), mCAttnActivations, mCAttnWeight, mCAttnBias, mParallelI);
+	GPT2::forward(i, mL1.getActivations(), mCAttnActivations, mCAttnWeight, mCAttnBias, parallel);
 
 	attention(i);
 
-	GPT2::forward(i, mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, mParallelI);
+	GPT2::forward(i, mAttnZ, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 
 	residual(i, inputTensor, mCProjActivations, mResidualActivation1);
 
 	mL2.normalise(i, mResidualActivation1);
 
-	mMLP.forward(i, mL2.getActivations());
+	mMLP.forward(i, mL2.getActivations(), parallel);
 
 	residual(i, mResidualActivation1, mMLP.getCProjActivations(), mResidualActivation2);
 
@@ -718,12 +718,12 @@ void GPT2::embedInput(std::size_t i, Token token) {
 	for (const auto& [a, t, p] : std::views::zip(wActivations, wte, wpe))
 		a = t + p;
 }
-void GPT2::embedInputs(TokensView tokens) {
+void GPT2::embedInputs(TokensView tokens, Parallel& parallel) {
 
 	//for each token, generate a position+token embedding
 	//as a setup step before forward
 
-	mParallelInput([&](auto& sections) {
+	parallel([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
 
@@ -762,11 +762,11 @@ void GPT2::unEmbedOutput(std::size_t i, Parallel& parallel) {
 
 		});
 }
-void GPT2::unEmbedOutputs() {
+void GPT2::unEmbedOutputs(Parallel& parallel) {
 
 	//after forward, generate each token probability
 
-	mParallelInput([&](auto& section) {
+	parallel([&](auto& section) {
 
 		auto& [first, second] = section.mOffsets;
 		auto& parallel = std::any_cast<Parallel&>(section.mAny);
@@ -792,7 +792,7 @@ void GPT2::setup() {
 	mParallelI.setup(floatAnyType, mTestInputSize);
 	
 }
-GPT2::Token GPT2::getPrediction(std::size_t m) {
+GPT2::Token GPT2::getPrediction(std::size_t m) const {
 
 	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
 	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
@@ -814,22 +814,22 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	//the best case performance is with fewer tokens, such as a short english sentence
 	//and worst case performace when tokens size = mDSeq, the maximum model size
 
-	mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
+	auto& parallel = mParallelInput;
 
-	embedInputs(tokens); 
+	parallel.section(tokens.size(), Parallel::mLargeHardwareThreads);
+
+	embedInputs(tokens, parallel);
 
 	Tensor* input = &mWActivations;
 
 	for (auto& layer : mAttnLayers)
-		input = &layer.forward(*input);
+		input = &layer.forward(*input, parallel);
 
-	mFinalLayer.normalise(*input);
+	mFinalLayer.normalise(*input, parallel);
 
-	unEmbedOutputs();
+	unEmbedOutputs(parallel);
 
 	Token predicted = getPrediction(tokens.size() - 1);
-
-	//Diagnostics::firstCitizenTest64(*this, predicted);
 
 	return predicted;
 }
@@ -842,8 +842,10 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	//At this point you need to make external decisions about your input data, such as scrolling it to create "more" space.
 	//feedMore acts like all previous tokens are valid, and the back token, needs processed only
 	//identical to feedForward except for parallel processing which is instead oriented toward a single sample
+	
+	auto& parallel = mParallelI;
 
-	mParallelInput.section(tokens.size(), Parallel::mLargeHardwareThreads);
+	parallel.section(tokens.size());
 
 	int i = tokens.size() - 1;
 	embedInput(i, tokens.back());
@@ -851,79 +853,106 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	Tensor* input = &mWActivations;
 
 	for (auto& layer : mAttnLayers)
-		input = &layer.forward(i, *input);
+		input = &layer.forward(i, *input, parallel);
 
-	mFinalLayer.normalise(*input);
+	mFinalLayer.normalise(i, *input);
 
-	unEmbedOutput(i, mParallelI);
+	unEmbedOutput(i, parallel);
 
 	Token predicted = getPrediction(i);
 
 	return predicted;
 }
 
-void GPT2::Diagnostics::firstCitizenTest64(const GPT2& gpt2, Token predicted) {
-	//when concerning first citizen test data, this checksum tests the test size which is 64 tokens
-	assert(64 == mTestInputSize);
+void GPT2::Diagnostics::firstCitizenTest64() {
 
-	auto getSum = [&](const auto& tensor) {
-		return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
+	GPT2 gpt2;
+	Token predicted;
+
+	auto test = [&]() {
+		//when concerning first citizen test data, mData,  this checksum tests the test size which is 64 tokens
+		assert(64 == mTestInputSize);
+
+		auto getSum = [&](const auto& tensor) {
+			return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
+			};
+
+		auto testEmbed = [&] {
+			assert(-30 == getSum(gpt2.mWActivations));
+			};
+
+		auto testFrontLayer = [&]() {
+
+			const auto& layer = gpt2.mAttnLayers.front();
+			assert(-334 == getSum(layer.mL1.mActivations));
+			assert(-3325 == getSum(layer.mCAttnActivations));
+			assert(454 == getSum(layer.mAttnZ));
+			assert(389 == getSum(layer.mCProjActivations));
+			assert(358 == getSum(layer.mResidualActivation1));
+			assert(280 == getSum(layer.mL2.mActivations));
+			assert(-235461 == getSum(layer.mMLP.mCFCActivations));
+			assert(-10345 == getSum(layer.mMLP.mGeluActivations));
+			assert(-155 == getSum(layer.mResidualActivation2));
+
+			};
+
+		auto testBackLayer = [&]() {
+
+			const auto& layer = gpt2.mAttnLayers.back();
+
+			assert(-3859 == getSum(layer.mResidualActivation2));
+
+			};
+
+		auto testOutput = [&]() {
+
+			auto testSum = getSum(gpt2.mFinalLayer.getActivations());
+			constexpr auto finalSum = 16654;
+
+			//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
+
+			assert(finalSum == testSum);
+
+			};
+
+		auto testUnEmbed = [&]() {
+
+			//inaccuracies/difference from reduce?
+			assert(-353759183 == getSum(gpt2.mUnembedActivations));
+
+			};
+		auto testPrediction = [&]() {
+			//385 == us
+			assert(385 == predicted);
+			};
+
+		testEmbed();
+		testFrontLayer();
+		testBackLayer();
+		testOutput();
+		testUnEmbed();
+		testPrediction();
 		};
 
-	auto testEmbed = [&] {
-		assert(-30 == getSum(gpt2.mWActivations));
-		};
+	try {
 
-	auto testFrontLayer = [&]() {
+		gpt2.setup();
 
-		const auto& layer = gpt2.mAttnLayers.front();
-		assert(-334 == getSum(layer.mL1.mActivations));
-		assert(-3325 == getSum(layer.mCAttnActivations));
-		assert(454 == getSum(layer.mAttnZ));
-		assert(389 == getSum(layer.mCProjActivations));
-		assert(358 == getSum(layer.mResidualActivation1));
-		assert(280 == getSum(layer.mL2.mActivations));
-		assert(-235461 == getSum(layer.mMLP.mCFCActivations));
-		assert(-10345 == getSum(layer.mMLP.mGeluActivations));
-		assert(-155 == getSum(layer.mResidualActivation2));
+		auto& data = gpt2.mTestData;
+		data.load();
+		TokensView tokens = { data.mTokens.begin(), GPT2::mTestInputSize };
 
-		};
+		predicted = gpt2.feedForward(tokens);
 
-	auto testBackLayer = [&]() {
-
-		const auto& layer = gpt2.mAttnLayers.back();
-
-		assert(-3859 == getSum(layer.mResidualActivation2));
-
-		};
-
-	auto testOutput = [&]() {
-
-		auto testSum = getSum(gpt2.mFinalLayer.getActivations());
-		constexpr auto finalSum = 16654;
-
-		//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
-
-		assert(finalSum == testSum);
-
-		};
-
-	auto testUnEmbed = [&]() {
-
-		//inaccuracies/difference from reduce?
-		//std::println("-353845315 == {}", getSum(mUnembedActivations));
-		assert(-353845315 == getSum(gpt2.mUnembedActivations));
-
-		};
-	auto testPrediction = [&]() {
-		//385 == us
-		assert(385 == predicted);
-		};
-
-	testEmbed();
-	testFrontLayer();
-	testBackLayer();
-	testOutput();
-	testUnEmbed();
-	testPrediction();
+		test();
+	}
+	catch (const GPT2::Error& e) {
+		std::println(std::cerr, "{}", e.what());
+	}
+	catch (const std::exception& e) {
+		std::println(std::cerr, "{}", e.what());
+	}
+	catch (...) {
+		std::println(std::cerr, "Unknown error");
+	}
 }

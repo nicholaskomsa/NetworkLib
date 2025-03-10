@@ -26,7 +26,7 @@ struct TimeAverage {
 	std::size_t count = 0;
 
 	void accumulateTime(auto&& functor) {
-		sum = sum + time<TimeType>("", std::move(functor));
+		sum += time<TimeType>("", std::move(functor));
 		++count;
 	}
 	std::size_t average() const {

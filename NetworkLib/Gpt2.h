@@ -68,27 +68,28 @@ namespace NetworkLib {
 
 		} mTranslator;
 
-		struct Data {
+		struct TestData {
 
 			Tokens mTokens;
 
 			void load();
 
-		} mData;
+		} mTestData;
 
 		GPT2() = default;
 
 		void setup();
-		Token getPrediction(std::size_t i);
+		Token getPrediction(std::size_t i) const;
 
 		struct Diagnostics {
-			static void firstCitizenTest64(const GPT2& gpt2, Token predicted);
+			static void firstCitizenTest64();
 		};
 		friend class Diagnostics;
 
 	private:
 
-		static Parallel mParallelInput, mParallelHeads, mParallelI;
+		Parallel mParallelInput, mParallelI;
+		static Parallel mParallelHeads;
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
@@ -106,8 +107,8 @@ namespace NetworkLib {
 			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& activationSpace);
 			const Tensor& getCProjActivations() const;
 
-			void forward(const Tensor& input);
-			void forward(std::size_t i, const Tensor& input);
+			void forward(const Tensor& input, Parallel& parallel);
+			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 		};
 		class LinearLayer {
 
@@ -121,7 +122,7 @@ namespace NetworkLib {
 			const Tensor& getActivations() const;
 
 			void normalise(std::size_t i, const Tensor& input);
-			void normalise(const Tensor& input);
+			void normalise(const Tensor& input, Parallel& parallel);
 		};
 		class AttnLayer {
 
@@ -144,18 +145,18 @@ namespace NetworkLib {
 			void multiHeadedAttn(std::size_t m);
 
 			void attention(std::size_t m);
-			void attention();
+			void attention(Parallel& parallel);
 
 			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor);
-			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor);
+			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor, Parallel& parallel);
 		
 		public:
 
 			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
 			void load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
 
-			Tensor& forward(Tensor& inputTensor);
-			Tensor& forward(std::size_t i, const Tensor& inputTensor);
+			Tensor& forward(Tensor& inputTensor, Parallel& parallel);
+			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel);
 		};
 
 		Floats mTensorSpace, mActivationSpace;
@@ -167,9 +168,9 @@ namespace NetworkLib {
 
 		void load();
 		void embedInput(std::size_t i, Token token);
-		void embedInputs(TokensView tokens);
+		void embedInputs(TokensView tokens, Parallel& parallel);
 		void unEmbedOutput(std::size_t i, Parallel& parallel);
-		void unEmbedOutputs();
+		void unEmbedOutputs(Parallel& parallel);
 
 		Token feedForward(TokensView tokens);
 		Token feedMore(TokensView tokens);
