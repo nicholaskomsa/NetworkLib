@@ -3,33 +3,55 @@
 #include <string>
 #include <chrono>
 
-using namespace std::chrono;
-template<typename TimeType>
-TimeType time(const std::string& caption, auto&& functor) {
+namespace NetworkLib {
 
-	if (caption.size()) std::println("timing {}", caption);
+	using namespace std::chrono;
 
-	auto start = high_resolution_clock::now();
-	functor();
-	auto end = high_resolution_clock::now();
-	auto elapsed = duration_cast<TimeType>(end - start);
 
-	if (caption.size()) std::println("\t{} took {}", caption, elapsed.count());
+	template<typename TimeType>
+	TimeType time(auto&& functor) {
 
-	return elapsed;
+		auto start = high_resolution_clock::now();
+		functor();
+		auto end = high_resolution_clock::now();
+		auto elapsed = duration_cast<TimeType>(end - start);
+
+		return elapsed;
+	}
+
+	template<typename TimeType>
+	TimeType time(const std::string& caption, auto&& functor) {
+
+		std::println("timing {}", caption);
+
+		auto elapsed = time<TimeType>(std::move(functor));
+
+		std::println("\t{} took {}", caption, elapsed.count());
+
+		return elapsed;
+	}
+
+	template<typename TimeType>
+	struct TimeAverage {
+
+		TimeType sum = TimeType(0);
+		std::size_t count = 0;
+
+		void accumulateTime( TimeType time) {
+			sum += time;
+			++count;
+		}
+
+		TimeType accumulateTime(auto&& functor) {
+			
+			auto elapsed = time<TimeType>(std::move(functor));
+			accumulateTime(elapsed);
+			return elapsed;
+		}
+
+
+		std::size_t average() const {
+			return sum.count() / count;
+		}
+	};
 }
-
-template<typename TimeType>
-struct TimeAverage {
-
-	TimeType sum = TimeType(0);
-	std::size_t count = 0;
-
-	void accumulateTime(auto&& functor) {
-		sum += time<TimeType>("", std::move(functor));
-		++count;
-	}
-	std::size_t average() const {
-		return sum.count() / count;
-	}
-};

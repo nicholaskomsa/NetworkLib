@@ -27,6 +27,7 @@ namespace NetworkLib {
 			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
 
 
+
 		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
 			, mSeqModel = mDSeq * mDModel
 			, mSeqModel3 = mDSeq * mDModel3
@@ -81,8 +82,15 @@ namespace NetworkLib {
 		void setup();
 		Token getPrediction(std::size_t i) const;
 
-		struct Diagnostics {
-			static void firstCitizenTest64();
+		class Diagnostics {
+
+			using TestFunction = std::function<void(GPT2& gpt2)>;
+			void run(TestFunction&& test);
+
+		public:
+			void firstCitizenTest64();
+			void feedForwardSpeed1024();
+			void simpleChat();
 		};
 		friend class Diagnostics;
 

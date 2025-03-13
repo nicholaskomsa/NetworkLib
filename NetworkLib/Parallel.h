@@ -111,16 +111,21 @@ namespace NetworkLib {
 					functor(section);
 					});
 		}
-		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, bool single = false) {
 
-			setup(mSectionsView);
+		//setup done insde functor(parallel), followed by single threaded finale
+		void operator()(SectionFunctor&& functor, SectionFunctor&& finale, bool single = false) {
 			operator()(std::move(functor), single);
+			operator()(std::move(finale), true);
 		}
-		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, SectionsFunctor&& finale, bool single = false) {
 
-			setup(mSectionsView);
+		//single threaded setup, paralel, single threaded finale
+		void operator()(SectionFunctor&& setup, SectionFunctor&& functor, SectionFunctor&& finale, bool single = false) {
+
+			operator()(std::move(functor), true);
 			operator()(std::move(functor), single);
-			finale(mSectionsView);
+			operator()(std::move(finale), true);
 		}
+
+
 	};
 }
