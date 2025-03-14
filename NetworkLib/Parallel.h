@@ -16,9 +16,6 @@ namespace NetworkLib {
 		
 		//there are three types of operations which enable different amounts of 
 		//parallel-customization.
-		//the most simple is just a parallel feature, (SectionFunctor)
-		//next, there is a setup followed by a parallel feature: (SectionsFunctor, SectionFunctor)
-		//next, there could be a setup, parallel, and a finale, (SectionsFunctor, SectionFunctor, SectionsFunctor)
 
 		//there is an any object which represents the specific parallel data and is left entirely to external use
 		
@@ -58,38 +55,46 @@ namespace NetworkLib {
 		Sections mSections;
 		SectionsView mSectionsView;
 
-		std::size_t mSize{ 0 };
+		std::size_t mSize{ 0 }, mSectionNum{ 1 };
 
 		Parallel() = default;
-		Parallel( std::size_t size, std::size_t hardwareSections = mHardwareThreads) {
-			section(size, hardwareSections);
+		Parallel( std::size_t size, std::size_t sectionNum = mHardwareThreads) {
+
+			mSectionNum = sectionNum;
+			section(size);
 		}
 
-		void setup(std::any defaultAny, std::size_t size=1, std::size_t hardwareSections = mHardwareThreads) {
+		void setup(std::any defaultAny, std::size_t size=1, std::size_t sectionNum = mHardwareThreads) {
 
 			mDefaultAny = defaultAny;
-			section(size, hardwareSections);
+			mSectionNum = sectionNum;
+
+			section(size);
 		}
 
-		void section(std::size_t size=1, std::size_t hardwareSections = mHardwareThreads) {
+		void section(std::size_t size) {
 
 			mSize = size;
 
-			auto sectionSize = size / hardwareSections;
-			if (sectionSize == 0) sectionSize = 1;
-			auto numSections = size / sectionSize;
+			auto sectionSize = size / mSectionNum;
+			auto sectionNum = mSectionNum;
+
+			if (sectionSize == 0) {
+				sectionNum = size;
+				sectionSize = 1;
+			}
 
 			std::size_t start = 0, end = 0;
 
-			if (mSections.size() > numSections) {
+			if (mSections.size() > sectionNum) {
 				//shrink without destruct
 			}
 			else //grow
-				mSections.resize(numSections, { mDefaultAny });
+				mSections.resize(sectionNum, { mDefaultAny });
 
-			mSectionsView = { mSections.begin(), numSections };
+			mSectionsView = { mSections.begin(), sectionNum };
 
-			for (std::size_t s = 0; s < numSections; ++s) {
+			for (std::size_t s = 0; s < sectionNum; ++s) {
 
 				end = start + sectionSize;
 

@@ -372,7 +372,7 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 		auto& [first, second] = section.mOffsets;
 
 		auto& parallel = std::any_cast<Parallel&>(section.mAny);
-		parallel.section(inputTensor.mY, 8); //tests OK at 8
+		parallel.section(inputTensor.mY);
 
 		for (std::size_t i = first; i < second; ++i)
 			forward(i, inputTensor, outputTensor, weightTensor, biasTensor, parallel);
@@ -398,6 +398,7 @@ void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 }
 void GPT2::MLP::forward(std::size_t i, const Tensor& input, Parallel& parallel) {
 
+	//should be pre-sectioned earlier
 	GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, parallel);
 
 	Tensor::TensorView mlpActivations = mCFCActivations.spanT(i), geluActivations = mGeluActivations.spanT(i);
@@ -407,7 +408,7 @@ void GPT2::MLP::forward(std::size_t i, const Tensor& input, Parallel& parallel) 
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 		});
 
-	parallel.section(mDModel4);
+	parallel.section(mGeluActivations.mY);
 	GPT2::forward(i, mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 }
 const Tensor& GPT2::MLP::getCProjActivations() const {
@@ -762,7 +763,7 @@ void GPT2::unEmbedOutputs(Parallel& parallel) {
 		auto& [first, second] = section.mOffsets;
 		auto& parallel = std::any_cast<Parallel&>(section.mAny);
 
-		parallel.section(mUnembedActivations.mY, 1);
+		parallel.section(mUnembedActivations.mY);
 
 		for (std::size_t i = first; i < second; ++i)
 			unEmbedOutput(i, parallel);
@@ -777,11 +778,10 @@ void GPT2::setup() {
 	mTranslator.load();
 
 	Floats floatAnyType;
-	Parallel inputAnyType; inputAnyType.setup(floatAnyType);
-	mParallelInput.setup(inputAnyType, mTestInputSize);
-	
-	mParallelI.setup(floatAnyType, mTestInputSize);
-	
+	Parallel inputAnyType; inputAnyType.setup(floatAnyType, 1, 1);
+	mParallelInput.setup(inputAnyType, mTestInputSize, 64);
+
+	mParallelI.setup(floatAnyType, mTestInputSize, 8);
 }
 GPT2::Token GPT2::getPrediction(std::size_t m) const {
 
@@ -807,7 +807,7 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	auto& parallel = mParallelInput;
 	std::size_t m = tokens.size() - 1;
-	parallel.section(tokens.size(), 64);
+	parallel.section(tokens.size());
 
 	embedInputs(tokens, parallel);
 
@@ -818,7 +818,9 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	mFinalLayer.normalise(*input, parallel);
 
+	std::cout <<"unembedOutputs\t";
 	unEmbedOutputs(parallel);
+	std::cout << "done\n";
 
 	Token predicted = getPrediction(m);
 
@@ -836,7 +838,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	
 	auto& parallel = mParallelI;
 
-	parallel.section(tokens.size(), 64);
+	parallel.section(tokens.size());
 
 	int i = tokens.size() - 1;
 	embedInput(i, tokens.back());
@@ -848,7 +850,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 
 	mFinalLayer.normalise(i, *input);
 
-	parallel.section(mUnembedActivations.mY, Parallel::mLargeHardwareThreads);
+	parallel.section(mUnembedActivations.mY);
 	unEmbedOutput(i, parallel);
 
 	Token predicted = getPrediction(i);
@@ -860,7 +862,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 	//this test is used to check the specific values of feed forward for correctness
 
-	auto test = [&](auto& gpt2) {
+	auto test = [&](auto& gpt2, Token predicted) {
 		//when concerning first citizen test data, mData,  this checksum tests the test size which is 64 tokens
 		assert(64 == mTestInputSize);
 
@@ -932,7 +934,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 		Token predicted = gpt2.feedForward(tokens);
 
-		test(gpt2);
+		test(gpt2, predicted);
 
 		});
 }
