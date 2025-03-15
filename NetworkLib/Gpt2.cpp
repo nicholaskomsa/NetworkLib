@@ -330,7 +330,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 	Tensor::TensorView input, output, b = biasTensor.span();
 
 	//a fully connected input and output with a bias
-	//this is a large parallelized operation
+	//identical to forward except for paralleled for i sample
 
 	input = inputTensor.spanT(i);
 	output = outputTensor.spanT(i);
@@ -355,27 +355,40 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 
 		}, [&](Parallel::Section& section) {
 
-			auto& sOutputs = std::any_cast<Floats&>(section.mAny);
+			auto& outputs = std::any_cast<Floats&>(section.mAny);
 
 			for (std::size_t m = 0; m < output.size(); ++m)
-				output[m] += sOutputs[m];
+				output[m] += outputs[m];
 				
 			});
 }
 void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
 	//each input is doing "matrix * vector + vector" or is "fully connected"
-	//therefore it is highly parallelised
 
 	parallel([&](Parallel::Section& section) {
 
 		auto& [first, second] = section.mOffsets;
 
-		auto& parallel = std::any_cast<Parallel&>(section.mAny);
-		parallel.section(inputTensor.mY);
+		Tensor::TensorView input, output, b = biasTensor.span();
 
-		for (std::size_t i = first; i < second; ++i)
-			forward(i, inputTensor, outputTensor, weightTensor, biasTensor, parallel);
+		for (std::size_t i = first; i < second; ++i) {
+
+			//a fully connected input and output with a bias
+
+			input = inputTensor.spanT(i);
+			output = outputTensor.spanT(i);
+
+			std::copy(b.begin(), b.end(), output.begin());
+
+			for (std::size_t m = 0; m < input.size(); ++m) {
+
+				const auto& in = input[m];
+
+				for (const auto& [o, w] : std::views::zip(output, weightTensor.spanT(m)))
+					o += w * in;
+			}
+		}
 
 		});
 }
@@ -761,12 +774,29 @@ void GPT2::unEmbedOutputs(Parallel& parallel) {
 	parallel([&](auto& section) {
 
 		auto& [first, second] = section.mOffsets;
-		auto& parallel = std::any_cast<Parallel&>(section.mAny);
 
-		parallel.section(mUnembedActivations.mY);
+		Tensor::TensorView input, wte, output;
 
-		for (std::size_t i = first; i < second; ++i)
-			unEmbedOutput(i, parallel);
+		for (std::size_t i = first; i < second; ++i) {
+
+			//weight token embed seen in embedInput
+			//input is the output of earlier forward process
+
+			input = mFinalLayer.getActivations().spanT(i);
+			output = mUnembedActivations.spanT(i);
+
+			for (std::size_t m = 0; m < output.size(); ++m) {
+
+				wte = mWteWeight.spanT(m);
+
+				float sum = 0.0f;
+
+				for (const auto& [in, w] : std::views::zip(input, wte))
+					sum += in * w;
+
+				output[m] = sum;
+			}
+		}
 
 		});
 }
@@ -777,11 +807,8 @@ void GPT2::setup() {
 	load();
 	mTranslator.load();
 
-	Floats floatAnyType;
-	Parallel inputAnyType; inputAnyType.setup(floatAnyType, 1, 1);
-	mParallelInput.setup(inputAnyType, mTestInputSize, 64);
-
-	mParallelI.setup(floatAnyType, mTestInputSize, 8);
+	mParallelInput.setup({}, mTestInputSize, 64);
+	mParallelI.setup(Floats{}, mTestInputSize, 8);
 }
 GPT2::Token GPT2::getPrediction(std::size_t m) const {
 
