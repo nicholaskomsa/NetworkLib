@@ -42,4 +42,7 @@
       <Filter>Gpt</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="notes.txt" />
+  </ItemGroup>
 </Project>

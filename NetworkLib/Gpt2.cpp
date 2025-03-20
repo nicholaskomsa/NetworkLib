@@ -254,7 +254,7 @@ void GPT2::load() {
 	boost::json::value j = boost::json::parse(header);
 	std::size_t floatsUsed = 0;
 
-	mActivationSpace.resize(mSeqModel + (mSeqModel * 7 + mSeqModel3 + mSeqSeqHead * 2 + mSeqModel4 * 2) * mAttnLayers.size() + mSeqModel + mSeqVocab);
+	mActivationSpace.resize(mSeqModel + (mSeqModel * 7 + mSeqModel3 + mSeqSeqHead * 2 + mSeqModel4 * 2) * mAttnLayers.size() + mSeqModel + mSeqVocab * 2);
 	auto activationSpace = mActivationSpace.begin();
 
 	auto readTensorByName = [&](std::string_view name) {
@@ -316,6 +316,9 @@ void GPT2::load() {
 	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), activationSpace);
 
 	mUnembedActivations = { {activationSpace, mSeqVocab}, mDSeq, mDVocab };
+	std::advance(activationSpace, mSeqVocab);
+
+	mUnembedActivationsSoftmax = { {activationSpace, mSeqVocab}, mDSeq, mDVocab };
 	std::advance(activationSpace, mSeqVocab);
 
 	assert(floatsUsed == mTensorSpace.size());
@@ -384,8 +387,9 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 			for (std::size_t m = 0; m < input.size(); ++m) {
 
 				const auto& in = input[m];
+				auto weights = weightTensor.spanT(m);
 
-				for (const auto& [o, w] : std::views::zip(output, weightTensor.spanT(m)))
+				for (const auto& [o, w] : std::views::zip(output, weights))
 					o += w * in;
 			}
 		}
@@ -399,10 +403,9 @@ void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 
 	//an activation function, gelu, is applied here
 
-	auto begin = mCFCActivations.mTensor.begin()
-		, end = mCFCActivations.spanTEnd(parallel.mSize -1 );
+	auto activations = mCFCActivations.spanTEnd(parallel.mSize -1 );
 
-	std::transform(std::execution::par_unseq, begin, end, mGeluActivations.mTensor.begin(),
+	std::transform(std::execution::par_unseq, activations.begin(), activations.end(), mGeluActivations.mTensor.begin(),
 		[&](auto x) {
 			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
 		});
@@ -479,6 +482,7 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 		norm = (i - mean) * r_stdDev;
 		o = norm * w + b;
 	}
+
 }
 void GPT2::LinearLayer::normalise(const Tensor& input, Parallel& parallel) {
 
@@ -513,23 +517,6 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 
 		attnOut[m] = dot * r_sqrtHeadsPerDModel;
 	};
-}
-void GPT2::AttnLayer::softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
-
-	const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
-
-	const auto softmaxMax = *std::max_element(ibegin, iend);
-
-	std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
-		return std::expf(in - softmaxMax);
-		});
-
-	const auto softmaxSum = std::reduce(obegin, oend)
-		, r_softmaxSum = 1.0f / softmaxSum;
-
-	std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
-		return o * r_softmaxSum;
-		});
 }
 void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOutSoftmax) {
 
@@ -574,7 +561,7 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 					, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
 
 				calculateQKAtten(headOffset, i, attnOut);
-				softmax(i, attnOut, attnOutSoftmax);
+				GPT2::softmax(i, attnOut, attnOutSoftmax);
 				calculateVAtten(headOffset, i, attnOutSoftmax);
 			}
 		}
@@ -592,11 +579,10 @@ void GPT2::AttnLayer::attention(Parallel& parallel) {
 
 	auto m = parallel.mSize - 1;
 
-	auto begin = mAttnZ.mTensor.begin();
-	auto end = mAttnZ.spanTEnd(m);
+	auto activations = mAttnZ.spanTEnd(m);
 
 	//activations z cleared here, attention generates mAttnZ (activations)
-	std::fill(begin, end , 0.0f);
+	std::fill(activations.begin(), activations.end(), 0.0f);
 
 	multiHeadedAttn(m);
 }
@@ -845,9 +831,7 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 
 	mFinalLayer.normalise(*input, parallel);
 
-	std::cout <<"unembedOutputs\t";
 	unEmbedOutputs(parallel);
-	std::cout << "done\n";
 
 	Token predicted = getPrediction(m);
 
@@ -883,6 +867,43 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	Token predicted = getPrediction(i);
 
 	return predicted;
+}
+float GPT2::crossEntropyLoss(TokensView tokens, Token predicted, Parallel& parallel) {
+
+
+	parallel([&](auto& section) {
+		
+		Tensor::TensorView unembed, unembedSoftmax;
+
+		auto& [first, second] = section.mOffsets;
+		for (std::size_t i = first; i < second; ++i) {
+
+			unembed = mUnembedActivations.spanT(i);
+			unembedSoftmax = mUnembedActivationsSoftmax.spanT(i);
+
+			GPT2::softmax(mUnembedActivations.mY - 1, unembed, unembedSoftmax);
+		}
+
+		});
+
+	Tensor::TensorView unembedSoftmax;
+	float loss = 0.0f;
+
+	for (std::size_t i = 0; i < tokens.size()-1; ++i) {
+
+		Token expected = tokens[i+1];
+		unembedSoftmax = mUnembedActivationsSoftmax.spanT(i);
+
+		float expectedSoftmax = unembedSoftmax[expected];
+
+		loss += -std::logf(expectedSoftmax);
+	}
+
+	loss += -std::logf(mUnembedActivationsSoftmax.spanT(tokens.size()-1)[predicted]);
+
+	loss /= tokens.size();
+
+	return loss;
 }
 
 void GPT2::Diagnostics::firstCitizenTest64() {
@@ -935,10 +956,12 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 			};
 
+
 		auto testUnEmbed = [&]() {
 
 			//inaccuracies/difference from reduce?
-			assert(-353759183 == getSum(gpt2.mUnembedActivations));
+			auto sum = getSum(gpt2.mUnembedActivations);
+			assert(-353845318 == sum);
 
 			};
 		auto testPrediction = [&]() {
@@ -997,6 +1020,36 @@ void GPT2::Diagnostics::feedForwardSpeed1024() {
 		}
 
 		});
+}
+void GPT2::Diagnostics::crossEntropyTest64() {
+
+	run([&](auto& gpt2) {
+
+		auto& data = gpt2.mTestData;
+		data.load();
+		TokensView dataView(data.mTokens.begin(), GPT2::mTestInputSize);
+		auto preText = gpt2.mTranslator.decode(dataView);
+		std::println("{}", preText);
+
+		Token predicted;
+		Tokens tokens(dataView.begin(), dataView.end());
+
+		float crossEntropyLoss;
+
+		TimeAverage<milliseconds> ffAvg;
+
+		auto elapsed = ffAvg.accumulateTime([&]() {
+
+			predicted = gpt2.feedForward(tokens);
+
+			crossEntropyLoss = gpt2.crossEntropyLoss(tokens, predicted, gpt2.mParallelInput );
+
+			});
+
+		std::println("{}; Cross Entropy Loss: {}", predicted, crossEntropyLoss);
+
+		});
+
 }
 
 void GPT2::Diagnostics::simpleChat() {

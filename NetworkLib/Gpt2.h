@@ -24,7 +24,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
+			, mTestInputSize = 64;// mDSeq;	//vs dSeq for full size or 64 for test size
 
 
 
@@ -91,6 +91,7 @@ namespace NetworkLib {
 			void firstCitizenTest64();
 			void feedForwardSpeed1024();
 			void simpleChat();
+			void crossEntropyTest64();
 		};
 		friend class Diagnostics;
 
@@ -102,6 +103,24 @@ namespace NetworkLib {
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		
+		static void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
+
+			const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
+
+			const auto softmaxMax = *std::max_element(ibegin, iend);
+
+			std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
+				return std::expf(in - softmaxMax);
+				});
+
+			const auto softmaxSum = std::reduce(obegin, oend)
+				, r_softmaxSum = 1.0f / softmaxSum;
+
+			std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
+				return o * r_softmaxSum;
+				});
+		}
+
 		class MLP {
 
 			friend class Diagnostics;
@@ -147,7 +166,6 @@ namespace NetworkLib {
 			static const float r_sqrtHeadsPerDModel;
 
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOut);
-			void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOutSoftmax);
 			
 			void multiHeadedAttn(std::size_t m);
@@ -169,7 +187,7 @@ namespace NetworkLib {
 
 		Floats mTensorSpace, mActivationSpace;
 
-		Tensor mWpeWeight, mWteWeight, mWActivations, mUnembedActivations;
+		Tensor mWpeWeight, mWteWeight, mWActivations, mUnembedActivations, mUnembedActivationsSoftmax;
 		
 		std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 		LinearLayer mFinalLayer;
@@ -183,6 +201,7 @@ namespace NetworkLib {
 		Token feedForward(TokensView tokens);
 		Token feedMore(TokensView tokens);
 
+		float crossEntropyLoss(TokensView tokens, Token predicted, Parallel& parallel);
 	public:
 
 		void chat() {

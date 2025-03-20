@@ -8,7 +8,8 @@ int main() {
 	using GPT2 = NetworkLib::GPT2;
 
 	GPT2::Diagnostics diag;
-	diag.feedForwardSpeed1024();
+	//diag.feedForwardSpeed1024();
+	diag.crossEntropyTest64();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
