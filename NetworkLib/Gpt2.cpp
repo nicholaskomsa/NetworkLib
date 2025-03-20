@@ -868,8 +868,7 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 
 	return predicted;
 }
-float GPT2::crossEntropyLoss(TokensView tokens, Token predicted, Parallel& parallel) {
-
+float GPT2::crossEntropyLoss(TokensView tokens, Token expected, Parallel& parallel) {
 
 	parallel([&](auto& section) {
 		
@@ -899,7 +898,7 @@ float GPT2::crossEntropyLoss(TokensView tokens, Token predicted, Parallel& paral
 		loss += -std::logf(expectedSoftmax);
 	}
 
-	loss += -std::logf(mUnembedActivationsSoftmax.spanT(tokens.size()-1)[predicted]);
+	loss += -std::logf(mUnembedActivationsSoftmax.spanT(tokens.size()-1)[expected]);
 
 	loss /= tokens.size();
 
@@ -1031,8 +1030,9 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 		auto preText = gpt2.mTranslator.decode(dataView);
 		std::println("{}", preText);
 
-		Token predicted;
+		Token predicted, expected;
 		Tokens tokens(dataView.begin(), dataView.end());
+		expected = data.mTokens[dataView.size()];
 
 		float crossEntropyLoss;
 
@@ -1042,11 +1042,14 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 
 			predicted = gpt2.feedForward(tokens);
 
-			crossEntropyLoss = gpt2.crossEntropyLoss(tokens, predicted, gpt2.mParallelInput );
+			crossEntropyLoss = gpt2.crossEntropyLoss(tokens, expected, gpt2.mParallelInput );
 
 			});
 
-		std::println("{}; Cross Entropy Loss: {}", predicted, crossEntropyLoss);
+		auto predictedWord = gpt2.mTranslator.decode(predicted);
+		auto expectedWord = gpt2.mTranslator.decode(expected);
+
+		std::println("{}=={}; Cross Entropy Loss: {}", predictedWord, expectedWord, crossEntropyLoss);
 
 		});
 

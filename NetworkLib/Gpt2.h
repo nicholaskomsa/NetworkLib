@@ -201,7 +201,7 @@ namespace NetworkLib {
 		Token feedForward(TokensView tokens);
 		Token feedMore(TokensView tokens);
 
-		float crossEntropyLoss(TokensView tokens, Token predicted, Parallel& parallel);
+		float crossEntropyLoss(TokensView tokens, Token expected, Parallel& parallel);
 	public:
 
 		void chat() {
