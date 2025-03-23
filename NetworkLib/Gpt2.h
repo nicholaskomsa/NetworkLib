@@ -80,7 +80,6 @@ namespace NetworkLib {
 		GPT2() = default;
 
 		void setup();
-		Token getPrediction(std::size_t i) const;
 
 		class Diagnostics {
 
@@ -97,12 +96,8 @@ namespace NetworkLib {
 
 	private:
 
-		Parallel mParallelInput, mParallelI;
-		static Parallel mParallelHeads;
-
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
-		
 		static void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
 
 			const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
@@ -155,6 +150,8 @@ namespace NetworkLib {
 
 			friend class Diagnostics;
 
+			static Parallel mParallelHeads;
+
 			LinearLayer mL1, mL2;
 
 			Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
@@ -185,24 +182,48 @@ namespace NetworkLib {
 			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel);
 		};
 
-		Floats mTensorSpace, mActivationSpace;
+		class Forward {
 
-		Tensor mWpeWeight, mWteWeight, mWActivations, mUnembedActivations, mUnembedActivationsSoftmax;
-		
-		std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
-		LinearLayer mFinalLayer;
+			friend class Diagnostics;
 
-		void load();
-		void embedInput(std::size_t i, Token token);
-		void embedInputs(TokensView tokens, Parallel& parallel);
-		void unEmbedOutput(std::size_t i, Parallel& parallel);
-		void unEmbedOutputs(Parallel& parallel);
+			Parallel mParallelInput, mParallelI;
 
-		Token feedForward(TokensView tokens);
-		Token feedMore(TokensView tokens);
+			Floats mTensorSpace, mActivationSpace;
 
-		float crossEntropyLoss(TokensView tokens, Token expected, Parallel& parallel);
+			Tensor mWpeWeight, mWteWeight, mWActivations, mUnembedActivations, mUnembedActivationsSoftmax;
+
+			std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
+			LinearLayer mFinalLayer;
+
+			void load();
+			void embedInput(std::size_t i, Token token);
+			void embedInputs(TokensView tokens);
+			void unEmbedOutput(std::size_t i);
+			void unEmbedOutputs();
+
+		public:
+
+			void setup();
+
+			Token feedForward(TokensView tokens);
+			Token feedMore(TokensView tokens);
+
+			Token getPrediction(std::size_t i) const;
+			float crossEntropyLoss(TokensView tokens, Token expected);
+
+		} mForward;
+
+		struct Backward {
+
+			friend class Diagnostics;
+
+			Floats mBackwardSpace;
+
+		} mBackward;
+
 	public:
+
+
 
 		void chat() {
 
@@ -286,11 +307,11 @@ namespace NetworkLib {
 			
 				if (scrolled)
 					ffAvg.accumulateTime([&]() {
-						newToken = feedForward(tokens);
+						newToken = mForward.feedForward(tokens);
 						});
 				else
 					fmAvg.accumulateTime([&]() {
-						newToken = feedMore(tokens);
+						newToken = mForward.feedMore(tokens);
 						});
 			
 				auto printAvgTime = [&]() {

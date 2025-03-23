@@ -10,7 +10,7 @@
 
 using namespace NetworkLib;
 
-Parallel GPT2::mParallelHeads( mHeadNum, mHeadNum);
+Parallel GPT2::AttnLayer::mParallelHeads( mHeadNum, mHeadNum);
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 
@@ -201,7 +201,14 @@ void GPT2::TestData::load() {
 	std::println(std::cout, "Data Tokens size: {}", mTokens.size());
 }
 
-void GPT2::load() {
+void GPT2::Forward::setup() {
+
+	mParallelInput.setup({}, mTestInputSize, 64);
+	mParallelI.setup(Floats{}, mTestInputSize, 8);
+
+	load();
+}
+void GPT2::Forward::load() {
 
 	//the gpt2 model is found on huggingface website: https://huggingface.co/openai-community/gpt2?show_file_info=model.safetensors
 	//we need to load gpt2 from file and create the activation space
@@ -697,7 +704,7 @@ void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t lay
 	std::advance(activationSpace, mSeqModel);
 }
 
-void GPT2::embedInput(std::size_t i, Token token) {
+void GPT2::Forward::embedInput(std::size_t i, Token token) {
 	
 	Tensor::TensorView wte, wpe, wActivations;
 	//weight token embed, weight position embed
@@ -710,12 +717,12 @@ void GPT2::embedInput(std::size_t i, Token token) {
 	for (const auto& [a, t, p] : std::views::zip(wActivations, wte, wpe))
 		a = t + p;
 }
-void GPT2::embedInputs(TokensView tokens, Parallel& parallel) {
+void GPT2::Forward::embedInputs(TokensView tokens) {
 
 	//for each token, generate a position+token embedding
 	//as a setup step before forward
 
-	parallel([&](auto& sections) {
+	mParallelInput([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
 
@@ -724,7 +731,7 @@ void GPT2::embedInputs(TokensView tokens, Parallel& parallel) {
 
 		});
 }
-void GPT2::unEmbedOutput(std::size_t i, Parallel& parallel) {
+void GPT2::Forward::unEmbedOutput(std::size_t i ) {
 
 	//after forward, generate the probability of a specific token
 
@@ -735,7 +742,8 @@ void GPT2::unEmbedOutput(std::size_t i, Parallel& parallel) {
 	input = mFinalLayer.getActivations().spanT(i);
 	output = mUnembedActivations.spanT(i);
 
-	parallel([&](Parallel::Section& section) {
+	mParallelI.section(mUnembedActivations.mY);
+	mParallelI([&](Parallel::Section& section) {
 
 		auto [first, second] = section.mOffsets;
 
@@ -753,11 +761,11 @@ void GPT2::unEmbedOutput(std::size_t i, Parallel& parallel) {
 
 		});
 }
-void GPT2::unEmbedOutputs(Parallel& parallel) {
+void GPT2::Forward::unEmbedOutputs() {
 
 	//after forward, generate each token probability
 
-	parallel([&](auto& section) {
+	mParallelInput([&](auto& section) {
 
 		auto& [first, second] = section.mOffsets;
 
@@ -790,24 +798,11 @@ void GPT2::setup() {
 
 	//we need to load our gpt data from file and also load the token translator file
 
-	load();
+	mForward.setup();
+
 	mTranslator.load();
-
-	mParallelInput.setup({}, mTestInputSize, 64);
-	mParallelI.setup(Floats{}, mTestInputSize, 8);
 }
-GPT2::Token GPT2::getPrediction(std::size_t m) const {
-
-	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
-	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
-
-	auto unembedActivations = mUnembedActivations.spanT(m);
-	auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
-	Token predicted = std::distance(unembedActivations.begin(), selected);
-
-	return predicted;
-}
-GPT2::Token GPT2::feedForward(TokensView tokens) {
+GPT2::Token GPT2::Forward::feedForward(TokensView tokens) {
 	
 	//feedForward will feed all tokens fresh into the network, up to dseq number of tokens
 	//tokens max size == mTestInputSize
@@ -818,26 +813,25 @@ GPT2::Token GPT2::feedForward(TokensView tokens) {
 	//the best case performance is with fewer tokens, such as a short english sentence
 	//and worst case performace when tokens size = mDSeq, the maximum model size
 
-	auto& parallel = mParallelInput;
+	mParallelInput.section(tokens.size());
 	std::size_t m = tokens.size() - 1;
-	parallel.section(tokens.size());
 
-	embedInputs(tokens, parallel);
+	embedInputs(tokens);
 
 	Tensor* input = &mWActivations;
 
 	for (auto& layer : mAttnLayers)
-		input = &layer.forward(*input, parallel);
+		input = &layer.forward(*input, mParallelInput);
 
-	mFinalLayer.normalise(*input, parallel);
+	mFinalLayer.normalise(*input, mParallelInput);
 
-	unEmbedOutputs(parallel);
+	unEmbedOutputs();
 
 	Token predicted = getPrediction(m);
 
 	return predicted;
 }
-GPT2::Token GPT2::feedMore(TokensView tokens) {
+GPT2::Token GPT2::Forward::feedMore(TokensView tokens) {
 
 	//because many short english sentences are small, they are way smaller than the maximum model size of mDSeq
 	//and in fact predictions fit inside basically "unallocated" "more" model space, so making predictions is very fast
@@ -846,10 +840,6 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	//At this point you need to make external decisions about your input data, such as scrolling it to create "more" space.
 	//feedMore acts like all previous tokens are valid, and the back token, needs processed only
 	//identical to feedForward except for parallel processing which is instead oriented toward a single sample
-	
-	auto& parallel = mParallelI;
-
-	parallel.section(tokens.size());
 
 	int i = tokens.size() - 1;
 	embedInput(i, tokens.back());
@@ -857,20 +847,21 @@ GPT2::Token GPT2::feedMore(TokensView tokens) {
 	Tensor* input = &mWActivations;
 
 	for (auto& layer : mAttnLayers)
-		input = &layer.forward(i, *input, parallel);
+		input = &layer.forward(i, *input, mParallelI);
 
 	mFinalLayer.normalise(i, *input);
 
-	parallel.section(mUnembedActivations.mY);
-	unEmbedOutput(i, parallel);
+	unEmbedOutput(i);
 
 	Token predicted = getPrediction(i);
 
 	return predicted;
 }
-float GPT2::crossEntropyLoss(TokensView tokens, Token expected, Parallel& parallel) {
+float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
 
-	parallel([&](auto& section) {
+	mParallelInput.section(tokens.size());
+
+	mParallelInput([&](auto& section) {
 		
 		Tensor::TensorView unembed, unembedSoftmax;
 
@@ -904,7 +895,17 @@ float GPT2::crossEntropyLoss(TokensView tokens, Token expected, Parallel& parall
 
 	return loss;
 }
+GPT2::Token GPT2::Forward::getPrediction(std::size_t i) const {
 
+	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
+	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
+
+	auto unembedActivations = mUnembedActivations.spanT(i);
+	auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
+	Token predicted = std::distance(unembedActivations.begin(), selected);
+
+	return predicted;
+}
 void GPT2::Diagnostics::firstCitizenTest64() {
 
 	//this test is used to check the specific values of feed forward for correctness
@@ -917,13 +918,15 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 			return std::int64_t(std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0)));
 			};
 
+		auto& forward = gpt2.mForward;
+
 		auto testEmbed = [&] {
-			assert(-30 == getSum(gpt2.mWActivations));
+			assert(-30 == getSum(forward.mWActivations));
 			};
 
 		auto testFrontLayer = [&]() {
 
-			const auto& layer = gpt2.mAttnLayers.front();
+			const auto& layer = forward.mAttnLayers.front();
 			assert(-334 == getSum(layer.mL1.mActivations));
 			assert(-3325 == getSum(layer.mCAttnActivations));
 			assert(454 == getSum(layer.mAttnZ));
@@ -938,7 +941,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 		auto testBackLayer = [&]() {
 
-			const auto& layer = gpt2.mAttnLayers.back();
+			const auto& layer = forward.mAttnLayers.back();
 
 			assert(-3859 == getSum(layer.mResidualActivation2));
 
@@ -946,7 +949,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 		auto testOutput = [&]() {
 
-			auto testSum = getSum(gpt2.mFinalLayer.getActivations());
+			auto testSum = getSum(forward.mFinalLayer.getActivations());
 			constexpr auto finalSum = 16654;
 
 			//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
@@ -959,7 +962,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 		auto testUnEmbed = [&]() {
 
 			//inaccuracies/difference from reduce?
-			auto sum = getSum(gpt2.mUnembedActivations);
+			auto sum = getSum(forward.mUnembedActivations);
 			assert(-353845318 == sum);
 
 			};
@@ -981,7 +984,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 		data.load();
 		TokensView tokens = { data.mTokens.begin(), GPT2::mTestInputSize };
 
-		Token predicted = gpt2.feedForward(tokens);
+		Token predicted = gpt2.mForward.feedForward(tokens);
 
 		test(gpt2, predicted);
 
@@ -1008,7 +1011,7 @@ void GPT2::Diagnostics::feedForwardSpeed1024() {
 		for (std::size_t i = 0; i < 200; ++i) {
 
 			auto elapsed = ffAvg.accumulateTime([&]() {
-				predicted = gpt2.feedForward(tokens);
+				predicted = gpt2.mForward.feedForward(tokens);
 				});
 
 			auto word = gpt2.mTranslator.decode(predicted);
@@ -1040,17 +1043,17 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 
 		auto elapsed = ffAvg.accumulateTime([&]() {
 
-			predicted = gpt2.feedForward(tokens);
+			predicted = gpt2.mForward.feedForward(tokens);
 
-			crossEntropyLoss = gpt2.crossEntropyLoss(tokens, expected, gpt2.mParallelInput );
+			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(tokens, expected );
 
 			});
 
 		auto predictedWord = gpt2.mTranslator.decode(predicted);
 		auto expectedWord = gpt2.mTranslator.decode(expected);
 
-		std::println("{}=={}; Cross Entropy Loss: {}", predictedWord, expectedWord, crossEntropyLoss);
-
+		std::println("{}=={}; Cross Entropy Loss: {} == 4.133143", predictedWord, expectedWord, crossEntropyLoss );
+	
 		});
 
 }
