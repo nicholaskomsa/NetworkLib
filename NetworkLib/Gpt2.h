@@ -87,6 +87,13 @@ namespace NetworkLib {
 			void run(TestFunction&& test);
 
 		public:
+
+			static double sumf(Tensor& tensor, std::string_view expected) {
+				double sum = std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0));
+				std::print("{}=={}\n", sum, expected);
+				return sum;
+			}
+
 			void firstCitizenTest64();
 			void feedForwardSpeed1024();
 			void simpleChat();
@@ -167,9 +174,12 @@ namespace NetworkLib {
 			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel);
 		};
 
+		class Backward;
+
 		class Forward {
 
 			friend class Diagnostics;
+			friend class Backward;
 
 			Parallel mParallelInput, mParallelI;
 
@@ -206,16 +216,46 @@ namespace NetworkLib {
 
 			Tensor mUnembed;
 
+			Forward* mForward;
+
 		public:
 			
-			void setup() {
+			void setup(Forward* forward) {
+
+				mForward = forward;
 
 				mBackwardSpace.resize(mSeqVocab);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
 				std::advance(backwardSpace, mSeqVocab);
+			}
 
+			void backward(Tokens& tokens, Token expected) {
+
+				auto& forward = *mForward;
+
+				auto& parallel = forward.mParallelInput;
+				parallel.section(tokens.size());
+
+				auto& forwardSoftmax = forward.mUnembedActivationsSoftmax;
+				Diagnostics::sumf(forwardSoftmax, "64");
+
+				auto softmaxSpan = forwardSoftmax.spanTEnd(tokens.size() - 1);
+				std::copy(softmaxSpan.begin(), softmaxSpan.end(), mUnembed.mTensor.begin());
+
+				Token token;
+				Tensor::TensorView unembed;
+
+				for (std::size_t i = 0; i < tokens.size(); ++i) {
+
+					token = tokens[i];
+					unembed = mUnembed.spanT(i);
+
+					unembed[token] -= 1.0f;
+				}
+
+				Diagnostics::sumf(mUnembed, "0.0009");
 
 			}
 

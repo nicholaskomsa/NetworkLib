@@ -1078,15 +1078,13 @@ void GPT2::Diagnostics::backwardTest64() {
 
 	run([&](auto& gpt2) {
 
-		gpt2.mBackward.setup();
-
 		auto& data = gpt2.mTestData;
 		data.load();
 		TokensView dataView(data.mTokens.begin(), GPT2::mTestInputSize);
 		auto preText = gpt2.mTranslator.decode(dataView);
 		std::println("{}", preText);
 
-		Token predicted, expected;
+		Token predicted=0, expected=0;
 		Tokens tokens(dataView.begin(), dataView.end());
 		expected = data.mTokens[dataView.size()];
 
@@ -1107,7 +1105,8 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		std::println("{}=={}; Cross Entropy Loss: {} == 4.133143", predictedWord, expectedWord, crossEntropyLoss);
 
-
+		gpt2.mBackward.setup(&gpt2.mForward);
+		gpt2.mBackward.backward(tokens, expected);
 
 		});
 
