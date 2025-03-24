@@ -98,23 +98,7 @@ namespace NetworkLib {
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
-		static void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
-
-			const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
-
-			const auto softmaxMax = *std::max_element(ibegin, iend);
-
-			std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
-				return std::expf(in - softmaxMax);
-				});
-
-			const auto softmaxSum = std::reduce(obegin, oend)
-				, r_softmaxSum = 1.0f / softmaxSum;
-
-			std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
-				return o * r_softmaxSum;
-				});
-		}
+		static void softmax(std::size_t length, Tensor::TensorView input, Tensor::TensorView output);
 
 		class MLP {
 
@@ -222,8 +206,6 @@ namespace NetworkLib {
 		} mBackward;
 
 	public:
-
-
 
 		void chat() {
 

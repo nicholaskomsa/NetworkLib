@@ -403,6 +403,23 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 
 		});
 }
+void GPT2::softmax(std::size_t length, Tensor::TensorView input, Tensor::TensorView output) {
+
+	const auto ibegin = input.begin(), iend = ibegin + 1 + length, obegin = output.begin(), oend = obegin + 1 + length;
+
+	const auto softmaxMax = *std::max_element(ibegin, iend);
+
+	std::transform(std::execution::seq, ibegin, iend, obegin, [&](auto& in) {
+		return std::expf(in - softmaxMax);
+		});
+
+	const auto softmaxSum = std::reduce(obegin, oend)
+		, r_softmaxSum = 1.0f / softmaxSum;
+
+	std::transform(std::execution::seq, obegin, oend, obegin, [&](auto& o) {
+		return o * r_softmaxSum;
+		});
+}
 
 void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 
