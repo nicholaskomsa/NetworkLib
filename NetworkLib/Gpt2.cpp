@@ -403,9 +403,9 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 
 		});
 }
-void GPT2::softmax(std::size_t length, Tensor::TensorView input, Tensor::TensorView output) {
+void GPT2::softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output) {
 
-	const auto ibegin = input.begin(), iend = ibegin + 1 + length, obegin = output.begin(), oend = obegin + 1 + length;
+	const auto ibegin = input.begin(), iend = ibegin + 1 + i, obegin = output.begin(), oend = obegin + 1 + i;
 
 	const auto softmaxMax = *std::max_element(ibegin, iend);
 
@@ -1074,6 +1074,45 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 		});
 
 }
+void GPT2::Diagnostics::backwardTest64() {
+
+	run([&](auto& gpt2) {
+
+		gpt2.mBackward.setup();
+
+		auto& data = gpt2.mTestData;
+		data.load();
+		TokensView dataView(data.mTokens.begin(), GPT2::mTestInputSize);
+		auto preText = gpt2.mTranslator.decode(dataView);
+		std::println("{}", preText);
+
+		Token predicted, expected;
+		Tokens tokens(dataView.begin(), dataView.end());
+		expected = data.mTokens[dataView.size()];
+
+		float crossEntropyLoss;
+
+		TimeAverage<milliseconds> ffAvg;
+
+		auto elapsed = ffAvg.accumulateTime([&]() {
+
+			predicted = gpt2.mForward.feedForward(tokens);
+
+			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(tokens, expected);
+
+			});
+
+		auto predictedWord = gpt2.mTranslator.decode(predicted);
+		auto expectedWord = gpt2.mTranslator.decode(expected);
+
+		std::println("{}=={}; Cross Entropy Loss: {} == 4.133143", predictedWord, expectedWord, crossEntropyLoss);
+
+
+
+		});
+
+}
+
 
 void GPT2::Diagnostics::simpleChat() {
 

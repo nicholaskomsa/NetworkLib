@@ -91,6 +91,7 @@ namespace NetworkLib {
 			void feedForwardSpeed1024();
 			void simpleChat();
 			void crossEntropyTest64();
+			void backwardTest64();
 		};
 		friend class Diagnostics;
 
@@ -98,7 +99,7 @@ namespace NetworkLib {
 
 		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
-		static void softmax(std::size_t length, Tensor::TensorView input, Tensor::TensorView output);
+		static void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output);
 
 		class MLP {
 
@@ -202,6 +203,21 @@ namespace NetworkLib {
 			friend class Diagnostics;
 
 			Floats mBackwardSpace;
+
+			Tensor mUnembed;
+
+		public:
+			
+			void setup() {
+
+				mBackwardSpace.resize(mSeqVocab);
+				auto backwardSpace = mBackwardSpace.begin();
+				
+				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
+				std::advance(backwardSpace, mSeqVocab);
+
+
+			}
 
 		} mBackward;
 
