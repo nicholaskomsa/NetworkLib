@@ -238,56 +238,63 @@ namespace NetworkLib {
 				std::advance(backwardSpace, mSeqModel);
 			}
 
-			void backward(Tokens& tokens, Token expected) {
+			void backward(TokensView nextTokens) {
 
 				auto& forward = *mForward;
+				auto& parallel = forward.mParallelInput;
+				parallel.section(nextTokens.size());
 
 				auto& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 				Diagnostics::sumf(forwardSoftmax, "64");
 
-				//auto softmaxSpan = forwardSoftmax.spanTEnd(tokens.size() - 1);
-				std::copy(forwardSoftmax.mTensor.begin(), forwardSoftmax.mTensor.end(), mUnembed.mTensor.begin());
+				auto softmaxSpan = forwardSoftmax.spanTEnd(nextTokens.size() - 1);
+				std::copy(softmaxSpan.begin(), softmaxSpan.end(), mUnembed.mTensor.begin());
 
 				Token token;
 				Tensor::TensorView unembed;
-				TokensView nextTokens(tokens.begin() + 1, tokens.end());
 
-				for (std::size_t i = 0; i < tokens.size()-1; ++i) {
+				for (std::size_t i = 0; i < nextTokens.size(); ++i) {
 
 					unembed = mUnembed.spanT(i);
 					token = nextTokens[i];
 
 					unembed[token] -= 1.0f;
 				};
-				mUnembed.spanT(tokens.size()-1)[expected] -= 1.0f;
 
-				Diagnostics::sumf(mUnembed, "0.008");
+				Diagnostics::sumf(mUnembed, "0.0009");
 
-				Tensor::TensorView input, output, weight;
-				Tensor wte = forward.mWteWeight;
 
-				const float r_tokens = 1.0f / tokens.size();
+				auto inputs = mFinalLayer.spanTEnd(nextTokens.size() - 1);
+				std::fill(inputs.begin(), inputs.end(), 0.0f);
 
-				for (std::size_t i = 0; i < tokens.size(); ++i) {
+				Tensor& wte = forward.mWteWeight;
 
-					output = mUnembed.spanT(i);
-					input = mFinalLayer.spanT(i);
+				parallel([&](auto& section) {
 
-					for (std::size_t m = 0; m < output.size(); ++m) {
+					Tensor::TensorView input, output, weight;
 
-						float o = output[m];
-						weight = wte.spanT(m);
+					auto& [first, second] = section.mOffsets;
+					for (std::size_t i = first; i < second; ++i) {
 
-						for (std::size_t n = 0; n < input.size(); ++n)
-							input[n] += o * weight[n];
+						output = mUnembed.spanT(i);
+						input = mFinalLayer.spanT(i);
+
+						for (std::size_t m = 0; m < output.size(); ++m) {
+
+							float o = output[m];
+							weight = wte.spanT(m);
+
+							for( const auto& [ in, w] : std::views::zip( input, weight))
+								in += o * w;
+						}
 					}
-					
-					for (std::size_t n = 0; n < input.size(); ++n)
-						input[n] *= r_tokens;
 
-				}
+					});
 
-				Diagnostics::sumf(mFinalLayer, "-0.0404");
+				const float r_tokens = 1.0f / nextTokens.size();
+				std::transform(std::execution::par_unseq, inputs.begin(), inputs.end(), inputs.begin(), [&](auto f) {return f * r_tokens; });
+
+				Diagnostics::sumf(mFinalLayer, "-0.0403");
 
 			}
 
