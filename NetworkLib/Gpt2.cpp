@@ -62,8 +62,8 @@ void GPT2::Translator::load() {
 		};
 
 	auto offsets = readFile();
-
-	for (Token token = 0; token < offsets.size(); ++token) {
+	
+	for (Token token : std::views::iota(0ULL, offsets.size())) {
 
 		auto& [offset, size] = offsets[token];
 
@@ -132,7 +132,7 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 		std::string_view testWord;
 		auto wordExists = mWordMap.left.end();
 
-		for (std::size_t size = wordSize; size >= 1; --size) {
+		for( auto size : std::views::iota(1, wordSize + 1) | std::views::reverse ) {
 
 			testWord = remaining.substr(0, size);
 
@@ -317,7 +317,7 @@ void GPT2::Forward::load() {
 	mWActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
 	std::advance(activationSpace, mSeqModel);
 
-	for (std::size_t i = 0; i < mAttnLayers.size(); ++i)
+	for (auto i : std::views::iota( 0ULL, mAttnLayers.size()))
 		mAttnLayers[i].load(readTensorByName, i, activationSpace);
 
 	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), activationSpace);
@@ -354,8 +354,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 		outputs.resize(output.size(), 0.0f);
 
 		auto& [first, second] = section.mOffsets;
-
-		for (std::size_t m = first; m < second; ++m) {
+		for (auto m : std::views::iota(first, second)) {
 
 			const auto& in = input[m];
 
@@ -367,7 +366,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, const Tensor& outpu
 
 			auto& outputs = std::any_cast<Floats&>(section.mAny);
 
-			for (std::size_t m = 0; m < output.size(); ++m)
+			for (auto m : std::views::iota(0ULL, output.size()))
 				output[m] += outputs[m];
 				
 			});
@@ -378,11 +377,10 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 
 	parallel([&](Parallel::Section& section) {
 
-		auto& [first, second] = section.mOffsets;
-
 		Tensor::TensorView input, output, b = biasTensor.span();
 
-		for (std::size_t i = first; i < second; ++i) {
+		auto& [first, second] = section.mOffsets;
+		for (auto i : std::views::iota( first, second)) {
 
 			//a fully connected input and output with a bias
 
@@ -391,7 +389,7 @@ void GPT2::forward(const Tensor& inputTensor, const Tensor& outputTensor, const 
 
 			std::copy(b.begin(), b.end(), output.begin());
 
-			for (std::size_t m = 0; m < input.size(); ++m) {
+			for (auto m : std::views::iota(0ULL, input.size())) {
 
 				const auto& in = input[m];
 				auto weights = weightTensor.spanT(m);
@@ -513,8 +511,7 @@ void GPT2::LinearLayer::normalise(const Tensor& input, Parallel& parallel) {
 	parallel([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
-
-		for (std::size_t m = first; m < second; ++m)
+		for( auto m : std::views::iota(first,second))
 			normalise(m, input);
 
 		});
@@ -531,7 +528,7 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 
 	const auto kOffset = mKOffset + headOffset;
 
-	for (std::size_t m = 0; m <= i; ++m) {
+	for (auto m : std::views::iota(0ULL, i + 1)) {
 
 		Tensor::TensorView kh = { mCAttnActivations.spanT(m).data() + kOffset, mHeadsPerDModel };
 		float dot = 0.0f;
@@ -552,7 +549,7 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 	Tensor::TensorView zh = { mAttnZ.spanT(i).data() + headOffset, mHeadsPerDModel };
 	const auto vOffset = mVOffset + headOffset;
 
-	for (std::size_t m = 0; m <= i; ++m) {
+	for (auto m : std::views::iota(0ULL, i + 1)) {
 
 		Tensor::TensorView vh = { mCAttnActivations.spanT(m).data() + vOffset, mHeadsPerDModel };
 		float factor = attnOutSoftmax[m];
@@ -574,12 +571,11 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 	mParallelHeads([&](Parallel::Section& section) {
 
 		auto& [first, second] = section.mOffsets;
-
-		for (std::size_t h = first; h < second; ++h) {
+		for (auto h : std::views::iota( first, second)) {
 
 			const auto headOffset = h * mHeadsPerDModel;
 
-			for (std::size_t i = 0; i <= m; ++i) {
+			for(auto i : std::views::iota(0ULL, m + 1) ) {
 
 				Tensor::TensorView attnOut = mAttnActivations.spanT(h, i)
 					, attnOutSoftmax = mAttnSoftmaxActivations.spanT(h, i);
@@ -622,8 +618,7 @@ void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projecti
 	parallel([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
-
-		for (std::size_t i = first; i < second; ++i)
+		for( auto i : std::views::iota( first, second))
 			residual(i, inputTensor, projectionTensor, residualTensor);
 
 		});
@@ -742,8 +737,7 @@ void GPT2::Forward::embedInputs(TokensView tokens) {
 	mParallelInput([&](auto& sections) {
 
 		auto& [first, second] = sections.mOffsets;
-
-		for (std::size_t i = first; i < second; ++i)
+		for( auto i : std::views::iota(first, second))
 			embedInput(i, tokens[i]);
 
 		});
@@ -763,8 +757,7 @@ void GPT2::Forward::unEmbedOutput(std::size_t i ) {
 	mParallelI([&](Parallel::Section& section) {
 
 		auto [first, second] = section.mOffsets;
-
-		for( std::size_t m = first; m < second; ++m) {
+		for( auto m : std::views::iota(first, second)){
 
 			wte = mWteWeight.spanT(m);
 
@@ -784,11 +777,10 @@ void GPT2::Forward::unEmbedOutputs() {
 
 	mParallelInput([&](auto& section) {
 
-		auto& [first, second] = section.mOffsets;
-
 		Tensor::TensorView input, wte, output;
 
-		for (std::size_t i = first; i < second; ++i) {
+		auto& [first, second] = section.mOffsets;
+		for (auto i : std::views::iota(first, second)) {
 
 			//weight token embed seen in embedInput
 			//input is the output of earlier forward process
@@ -796,7 +788,7 @@ void GPT2::Forward::unEmbedOutputs() {
 			input = mFinalLayer.getActivations().spanT(i);
 			output = mUnembedActivations.spanT(i);
 
-			for (std::size_t m = 0; m < output.size(); ++m) {
+			for (auto m : std::views::iota(0ULL, output.size())) {
 
 				wte = mWteWeight.spanT(m);
 
@@ -883,7 +875,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
 		Tensor::TensorView unembed, unembedSoftmax;
 
 		auto& [first, second] = section.mOffsets;
-		for (std::size_t i = first; i < second; ++i) {
+		for (auto i : std::views::iota(first, second)) {
 
 			unembed = mUnembedActivations.spanT(i);
 			unembedSoftmax = mUnembedActivationsSoftmax.spanT(i);
@@ -895,8 +887,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
 
 	Tensor::TensorView unembedSoftmax;
 	float loss = 0.0f;
-
-	for (std::size_t i = 0; i < tokens.size()-1; ++i) {
+	for (auto i : std::views::iota(0ULL, tokens.size() - 1)) {
 
 		Token expected = tokens[i+1];
 		unembedSoftmax = mUnembedActivationsSoftmax.spanT(i);
@@ -1024,8 +1015,8 @@ void GPT2::Diagnostics::feedForwardSpeed1024() {
 		Tokens tokens(dataView.begin(), dataView.end());
 
 		TimeAverage<milliseconds> ffAvg;
-
-		for (std::size_t i = 0; i < 200; ++i) {
+		
+		for (auto i : std::views::iota( 0, 200)) {
 
 			auto elapsed = ffAvg.accumulateTime([&]() {
 				predicted = gpt2.mForward.feedForward(tokens);
@@ -1084,8 +1075,7 @@ void GPT2::Diagnostics::backwardTest64() {
 		auto preText = gpt2.mTranslator.decode(tokens);
 		std::println("{}", preText);
 
-		Token predicted=0, expected=0;
-		expected = data.mTokens[tokens.size()];
+		Token predicted, expected = data.mTokens[tokens.size()];
 
 		float crossEntropyLoss;
 		TimeAverage<milliseconds> ffAvg;

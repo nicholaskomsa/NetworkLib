@@ -94,7 +94,7 @@ namespace NetworkLib {
 				std::print("{}=={}\n", expected, sum);
 				return sum;
 			}
-			static double sumf(Tensor& tensor, std::string_view expected) {
+			static double sumf(const Tensor& tensor, std::string_view expected) {
 				return sumf(tensor.mTensor, expected);
 			}
 
@@ -219,8 +219,11 @@ namespace NetworkLib {
 			Floats mBackwardSpace;
 
 			Tensor mUnembed, mFinalLayer;
+			Tensor mWteWeight;
 
 			Forward* mForward;
+
+			static constexpr std::size_t mVocabModel = mDVocab * mDModel;
 
 		public:
 			
@@ -228,7 +231,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mSeqModel);
+				mBackwardSpace.resize(mSeqVocab + mSeqModel + mVocabModel);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -236,6 +239,9 @@ namespace NetworkLib {
 
 				mFinalLayer = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
 				std::advance(backwardSpace, mSeqModel);
+
+				mWteWeight = { {backwardSpace, mVocabModel}, mDVocab, mDModel };
+				std::advance(backwardSpace, mVocabModel);
 			}
 
 			void backward(TokensView nextTokens) {
@@ -253,7 +259,7 @@ namespace NetworkLib {
 				Token token;
 				Tensor::TensorView unembed;
 
-				for (std::size_t i = 0; i < nextTokens.size(); ++i) {
+				for (auto i : std::views::iota( 0ULL, nextTokens.size())) {
 
 					unembed = mUnembed.spanT(i);
 					token = nextTokens[i];
@@ -267,25 +273,33 @@ namespace NetworkLib {
 				auto inputs = mFinalLayer.spanTEnd(nextTokens.size() - 1);
 				std::fill(inputs.begin(), inputs.end(), 0.0f);
 
+				auto dWeights = mWteWeight.mTensor;
+				std::fill(dWeights.begin(), dWeights.end(), 0.0f);
+
 				Tensor& wte = forward.mWteWeight;
+				Tensor& dWte = mWteWeight;
 
 				parallel([&](auto& section) {
 
-					Tensor::TensorView input, output, weight;
+					Tensor::TensorView input, output, weight, dWeight;
 
 					auto& [first, second] = section.mOffsets;
-					for (std::size_t i = first; i < second; ++i) {
+					for (auto i : std::views::iota(first, second)) {
 
 						output = mUnembed.spanT(i);
 						input = mFinalLayer.spanT(i);
 
-						for (std::size_t m = 0; m < output.size(); ++m) {
-
+						for( auto m : std::views::iota(0ULL, output.size())){
+				
 							float o = output[m];
 							weight = wte.spanT(m);
+							dWeight = dWte.spanT(m);
 
-							for( const auto& [ in, w] : std::views::zip( input, weight))
+							for (const auto& [in, w, dw] : std::views::zip(input, weight, dWeight)) {
 								in += o * w;
+								dw += o * in;
+							}
+								
 						}
 					}
 
@@ -293,6 +307,7 @@ namespace NetworkLib {
 
 				const float r_tokens = 1.0f / nextTokens.size();
 				std::transform(std::execution::par_unseq, inputs.begin(), inputs.end(), inputs.begin(), [&](auto f) {return f * r_tokens; });
+				std::transform(std::execution::par_unseq, dWeights.begin(), dWeights.end(), dWeights.begin(), [&](auto f) {return f * r_tokens; });
 
 				Diagnostics::sumf(mFinalLayer, "-0.0403");
 
@@ -380,7 +395,7 @@ namespace NetworkLib {
 			Token newToken = 0;
 			TimeAverage<milliseconds> ffAvg, fmAvg;
 
-			for (std::size_t s = 0; s < distance && !endOfSentence; ++s) {
+			for( auto s : std::views::iota(0ULL, distance )){
 			
 				if (scrolled)
 					ffAvg.accumulateTime([&]() {
@@ -399,6 +414,8 @@ namespace NetworkLib {
 				printAvgTime();
 
 				scrolled = addToken(newToken);
+
+				if (endOfSentence) break;
 			}
 		}
 	};
