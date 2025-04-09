@@ -270,11 +270,11 @@ namespace NetworkLib {
 				Diagnostics::sumf(mUnembed, "0.0009");
 
 				auto inputs = forward.mFinalLayer.getActivations();
-				auto inputsSpanEnd = inputs.spanTEnd(nextTokens.size() - 1);
-				std::fill(inputsSpanEnd.begin(), inputsSpanEnd.end(), 0.0f);
-				
+
 				auto dInputs = mFinalLayer;
 				auto dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
+
+				std::fill(dInputsSpanEnd.begin(), dInputsSpanEnd.end(), 0.0f);
 
 				Tensor& wte = forward.mWteWeight;
 				Tensor& dWte = mWteWeight;
@@ -307,7 +307,6 @@ namespace NetworkLib {
 
 					});
 
-				auto dInputsSpanEnd = mFinalLayer.spanTEnd(nextTokens.size() - 1);
 				std::transform(std::execution::par_unseq, dInputsSpanEnd.begin(), dInputsSpanEnd.end(), dInputsSpanEnd.begin(), [&](auto f) {return f * r_tokens; });
 
 				Diagnostics::sumf(dInputsSpanEnd, "-0.0403");
