@@ -9,8 +9,8 @@ int main() {
 
 	GPT2::Diagnostics diag;
 	//diag.feedForwardSpeed1024();
-	//diag.backwardTest64();
-	diag.simpleChat();
+	diag.backwardTest64();
+	//diag.simpleChat();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

@@ -269,47 +269,48 @@ namespace NetworkLib {
 
 				Diagnostics::sumf(mUnembed, "0.0009");
 
-
-				auto inputs = mFinalLayer.spanTEnd(nextTokens.size() - 1);
-				std::fill(inputs.begin(), inputs.end(), 0.0f);
-
-				auto dWeights = mWteWeight.mTensor;
-				std::fill(dWeights.begin(), dWeights.end(), 0.0f);
+				auto inputs = forward.mFinalLayer.getActivations();
+				auto inputsSpanEnd = inputs.spanTEnd(nextTokens.size() - 1);
+				std::fill(inputsSpanEnd.begin(), inputsSpanEnd.end(), 0.0f);
+				
+				auto dInputs = mFinalLayer;
+				auto dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
 
 				Tensor& wte = forward.mWteWeight;
 				Tensor& dWte = mWteWeight;
 
+				const float r_tokens = 1.0f / nextTokens.size();
+
 				parallel([&](auto& section) {
 
-					Tensor::TensorView input, output, weight, dWeight;
+					Tensor::TensorView input, dInput, output, weight, dWeight;
 
 					auto& [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
 						output = mUnembed.spanT(i);
-						input = mFinalLayer.spanT(i);
-
+						dInput = dInputs.spanT(i);
+						input = inputs.spanT(i);
+					
 						for( auto m : std::views::iota(0ULL, output.size())){
 				
 							float o = output[m];
 							weight = wte.spanT(m);
 							dWeight = dWte.spanT(m);
-
-							for (const auto& [in, w, dw] : std::views::zip(input, weight, dWeight)) {
-								in += o * w;
-								dw += o * in;
+							
+							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
+								din += o * w;
+								dw = o * in * r_tokens;
 							}
-								
 						}
 					}
 
 					});
 
-				const float r_tokens = 1.0f / nextTokens.size();
-				std::transform(std::execution::par_unseq, inputs.begin(), inputs.end(), inputs.begin(), [&](auto f) {return f * r_tokens; });
-				std::transform(std::execution::par_unseq, dWeights.begin(), dWeights.end(), dWeights.begin(), [&](auto f) {return f * r_tokens; });
+				auto dInputsSpanEnd = mFinalLayer.spanTEnd(nextTokens.size() - 1);
+				std::transform(std::execution::par_unseq, dInputsSpanEnd.begin(), dInputsSpanEnd.end(), dInputsSpanEnd.begin(), [&](auto f) {return f * r_tokens; });
 
-				Diagnostics::sumf(mFinalLayer, "-0.0403");
+				Diagnostics::sumf(dInputsSpanEnd, "-0.0403");
 
 			}
 
