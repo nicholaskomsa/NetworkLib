@@ -469,7 +469,7 @@ void GPT2::MLP::load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& 
 	std::advance(activationSpace, mSeqModel);
 }
 
-const Tensor& GPT2::LinearLayer::getActivations() const {
+Tensor& GPT2::LinearLayer::getActivations() {
 	return mActivations;
 }
 void GPT2::LinearLayer::load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace) {

@@ -136,8 +136,20 @@ namespace NetworkLib {
 			Tensor mActivations;
 		public:
 
+			void load(Floats::iterator& backwardSpace) {
+
+				mActivations = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
+				std::advance(backwardSpace, mSeqModel);
+
+				mBias = { {backwardSpace, mDModel}, mDModel };
+				std::advance(backwardSpace, mDModel);
+
+				mWeight = { {backwardSpace, mDModel}, mDModel  };
+				std::advance(backwardSpace, mDModel);
+			}
+
 			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
-			const Tensor& getActivations() const;
+			Tensor& getActivations();
 
 			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input, Parallel& parallel);
@@ -217,22 +229,6 @@ namespace NetworkLib {
 			friend class Diagnostics;
 
 
-			struct LinearLayer {
-
-				Tensor mActivations, mBias;
-
-				void load(Floats::iterator& backwardSpace) {
-			
-					mActivations = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-					std::advance(backwardSpace, mSeqModel);
-
-					mBias = { {backwardSpace, mDModel}, mDModel };
-					std::advance(backwardSpace, mDModel);
-				}
-
-			};
-
-
 			Floats mBackwardSpace;
 
 			Tensor mUnembed, mWteWeight;
@@ -249,7 +245,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel)  );
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel*2)  );
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -286,10 +282,9 @@ namespace NetworkLib {
 
 				Diagnostics::sumf(mUnembed, "0.0009");
 
-				auto inputs = forward.mFinalLayer.getActivations();
-
-				auto dInputs = mFinalLayer.mActivations;
-				auto dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
+				Tensor& inputs = forward.mFinalLayer.getActivations();
+				Tensor& dInputs = mFinalLayer.getActivations();
+				Tensor::TensorView dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
 
 				std::fill(dInputsSpanEnd.begin(), dInputsSpanEnd.end(), 0.0f);
 
@@ -341,10 +336,12 @@ namespace NetworkLib {
 					
 					Tensor::TensorView dOut, dBias;
 
+					Tensor& dActivations = mFinalLayer.getActivations();
+
 					auto [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
-						//dOut = mFinalLayer.spanT(i);
+						dOut = dActivations.spanT(i);
 
 					}
 
