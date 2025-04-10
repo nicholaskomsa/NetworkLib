@@ -216,10 +216,28 @@ namespace NetworkLib {
 
 			friend class Diagnostics;
 
+
+			struct LinearLayer {
+
+				Tensor mActivations, mBias;
+
+				void load(Floats::iterator& backwardSpace) {
+			
+					mActivations = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
+					std::advance(backwardSpace, mSeqModel);
+
+					mBias = { {backwardSpace, mDModel}, mDModel };
+					std::advance(backwardSpace, mDModel);
+				}
+
+			};
+
+
 			Floats mBackwardSpace;
 
-			Tensor mUnembed, mFinalLayer;
-			Tensor mWteWeight;
+			Tensor mUnembed, mWteWeight;
+
+			LinearLayer mFinalLayer;
 
 			Forward* mForward;
 
@@ -231,20 +249,19 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mSeqModel + mVocabModel);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel)  );
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
 				std::advance(backwardSpace, mSeqVocab);
 
-				mFinalLayer = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-				std::advance(backwardSpace, mSeqModel);
-
 				mWteWeight = { {backwardSpace, mVocabModel}, mDVocab, mDModel };
 				std::advance(backwardSpace, mVocabModel);
+
+				mFinalLayer.load(backwardSpace);
 			}
 
-			void backward(TokensView nextTokens) {
+			void unEmbedOutputs(TokensView nextTokens) {
 
 				auto& forward = *mForward;
 				auto& parallel = forward.mParallelInput;
@@ -259,7 +276,7 @@ namespace NetworkLib {
 				Token token;
 				Tensor::TensorView unembed;
 
-				for (auto i : std::views::iota( 0ULL, nextTokens.size())) {
+				for (auto i : std::views::iota(0ULL, nextTokens.size())) {
 
 					unembed = mUnembed.spanT(i);
 					token = nextTokens[i];
@@ -271,7 +288,7 @@ namespace NetworkLib {
 
 				auto inputs = forward.mFinalLayer.getActivations();
 
-				auto dInputs = mFinalLayer;
+				auto dInputs = mFinalLayer.mActivations;
 				auto dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
 
 				std::fill(dInputsSpanEnd.begin(), dInputsSpanEnd.end(), 0.0f);
@@ -291,16 +308,16 @@ namespace NetworkLib {
 						output = mUnembed.spanT(i);
 						dInput = dInputs.spanT(i);
 						input = inputs.spanT(i);
-					
-						for( auto m : std::views::iota(0ULL, output.size())){
-				
+
+						for (auto m : std::views::iota(0ULL, output.size())) {
+
 							float o = output[m];
 							weight = wte.spanT(m);
 							dWeight = dWte.spanT(m);
-							
+
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
-								dw = o * in * r_tokens;
+								dw += o * in * r_tokens;
 							}
 						}
 					}
@@ -308,8 +325,30 @@ namespace NetworkLib {
 					});
 
 				std::transform(std::execution::par_unseq, dInputsSpanEnd.begin(), dInputsSpanEnd.end(), dInputsSpanEnd.begin(), [&](auto f) {return f * r_tokens; });
-
+			
 				Diagnostics::sumf(dInputsSpanEnd, "-0.0403");
+			}
+
+			void backward(TokensView nextTokens) {
+
+				auto& forward = *mForward;
+				auto& parallel = forward.mParallelInput;
+				parallel.section(nextTokens.size());
+
+				unEmbedOutputs(nextTokens);
+
+				parallel([&](auto& section) {
+					
+					Tensor::TensorView dOut, dBias;
+
+					auto [first, second] = section.mOffsets;
+					for (auto i : std::views::iota(first, second)) {
+
+						//dOut = mFinalLayer.spanT(i);
+
+					}
+
+					});
 
 			}
 
