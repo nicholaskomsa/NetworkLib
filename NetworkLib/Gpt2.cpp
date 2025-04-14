@@ -473,10 +473,14 @@ Tensor& GPT2::LinearLayer::getActivations() {
 	return mActivations;
 }
 void GPT2::LinearLayer::load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace) {
+
 	mBias = std::move(bias);
 	mWeight = std::move(weight);
 	mActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
 	std::advance(activationSpace, mSeqModel);
+
+	mMean.resize(mTestInputSize);
+	mRStdDev.resize(mTestInputSize);
 }
 void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 
@@ -488,6 +492,7 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 	Tensor::TensorView in = input.spanT(m), out = mActivations.spanT(m);
 
 	const auto mean = std::reduce(in.begin(), in.end()) / in.size();
+	mMean[m] = mean;
 
 	auto meanDiffSq = std::reduce(in.begin(), in.end(), 0.0f,
 		[&](auto sum, auto x) {
@@ -496,6 +501,7 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 		}) / in.size();
 
 	auto r_stdDev = 1.0f / std::sqrt(meanDiffSq);
+	mRStdDev[m] = r_stdDev;
 
 	Tensor::TensorView bias = mBias.span(), weight = mWeight.span();
 
@@ -504,7 +510,6 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 		norm = (i - mean) * r_stdDev;
 		o = norm * w + b;
 	}
-
 }
 void GPT2::LinearLayer::normalise(const Tensor& input, Parallel& parallel) {
 

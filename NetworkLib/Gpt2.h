@@ -129,11 +129,15 @@ namespace NetworkLib {
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 		};
 		class LinearLayer {
-
+		public:
 			friend class Diagnostics;
 
 			Tensor mBias, mWeight;
 			Tensor mActivations;
+
+			//for backward
+			using PartialBiasWeight = std::pair<Floats, Floats>;
+			Floats mMean, mRStdDev;
 		public:
 
 			void load(Floats::iterator& backwardSpace) {
@@ -146,6 +150,9 @@ namespace NetworkLib {
 
 				mWeight = { {backwardSpace, mDModel}, mDModel  };
 				std::advance(backwardSpace, mDModel);
+
+				mMean.resize(mTestInputSize);
+				mRStdDev.resize(mTestInputSize);
 			}
 
 			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
@@ -153,6 +160,79 @@ namespace NetworkLib {
 
 			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input, Parallel& parallel);
+
+			void backward(const LinearLayer& inputLayer, Tensor& inputs, Tensor& dInputs, Parallel& parallel) {
+
+				Tensor::TensorView dBias = mBias.span();
+				Tensor& dActivations = mActivations;
+				Tensor::TensorView dWeight = mWeight.span();
+
+				Tensor::TensorView weight = inputLayer.mWeight.span();
+				auto& means = inputLayer.mMean;
+				auto& rStdDevs = inputLayer.mRStdDev;
+
+				parallel([&](auto& section) {
+
+					auto& [dBias, dWeight] = std::any_cast<LinearLayer::PartialBiasWeight&>(section.mAny);
+
+					dBias.clear();
+					dBias.resize(inputs.mY, 0.0f);
+
+					dWeight.clear();
+					dWeight.resize(inputs.mY, 0.0f);
+
+					Tensor::TensorView dOut, input, dInput;
+
+					auto [first, second] = section.mOffsets;
+					for (auto i : std::views::iota(first, second)) {
+
+						dOut = dActivations.spanT(i);
+						input = inputs.spanT(i);
+
+						float mean = means[i]
+							, rStdDev = rStdDevs[i]
+							, meanPartial = 0.0f
+							, stdDevPartial = 0.0f;
+
+						for (const auto& [g, o, i, dW, w] : std::views::zip(dBias, dOut, input, dWeight, weight)) {
+
+							float dInNorm = o * w
+								, inNorm = (i - mean) * rStdDev;
+
+							g += o;
+							dW += o * inNorm;
+
+							meanPartial += dInNorm;
+							stdDevPartial += dInNorm * inNorm;
+						}
+
+						meanPartial /= dBias.size();
+						stdDevPartial /= dBias.size();
+
+						dInput = dInputs.spanT(i);
+
+						for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
+
+							float dInNorm = o * w
+								, inNorm = (i - mean) * rStdDev;
+
+							dI = dInNorm - meanPartial - inNorm * stdDevPartial;
+							dI *= rStdDev;
+						}
+					}
+
+					}, [&](Parallel::Section& section) {
+
+						auto& [partialBias, partialWeight] = std::any_cast<LinearLayer::PartialBiasWeight&>(section.mAny);
+
+						for (const auto& [b, w, pb, pw] : std::views::zip(dBias, dWeight, partialBias, partialWeight)) {
+							b += pb;
+							w += pw;
+						}
+
+						});
+
+			}
 		};
 		class AttnLayer {
 
@@ -185,9 +265,20 @@ namespace NetworkLib {
 
 			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
 			void load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
+			
+			void load(Floats::iterator& backwardSpace) {
+
+				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
+				std::advance(backwardSpace, mSeqModel);
+
+
+
+			}
 
 			Tensor& forward(Tensor& inputTensor, Parallel& parallel);
 			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel);
+
+			Tensor& getOutput() { return mResidualActivation2; }
 		};
 
 		class Backward;
@@ -228,12 +319,15 @@ namespace NetworkLib {
 
 			friend class Diagnostics;
 
+			Parallel mParallelInput;
 
 			Floats mBackwardSpace;
 
 			Tensor mUnembed, mWteWeight;
 
 			LinearLayer mFinalLayer;
+
+			std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 
 			Forward* mForward;
 
@@ -245,7 +339,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel*2)  );
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel*2) + (mSeqModel) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -255,6 +349,13 @@ namespace NetworkLib {
 				std::advance(backwardSpace, mVocabModel);
 
 				mFinalLayer.load(backwardSpace);
+
+				for( auto& attnLayer : mAttnLayers ) {
+
+					attnLayer.load(backwardSpace);
+				}
+
+				mParallelInput.setup(std::pair<Floats, Floats>{}, mTestInputSize, 32);
 			}
 
 			void unEmbedOutputs(TokensView nextTokens) {
@@ -327,25 +428,19 @@ namespace NetworkLib {
 			void backward(TokensView nextTokens) {
 
 				auto& forward = *mForward;
-				auto& parallel = forward.mParallelInput;
+				auto& parallel = mParallelInput;
 				parallel.section(nextTokens.size());
 
 				unEmbedOutputs(nextTokens);
+				
+				Tensor& inputs = forward.mAttnLayers.back().getOutput();
+				Tensor& dInputs = mAttnLayers.back().getOutput();
 
-				parallel([&](auto& section) {
-					
-					Tensor::TensorView dOut, dBias;
+				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
 
-					Tensor& dActivations = mFinalLayer.getActivations();
-
-					auto [first, second] = section.mOffsets;
-					for (auto i : std::views::iota(first, second)) {
-
-						dOut = dActivations.spanT(i);
-
-					}
-
-					});
+				Diagnostics::sumf(mFinalLayer.mBias, "-0.0403");
+				Diagnostics::sumf(mFinalLayer.mWeight, "-0.5371");
+				Diagnostics::sumf(dInputs, "-.e8 on debug");
 
 			}
 
