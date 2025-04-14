@@ -150,9 +150,6 @@ namespace NetworkLib {
 
 				mWeight = { {backwardSpace, mDModel}, mDModel  };
 				std::advance(backwardSpace, mDModel);
-
-				mMean.resize(mTestInputSize);
-				mRStdDev.resize(mTestInputSize);
 			}
 
 			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
@@ -161,13 +158,13 @@ namespace NetworkLib {
 			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input, Parallel& parallel);
 
-			void backward(const LinearLayer& inputLayer, Tensor& inputs, Tensor& dInputs, Parallel& parallel) {
+			void backward(const LinearLayer& inputLayer, const Tensor& inputs, const Tensor& dInputs, Parallel& parallel) {
 
 				Tensor::TensorView dBias = mBias.span();
 				Tensor& dActivations = mActivations;
 				Tensor::TensorView dWeight = mWeight.span();
 
-				Tensor::TensorView weight = inputLayer.mWeight.span();
+				Tensor::ConstTensorView weight = inputLayer.mWeight.span();
 				auto& means = inputLayer.mMean;
 				auto& rStdDevs = inputLayer.mRStdDev;
 
@@ -181,42 +178,43 @@ namespace NetworkLib {
 					dWeight.clear();
 					dWeight.resize(inputs.mY, 0.0f);
 
-					Tensor::TensorView dOut, input, dInput;
+					Tensor::ConstTensorView dOut, input;
+					Tensor::TensorView dInput;
 
 					auto [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
 						dOut = dActivations.spanT(i);
 						input = inputs.spanT(i);
+						dInput = dInputs.spanT(i);
 
 						float mean = means[i]
 							, rStdDev = rStdDevs[i]
 							, meanPartial = 0.0f
 							, stdDevPartial = 0.0f;
 
-						for (const auto& [g, o, i, dW, w] : std::views::zip(dBias, dOut, input, dWeight, weight)) {
+						float dInNorm;
 
-							float dInNorm = o * w
-								, inNorm = (i - mean) * rStdDev;
+						for (const auto& [g, o, i, dW, w, dI] : std::views::zip(dBias, dOut, input, dWeight, weight, dInput)) {
 
+							dI = (i - mean) * rStdDev; //==inNorm will pass through as dI
+
+							dW += o * dI;
 							g += o;
-							dW += o * inNorm;
 
+							dInNorm = o * w;
 							meanPartial += dInNorm;
-							stdDevPartial += dInNorm * inNorm;
+							stdDevPartial += dInNorm * dI;
 						}
 
 						meanPartial /= dBias.size();
 						stdDevPartial /= dBias.size();
 
-						dInput = dInputs.spanT(i);
-
 						for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
 
-							float dInNorm = o * w
-								, inNorm = (i - mean) * rStdDev;
-
-							dI = dInNorm - meanPartial - inNorm * stdDevPartial;
+							dInNorm = o * w;
+							
+							dI = dInNorm - meanPartial - dI * stdDevPartial;
 							dI *= rStdDev;
 						}
 					}
@@ -421,8 +419,6 @@ namespace NetworkLib {
 					});
 
 				std::transform(std::execution::par_unseq, dInputsSpanEnd.begin(), dInputsSpanEnd.end(), dInputsSpanEnd.begin(), [&](auto f) {return f * r_tokens; });
-			
-				Diagnostics::sumf(dInputsSpanEnd, "-0.0403");
 			}
 
 			void backward(TokensView nextTokens) {
@@ -432,7 +428,8 @@ namespace NetworkLib {
 				parallel.section(nextTokens.size());
 
 				unEmbedOutputs(nextTokens);
-				
+				Diagnostics::sumf(mFinalLayer.mActivations, "-0.0403");
+
 				Tensor& inputs = forward.mAttnLayers.back().getOutput();
 				Tensor& dInputs = mAttnLayers.back().getOutput();
 

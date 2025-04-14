@@ -12,6 +12,8 @@ struct Tensor {
 	//TensorView is the multidimensional float data and is broken up into spannable segments depending on dimensionality.
 
 	using TensorView = std::span<float>;
+	using ConstTensorView = std::span<const float>;
+
 	TensorView mTensor;
 
 	std::size_t mX{ 0 }, mY{ 0 }, mZ{ 0 }, mW{ 0 };
