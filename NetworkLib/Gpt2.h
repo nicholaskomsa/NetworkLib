@@ -88,7 +88,7 @@ namespace NetworkLib {
 
 		public:
 
-			static double sumf(Tensor::TensorView tensorView, std::string_view expected) {
+			static double sumf(Tensor::ConstView tensorView, std::string_view expected) {
 
 				double sum = std::reduce(tensorView.begin(), tensorView.end(), double(0.0));
 				std::print("{}=={}\n", expected, sum);
@@ -108,9 +108,9 @@ namespace NetworkLib {
 
 	private:
 
-		static void forward(std::size_t i, const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
-		static void forward(const Tensor& inputTensor, const Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
-		static void softmax(std::size_t i, Tensor::TensorView input, Tensor::TensorView output);
+		static void forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
+		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
+		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
 
 		class MLP {
 
@@ -158,15 +158,15 @@ namespace NetworkLib {
 			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input, Parallel& parallel);
 
-			void backward(const LinearLayer& inputLayer, const Tensor& inputs, const Tensor& dInputs, Parallel& parallel) {
+			void backward(const LinearLayer& inputLayer, const Tensor& inputs, Tensor& dInputs, Parallel& parallel) {
+				
+				const Tensor& dActivations = mActivations;
+				Tensor::View dBias = mBias.view()
+					, dWeight = mWeight.view();
 
-				Tensor::TensorView dBias = mBias.span();
-				Tensor& dActivations = mActivations;
-				Tensor::TensorView dWeight = mWeight.span();
-
-				Tensor::ConstTensorView weight = inputLayer.mWeight.span();
-				auto& means = inputLayer.mMean;
-				auto& rStdDevs = inputLayer.mRStdDev;
+				Tensor::ConstView weight = inputLayer.mWeight.constView();
+				const Floats& means = inputLayer.mMean
+					, &rStdDevs = inputLayer.mRStdDev;
 
 				parallel([&](auto& section) {
 
@@ -178,15 +178,15 @@ namespace NetworkLib {
 					dWeight.clear();
 					dWeight.resize(inputs.mY, 0.0f);
 
-					Tensor::ConstTensorView dOut, input;
-					Tensor::TensorView dInput;
+					Tensor::ConstView dOut, input;
+					Tensor::View dInput;
 
 					auto [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
-						dOut = dActivations.spanT(i);
-						input = inputs.spanT(i);
-						dInput = dInputs.spanT(i);
+						dOut = dActivations.constViewT(i);
+						input = inputs.constViewT(i);
+						dInput = dInputs.viewT(i);
 
 						float mean = means[i]
 							, rStdDev = rStdDevs[i]
@@ -248,16 +248,16 @@ namespace NetworkLib {
 
 			static const float r_sqrtHeadsPerDModel;
 
-			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOut);
-			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::TensorView attnOutSoftmax);
+			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
+			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOutSoftmax);
 			
 			void multiHeadedAttn(std::size_t m);
 
 			void attention(std::size_t m);
 			void attention(Parallel& parallel);
 
-			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor);
-			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, const Tensor& residualTensor, Parallel& parallel);
+			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor);
+			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel);
 		
 		public:
 
@@ -273,10 +273,11 @@ namespace NetworkLib {
 
 			}
 
-			Tensor& forward(Tensor& inputTensor, Parallel& parallel);
+			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
 			Tensor& forward(std::size_t i, const Tensor& inputTensor, Parallel& parallel);
 
-			Tensor& getOutput() { return mResidualActivation2; }
+			Tensor& getOutput() { return mResidualActivation2; } 
+		
 		};
 
 		class Backward;
@@ -353,7 +354,7 @@ namespace NetworkLib {
 					attnLayer.load(backwardSpace);
 				}
 
-				mParallelInput.setup(std::pair<Floats, Floats>{}, mTestInputSize, 32);
+				mParallelInput.setup(LinearLayer::PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
 			void unEmbedOutputs(TokensView nextTokens) {
@@ -362,18 +363,18 @@ namespace NetworkLib {
 				auto& parallel = forward.mParallelInput;
 				parallel.section(nextTokens.size());
 
-				auto& forwardSoftmax = forward.mUnembedActivationsSoftmax;
+				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 				Diagnostics::sumf(forwardSoftmax, "64");
 
-				auto softmaxSpan = forwardSoftmax.spanTEnd(nextTokens.size() - 1);
+				auto softmaxSpan = forwardSoftmax.viewTBlock(nextTokens.size() - 1);
 				std::copy(softmaxSpan.begin(), softmaxSpan.end(), mUnembed.mTensor.begin());
 
 				Token token;
-				Tensor::TensorView unembed;
+				Tensor::View unembed;
 
 				for (auto i : std::views::iota(0ULL, nextTokens.size())) {
 
-					unembed = mUnembed.spanT(i);
+					unembed = mUnembed.viewT(i);
 					token = nextTokens[i];
 
 					unembed[token] -= 1.0f;
@@ -383,7 +384,7 @@ namespace NetworkLib {
 
 				Tensor& inputs = forward.mFinalLayer.getActivations();
 				Tensor& dInputs = mFinalLayer.getActivations();
-				Tensor::TensorView dInputsSpanEnd = dInputs.spanTEnd(nextTokens.size() - 1);
+				Tensor::View dInputsSpanEnd = dInputs.viewTBlock(nextTokens.size() - 1);
 
 				std::fill(dInputsSpanEnd.begin(), dInputsSpanEnd.end(), 0.0f);
 
@@ -394,20 +395,20 @@ namespace NetworkLib {
 
 				parallel([&](auto& section) {
 
-					Tensor::TensorView input, dInput, output, weight, dWeight;
+					Tensor::View input, dInput, output, weight, dWeight;
 
 					auto& [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
-						output = mUnembed.spanT(i);
-						dInput = dInputs.spanT(i);
-						input = inputs.spanT(i);
+						output = mUnembed.viewT(i);
+						dInput = dInputs.viewT(i);
+						input = inputs.viewT(i);
 
 						for (auto m : std::views::iota(0ULL, output.size())) {
 
 							float o = output[m];
-							weight = wte.spanT(m);
-							dWeight = dWte.spanT(m);
+							weight = wte.viewT(m);
+							dWeight = dWte.viewT(m);
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
@@ -430,14 +431,14 @@ namespace NetworkLib {
 				unEmbedOutputs(nextTokens);
 				Diagnostics::sumf(mFinalLayer.mActivations, "-0.0403");
 
-				Tensor& inputs = forward.mAttnLayers.back().getOutput();
+				const Tensor& inputs = forward.mAttnLayers.back().getOutput();
 				Tensor& dInputs = mAttnLayers.back().getOutput();
 
 				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
 
 				Diagnostics::sumf(mFinalLayer.mBias, "-0.0403");
 				Diagnostics::sumf(mFinalLayer.mWeight, "-0.5371");
-				Diagnostics::sumf(dInputs, "-.e8 on debug");
+				Diagnostics::sumf(dInputs, "-1.0-e08 on debug");
 
 			}
 

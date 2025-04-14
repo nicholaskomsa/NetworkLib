@@ -11,15 +11,15 @@ struct Tensor {
 	//the fourth dimension is W
 	//TensorView is the multidimensional float data and is broken up into spannable segments depending on dimensionality.
 
-	using TensorView = std::span<float>;
-	using ConstTensorView = std::span<const float>;
+	using View = std::span<float>;
+	using ConstView = std::span<const float>;
 
-	TensorView mTensor;
+	View mTensor;
 
 	std::size_t mX{ 0 }, mY{ 0 }, mZ{ 0 }, mW{ 0 };
 
 	Tensor() = default;
-	Tensor(TensorView floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
+	Tensor(View floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
 
 
 	std::size_t size() const {
@@ -35,7 +35,7 @@ struct Tensor {
 		return mX * mY * mZ * mW;
 	}
 
-	TensorView spanTEnd(std::size_t col) const {
+	View viewTBlock(std::size_t col) {
 
 		std::size_t offset = col * mY + mY;
 		auto begin = mTensor.begin();
@@ -43,50 +43,62 @@ struct Tensor {
 		return { begin, end };
 	}
 
-	float& at(std::size_t col) const {
+	float& at(std::size_t col) {
+		return mTensor[col];
+	}
+	const float& cat(std::size_t col) const {
 		return mTensor[col];
 	}
 
-	float& at(std::size_t row, std::size_t col) const {
+	float& at(std::size_t row, std::size_t col) {
 		return  mTensor[row * mX + col];
 	}
-	float& atT(std::size_t row, std::size_t col) const {
+	float& atT(std::size_t row, std::size_t col) {
 		return  mTensor[col * mY + row];
 	}
 
-	float& at(std::size_t depth, std::size_t row, std::size_t col) const {
+	const float& catT(std::size_t row, std::size_t col) const {
+		return mTensor[col * mY + row];
+	}
+
+	float& at(std::size_t depth, std::size_t row, std::size_t col) {
 		return  mTensor[depth * (mY * mX) + row * mX + col];
 	}
-	float& atT(std::size_t depth, std::size_t row, std::size_t col) const {
+	float& atT(std::size_t depth, std::size_t row, std::size_t col) {
 		return  mTensor[depth * (mY * mX) + col * mY + row];
 	}
 
-	float& at(std::size_t w, std::size_t z, std::size_t y, std::size_t x) const {
+	float& at(std::size_t w, std::size_t z, std::size_t y, std::size_t x) {
 		return  mTensor[w * (mZ * mY * mX) + z * (mY * mX) + y * mX + x];
 	}
 
-	TensorView span() const {
+	View view() {
 		return { &at(0), mX };
 	}
-	TensorView spanT() const {
-		return { &at(0), mY };
+	
+	ConstView constView() const {
+		return { &cat(0), mX };
 	}
 
-	TensorView span(std::size_t row) const {
+	View view(std::size_t row) {
 		return { &at(row,0), mX };
 	}
-	TensorView spanT(size_t col) const {
+	View viewT(size_t col)  {
 		return { &atT(0, col), mY };
 	}
 
-	TensorView span(std::size_t depth, std::size_t row) const {
+	ConstView constViewT(size_t col) const {
+		return { &catT(0, col), mY };
+	}
+
+	View view(std::size_t depth, std::size_t row) {
 		return { &at(depth, row, 0), mX };
 	}
-	TensorView spanT(std::size_t depth, std::size_t col) const {
+	View viewT(std::size_t depth, std::size_t col) {
 		return { &at(depth, 0, col), mY };
 	}
 
-	TensorView span(std::size_t w, std::size_t z, std::size_t y) const {
+	View view(std::size_t w, std::size_t z, std::size_t y) {
 		return { &at(w, z, y, 0), mX };
 	}
 
