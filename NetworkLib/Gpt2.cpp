@@ -110,15 +110,12 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 	//std::println("Tokens: {}", tokens.size()); == 2
 
 	//sort words by length into length-words maps
-	static std::map<std::size_t, std::set<Word> > wordsMap;
-	if( wordsMap.empty() )
+	static std::set<std::size_t > wordSizes;
+	if(wordSizes.empty() )
 		for (auto& [word, token] : mWordMap.left)
-			wordsMap[word.size()].insert(word);
+			wordSizes.insert(word.size());
 
 	Tokens tokens;
-
-	Parallel parallel;
-	parallel.setup(Word{}, wordsMap.size());
 	
 	const std::string empty;
 
@@ -126,39 +123,18 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 		auto matchVocabWord = [&]() {
 
-			Word currentWord = empty;
+			for (auto size : wordSizes | std::views::reverse) {
 
-			parallel([&](Parallel::Section& section) {
+				if (size > remaining.size()) continue;
 
-				Word& selectedWord = std::any_cast<Word&>(section.mAny);
-				selectedWord = empty;
+				Word testWord = remaining | std::views::take(size);
 
-				auto& [first, second] = section.mOffsets;
-				for (auto i : std::views::iota(first, second) | std::views::reverse) {
-	
-					auto& [size, words] = *std::next(wordsMap.begin(), i);
+				auto wordExists = mWordMap.left.find(testWord);
 
-					if (size > remaining.size()) continue;
+				if (wordExists != mWordMap.left.end()) 
+					return wordExists->first;
+			}
 
-					Word testWord = remaining | std::views::take(size);
-
-					auto wordExists = words.find(testWord);
-
-					if (wordExists != words.end()) {
-						selectedWord = *wordExists;
-						break;
-					}
-				}
-
-				}, [&](Parallel::Section& section) {
-
-					Word& selectedWord = std::any_cast<Word&>(section.mAny);
-
-					if (selectedWord.size() > currentWord.size()) currentWord = selectedWord;
-
-					});
-			
-				return currentWord;
 			};
 
 		Word selectedWord = matchVocabWord();
