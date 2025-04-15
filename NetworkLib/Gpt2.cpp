@@ -109,27 +109,29 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 
 	//there is a specific vocabulary, get the length of the longest word
-	//seach in parallel for matching words, greedily from the end rather than the start
+	//search in parallel for matching words, greedily from the end rather than the start
 	//select the longest word found
 
 	Tokens tokens;
 
+	static const std::size_t maxWordSize = std::max_element(mWordMap.begin(), mWordMap.end(), [&](auto& a, auto& b) {
+		return a.get_left().size() < b.get_left().size();
+		})->get_left().size();
+
+	const auto wordSize = std::min(maxWordSize, remaining.size());
+	const std::string empty = "";
+
+	Parallel parallel;
+	parallel.setup(Word{}, wordSize);
+
 	auto getToken = [&]() {
 
-		static const std::size_t maxWordSize = std::max_element(mWordMap.begin(), mWordMap.end(), [&](auto& a, auto& b) {
-			return a.get_left().size() < b.get_left().size();
-			})->get_left().size();
-
-		const auto wordSize = std::min(maxWordSize, remaining.size());
-
-		Parallel parallel;
-		parallel.setup(Word{}, wordSize);
-		
 		Word selectedWord;
-
+		
 		parallel([&](Parallel::Section& section) {
 
 			auto& currentWord = std::any_cast<Word&>(section.mAny);
+			currentWord = empty;
 
 			auto& [first, second] = section.mOffsets;
 			for (auto size : std::views::iota(first, second + 1) | std::views::reverse) {
