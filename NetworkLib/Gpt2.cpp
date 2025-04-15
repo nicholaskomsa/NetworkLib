@@ -108,6 +108,9 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 	//std::println("Tokens: {}", tokens.size()); == 2
 
 
+	//there is a specific vocabulary, get the length of the longest word
+	//seach in parallel for matching words, greedily from the end rather than the start
+	//select the longest word found
 
 	Tokens tokens;
 
@@ -119,23 +122,41 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 		const auto wordSize = std::min(maxWordSize, remaining.size());
 
-		std::string_view testWord;
-		auto wordExists = mWordMap.left.end();
+		Parallel parallel;
+		parallel.setup(Word{}, wordSize);
+		
+		Word selectedWord;
 
-		for( auto size : std::views::iota(1ULL, wordSize + 1) | std::views::reverse ) {
+		parallel([&](Parallel::Section& section) {
 
-			testWord = remaining.substr(0, size);
+			auto& currentWord = std::any_cast<Word&>(section.mAny);
 
-			wordExists = mWordMap.left.find(testWord);
-			
-			if (wordExists != mWordMap.left.end())
-				break;
-		}
+			auto& [first, second] = section.mOffsets;
+			for (auto size : std::views::iota(first, second + 1) | std::views::reverse) {
 
-		auto& [word, token] = *wordExists;
+				Word testWord = remaining.substr(0, size);
+				auto wordExists = mWordMap.left.find(testWord);
+
+				if (wordExists != mWordMap.left.end()) {
+				
+					currentWord = wordExists->first;
+					break;
+				}
+			}
+
+			}, [&](Parallel::Section& section) {
+
+				auto& sectionWord = std::any_cast<Word&>(section.mAny);
+
+				if( sectionWord.size() > selectedWord.size() )
+					selectedWord = sectionWord;
+
+				});
+
+		Token token = mWordMap.left.find(selectedWord)->get_right();
 
 		tokens.push_back(token);
-		remaining = remaining.substr(word.size());
+		remaining = remaining.substr(selectedWord.size());
 
 		return remaining.size();
 		};
