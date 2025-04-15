@@ -107,6 +107,8 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 	//auto tokens = gpt2.mTranslator.encode(" Hello World");
 	//std::println("Tokens: {}", tokens.size()); == 2
 
+
+
 	Tokens tokens;
 
 	auto getToken = [&]() {
@@ -115,24 +117,22 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 			return a.get_left().size() < b.get_left().size();
 			})->get_left().size();
 
-		const auto wordSize = std::min( maxWordSize, remaining.size() );
+		const auto wordSize = std::min(maxWordSize, remaining.size());
 
 		std::string_view testWord;
-		auto wordExists = mWordMap.left.end(), selectedWord = wordExists;
+		auto wordExists = mWordMap.left.end();
 
-		for( auto size : std::views::iota(1ULL, wordSize + 1) ) {
+		for( auto size : std::views::iota(1ULL, wordSize + 1) | std::views::reverse ) {
 
 			testWord = remaining.substr(0, size);
 
 			wordExists = mWordMap.left.find(testWord);
 			
 			if (wordExists != mWordMap.left.end())
-				selectedWord = wordExists;
-			else
 				break;
 		}
 
-		auto& [word, token] = *selectedWord;
+		auto& [word, token] = *wordExists;
 
 		tokens.push_back(token);
 		remaining = remaining.substr(word.size());
