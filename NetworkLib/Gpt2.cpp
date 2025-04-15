@@ -116,24 +116,49 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 			wordsMap[word.size()].insert(word);
 
 	Tokens tokens;
+
+	Parallel parallel;
+	parallel.setup(Word{}, wordsMap.size());
+	
+	const std::string empty;
+
 	auto getToken = [&]() {
 
 		auto matchVocabWord = [&]() {
 
-			for (auto& [size, words] : wordsMap | std::views::reverse) {
+			Word currentWord = empty;
 
-				if (size > remaining.size()) continue;
+			parallel([&](Parallel::Section& section) {
 
-				for (auto word : words) {
+				Word& selectedWord = std::any_cast<Word&>(section.mAny);
+				selectedWord = empty;
 
-					Word testWord = remaining.substr(0, size);
+				auto& [first, second] = section.mOffsets;
+				for (auto i : std::views::iota(first, second) | std::views::reverse) {
+	
+					auto& [size, words] = *std::next(wordsMap.begin(), i);
+
+					if (size > remaining.size()) continue;
+
+					Word testWord = remaining | std::views::take(size);
 
 					auto wordExists = words.find(testWord);
 
-					if (wordExists != words.end()) 
-						return *wordExists;
+					if (wordExists != words.end()) {
+						selectedWord = *wordExists;
+						break;
+					}
 				}
-			}
+
+				}, [&](Parallel::Section& section) {
+
+					Word& selectedWord = std::any_cast<Word&>(section.mAny);
+
+					if (selectedWord.size() > currentWord.size()) currentWord = selectedWord;
+
+					});
+			
+				return currentWord;
 			};
 
 		Word selectedWord = matchVocabWord();
