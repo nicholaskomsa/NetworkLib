@@ -109,15 +109,13 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 	//auto tokens = gpt2.mTranslator.encode(" Hello World");
 	//std::println("Tokens: {}", tokens.size()); == 2
 
-	//sort words by length into length-words maps
+	//determine the size categories of the words in the vocabulary
 	static std::set<std::size_t > wordSizes;
 	if(wordSizes.empty() )
 		for (auto& [word, token] : mWordMap.left)
 			wordSizes.insert(word.size());
 
 	Tokens tokens;
-	
-	const std::string empty;
 
 	auto getToken = [&]() {
 
@@ -129,20 +127,18 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 				Word testWord = remaining | std::views::take(size);
 
-				auto wordExists = mWordMap.left.find(testWord);
+				auto wordFound = mWordMap.left.find(testWord);
 
-				if (wordExists != mWordMap.left.end()) 
-					return wordExists->first;
+				if (wordFound != mWordMap.left.end()) 
+					return wordFound;
 			}
 
 			};
 
-		Word selectedWord = matchVocabWord();
-
-		Token token = mWordMap.left.find(selectedWord)->get_right();
+		const auto& [word, token] = *matchVocabWord();
 
 		tokens.push_back(token);
-		remaining = remaining.substr(selectedWord.size());
+		remaining = remaining.substr(word.size());
 
 		return remaining.size();
 		};
