@@ -111,37 +111,28 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 	auto getToken = [&]() {
 
-		const std::string delims = " \n\t\r";
+		static const std::size_t maxWordSize = std::max_element(mWordMap.begin(), mWordMap.end(), [&](auto& a, auto& b) {
+			return a.get_left().size() < b.get_left().size();
+			})->get_left().size();
 
-		auto getWordSize = [&](auto remaining) {
-
-			std::size_t endOfWord = remaining.find_first_of(delims);
-
-			if (endOfWord == std::string::npos)
-				endOfWord = remaining.size();
-
-			return endOfWord;
-			};
-
-		auto wordSize = 0;
-		if (remaining.front() == ' ')
-			wordSize = 1 + getWordSize(remaining.substr(1));
-		else
-			wordSize = getWordSize(remaining);
+		const auto wordSize = std::min( maxWordSize, remaining.size() );
 
 		std::string_view testWord;
-		auto wordExists = mWordMap.left.end();
+		auto wordExists = mWordMap.left.end(), selectedWord = wordExists;
 
-		for( auto size : std::views::iota(1, wordSize + 1) | std::views::reverse ) {
+		for( auto size : std::views::iota(1ULL, wordSize + 1) ) {
 
 			testWord = remaining.substr(0, size);
 
 			wordExists = mWordMap.left.find(testWord);
+			
 			if (wordExists != mWordMap.left.end())
+				selectedWord = wordExists;
+			else
 				break;
 		}
 
-		auto& [word, token] = *wordExists;
+		auto& [word, token] = *selectedWord;
 
 		tokens.push_back(token);
 		remaining = remaining.substr(word.size());
@@ -787,7 +778,8 @@ void GPT2::Forward::unEmbedOutputs() {
 
 	mParallelInput([&](auto& section) {
 
-		Tensor::View input, wte, output;
+		Tensor::ConstView input, wte;
+		Tensor::View output;
 
 		auto& [first, second] = section.mOffsets;
 		for (auto i : std::views::iota(first, second)) {
@@ -802,12 +794,12 @@ void GPT2::Forward::unEmbedOutputs() {
 
 				wte = mWteWeight.viewT(m);
 
-				float sum = 0.0f;
+				float dot = 0.0f;
 
 				for (const auto& [in, w] : std::views::zip(input, wte))
-					sum += in * w;
+					dot += in * w;
 
-				output[m] = sum;
+				output[m] = dot;
 			}
 		}
 
