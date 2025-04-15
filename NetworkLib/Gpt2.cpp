@@ -5,6 +5,8 @@
 #include <fstream>
 #include <cassert>
 #include <ranges>
+#include <map>
+#include <set>
 
 #include <boost/json.hpp>
 
@@ -107,53 +109,34 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 	//auto tokens = gpt2.mTranslator.encode(" Hello World");
 	//std::println("Tokens: {}", tokens.size()); == 2
 
-
-	//there is a specific vocabulary, get the length of the longest word
-	//search in parallel for matching words, greedily from the end rather than the start
-	//select the longest word found
+	//sort words by length into length-words maps
+	static std::map<std::size_t, std::set<Word> > wordsMap;
+	if( wordsMap.empty() )
+		for (auto& [word, token] : mWordMap.left)
+			wordsMap[word.size()].insert(word);
 
 	Tokens tokens;
-
-	static const std::size_t maxWordSize = std::max_element(mWordMap.begin(), mWordMap.end(), [&](auto& a, auto& b) {
-		return a.get_left().size() < b.get_left().size();
-		})->get_left().size();
-
-	const auto wordSize = std::min(maxWordSize, remaining.size());
-	const std::string empty = "";
-
-	Parallel parallel;
-	parallel.setup(Word{}, wordSize);
-
 	auto getToken = [&]() {
 
-		Word selectedWord;
-		
-		parallel([&](Parallel::Section& section) {
+		auto matchVocabWord = [&]() {
 
-			auto& currentWord = std::any_cast<Word&>(section.mAny);
-			currentWord = empty;
+			for (auto& [size, words] : wordsMap | std::views::reverse) {
 
-			auto& [first, second] = section.mOffsets;
-			for (auto size : std::views::iota(first, second + 1) | std::views::reverse) {
+				if (size > remaining.size()) continue;
 
-				Word testWord = remaining.substr(0, size);
-				auto wordExists = mWordMap.left.find(testWord);
+				for (auto word : words) {
 
-				if (wordExists != mWordMap.left.end()) {
-				
-					currentWord = wordExists->first;
-					break;
+					Word testWord = remaining.substr(0, size);
+
+					auto wordExists = words.find(testWord);
+
+					if (wordExists != words.end()) 
+						return *wordExists;
 				}
 			}
+			};
 
-			}, [&](Parallel::Section& section) {
-
-				auto& sectionWord = std::any_cast<Word&>(section.mAny);
-
-				if( sectionWord.size() > selectedWord.size() )
-					selectedWord = sectionWord;
-
-				});
+		Word selectedWord = matchVocabWord();
 
 		Token token = mWordMap.left.find(selectedWord)->get_right();
 
