@@ -126,7 +126,7 @@ namespace NetworkLib {
 		//single threaded setup, paralel, single threaded finale
 		void operator()(SectionFunctor&& setup, SectionFunctor&& functor, SectionFunctor&& finale, bool single = false) {
 
-			operator()(std::move(functor), true);
+			operator()(std::move(setup), true);
 			operator()(std::move(functor), single);
 			operator()(std::move(finale), true);
 		}

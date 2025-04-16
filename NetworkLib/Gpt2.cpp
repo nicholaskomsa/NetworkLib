@@ -1040,6 +1040,7 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 
 		auto& data = gpt2.mTestData;
 		data.load();
+
 		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize)
 			, nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
 
