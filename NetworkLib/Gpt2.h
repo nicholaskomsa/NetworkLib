@@ -128,6 +128,7 @@ namespace NetworkLib {
 			void forward(const Tensor& input, Parallel& parallel);
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 		};
+
 		class LinearLayer {
 		public:
 			friend class Diagnostics;
@@ -310,7 +311,7 @@ namespace NetworkLib {
 			Token feedMore(TokensView tokens);
 
 			Token getPrediction(std::size_t i) const;
-			float crossEntropyLoss(TokensView tokens, Token expected);
+			float crossEntropyLoss(TokensView nextTokens);
 
 		} mForward;
 

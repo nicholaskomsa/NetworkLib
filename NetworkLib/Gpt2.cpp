@@ -871,9 +871,9 @@ GPT2::Token GPT2::Forward::feedMore(TokensView tokens) {
 
 	return predicted;
 }
-float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
+float GPT2::Forward::crossEntropyLoss(TokensView nextTokens) {
 
-	mParallelInput.section(tokens.size());
+	mParallelInput.section(nextTokens.size());
 
 	mParallelInput([&](auto& section) {
 		
@@ -892,9 +892,9 @@ float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
 
 	Tensor::View unembedSoftmax;
 	float loss = 0.0f;
-	for (auto i : std::views::iota(0ULL, tokens.size() - 1)) {
+	for (auto i : std::views::iota(0ULL, nextTokens.size())) {
 
-		Token expected = tokens[i+1];
+		Token expected = nextTokens[i];
 		unembedSoftmax = mUnembedActivationsSoftmax.viewT(i);
 
 		float expectedSoftmax = unembedSoftmax[expected];
@@ -902,9 +902,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView tokens, Token expected) {
 		loss += -std::logf(expectedSoftmax);
 	}
 
-	loss += -std::logf(mUnembedActivationsSoftmax.viewT(tokens.size()-1)[expected]);
-
-	loss /= tokens.size();
+	loss /= nextTokens.size();
 
 	return loss;
 }
@@ -1042,13 +1040,13 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 
 		auto& data = gpt2.mTestData;
 		data.load();
-		TokensView dataView(data.mTokens.begin(), GPT2::mTestInputSize);
-		auto preText = gpt2.mTranslator.decode(dataView);
+		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize)
+			, nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
+
+		auto preText = gpt2.mTranslator.decode(tokens);
 		std::println("{}", preText);
 
-		Token predicted, expected;
-		Tokens tokens(dataView.begin(), dataView.end());
-		expected = data.mTokens[dataView.size()];
+		Token predicted, expected = nextTokens.back();
 
 		float crossEntropyLoss;
 
@@ -1058,7 +1056,7 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 
 			predicted = gpt2.mForward.feedForward(tokens);
 
-			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(tokens, expected );
+			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(nextTokens );
 
 			});
 
@@ -1076,11 +1074,14 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		auto& data = gpt2.mTestData;
 		data.load();
-		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize);
+
+		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize)
+			, nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
+
 		auto preText = gpt2.mTranslator.decode(tokens);
 		std::println("{}", preText);
 
-		Token predicted, expected = data.mTokens[tokens.size()];
+		Token predicted, expected = nextTokens.back();
 
 		float crossEntropyLoss;
 		TimeAverage<milliseconds> ffAvg;
@@ -1089,7 +1090,7 @@ void GPT2::Diagnostics::backwardTest64() {
 
 			predicted = gpt2.mForward.feedForward(tokens);
 
-			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(tokens, expected);
+			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(nextTokens);
 
 			});
 
@@ -1101,7 +1102,7 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		gpt2.mBackward.setup(&gpt2.mForward);
 
-		TokensView nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
+
 		gpt2.mBackward.backward(nextTokens);
 
 		});
