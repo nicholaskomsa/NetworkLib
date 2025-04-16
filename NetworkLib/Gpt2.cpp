@@ -130,12 +130,12 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 				auto wordFound = mWordMap.left.find(testWord);
 
 				if (wordFound != mWordMap.left.end()) 
-					return wordFound;
+					return *wordFound;
 			}
 
 			};
 
-		const auto& [word, token] = *matchVocabWord();
+		const auto& [word, token] = matchVocabWord();
 
 		tokens.push_back(token);
 		remaining = remaining.substr(word.size());
@@ -1120,11 +1120,11 @@ void GPT2::Diagnostics::run(TestFunction&& test) {
 
 	try {
 
-		GPT2 gpt2;
+		auto gpt2 = std::make_unique<GPT2>(); //gpt2 is large and offsourced to heap
 
-		gpt2.setup();
+		gpt2->setup();
 
-		test(gpt2);
+		test(*gpt2);
 
 	}catch (const GPT2::Error& e) {
 		std::println(std::cerr, "{}", e.what());

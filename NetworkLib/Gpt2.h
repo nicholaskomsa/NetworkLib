@@ -380,7 +380,7 @@ namespace NetworkLib {
 					unembed[token] -= 1.0f;
 				};
 
-				Diagnostics::sumf(mUnembed, "0.0009");
+				Diagnostics::sumf(mUnembed, "0.008");
 
 				Tensor& inputs = forward.mFinalLayer.getActivations();
 				Tensor& dInputs = mFinalLayer.getActivations();
