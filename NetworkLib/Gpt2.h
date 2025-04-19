@@ -265,12 +265,12 @@ namespace NetworkLib {
 			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
 			void load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
 			
+			Tensor mUnembedOut;
+
 			void load(Floats::iterator& backwardSpace) {
 
 				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
 				std::advance(backwardSpace, mSeqModel);
-
-
 
 			}
 
@@ -323,7 +323,7 @@ namespace NetworkLib {
 
 			Floats mBackwardSpace;
 
-			Tensor mUnembed, mWteWeight;
+			Tensor mUnembed, mWteWeight, mUnembedOut;
 
 			LinearLayer mFinalLayer;
 
@@ -339,7 +339,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mDModel*2) + (mSeqModel) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab * 2 + mVocabModel + (mSeqModel + mDModel*2) + (mSeqModel) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -349,6 +349,9 @@ namespace NetworkLib {
 				std::advance(backwardSpace, mVocabModel);
 
 				mFinalLayer.load(backwardSpace);
+
+				mUnembedOut = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
+				std::advance(backwardSpace, mSeqVocab);
 
 				for( auto& attnLayer : mAttnLayers ) {
 
@@ -441,6 +444,37 @@ namespace NetworkLib {
 				Diagnostics::sumf(mFinalLayer.mWeight, "-0.5371");
 				Diagnostics::sumf(dInputs, "-1.0-e08 on debug");
 
+				const Tensor& finalOutputs = forward.mFinalLayer.getActivations();
+				const Tensor& wte = forward.mWteWeight;
+				Tensor& unembedOut = mUnembedOut;
+
+				parallel([&](auto& section) {
+
+					Tensor::ConstView input, weight;
+					Tensor::View output;
+
+					auto& [first, second] = section.mOffsets;
+					for (auto i : std::views::iota(first, second)) {
+
+						input = finalOutputs.constViewT(i);
+						output = unembedOut.viewT(i);
+
+						for (auto m : std::views::iota(0ULL, output.size() )) {
+
+							float dot = 0.0f;
+							weight = wte.constViewT(m);
+
+							for (const auto& [i, w] : std::views::zip(input, weight))
+								dot += i * w;
+							
+							output[m] = dot;
+						}
+					}
+
+					});
+
+				Diagnostics::sumf(unembedOut.viewTBlock(nextTokens.size() - 1), "-3.538e+8");
+				
 			}
 
 		} mBackward;
@@ -471,8 +505,8 @@ namespace NetworkLib {
 				slide(scrollingTokens);
 				scrollingTokens.push_back(endl);
 
-				std::cout << mTranslator.decode(scrollingTokens);
-				std::cout << std::endl;
+				std::cout << mTranslator.decode(scrollingTokens)
+					<< std::endl;
 
 			} while (chatting);
 		}

@@ -123,7 +123,7 @@ namespace NetworkLib {
 			operator()(std::move(finale), true);
 		}
 
-		//single threaded setup, paralel, single threaded finale
+		//single threaded setup, parallel, single threaded finale
 		void operator()(SectionFunctor&& setup, SectionFunctor&& functor, SectionFunctor&& finale, bool single = false) {
 
 			operator()(std::move(setup), true);

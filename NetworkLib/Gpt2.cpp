@@ -135,7 +135,7 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 			};
 
-		const auto& [word, token] = matchVocabWord();
+		const auto [word, token] = matchVocabWord();
 
 		tokens.push_back(token);
 		remaining = remaining.substr(word.size());
