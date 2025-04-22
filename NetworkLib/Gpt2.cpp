@@ -1087,11 +1087,13 @@ void GPT2::Diagnostics::backwardTest64() {
 		float crossEntropyLoss;
 		TimeAverage<milliseconds> ffAvg;
 
+		auto& forward = gpt2.mForward;
+
 		auto elapsed = ffAvg.accumulateTime([&]() {
 
-			predicted = gpt2.mForward.feedForward(tokens);
+			predicted = forward.feedForward(tokens);
 
-			crossEntropyLoss = gpt2.mForward.crossEntropyLoss(nextTokens);
+			crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
 
 			});
 
@@ -1101,10 +1103,25 @@ void GPT2::Diagnostics::backwardTest64() {
 		std::println("{}=={}; Cross Entropy Loss: {} == 4.133143", predictedWord, expectedWord, crossEntropyLoss);
 
 
-		gpt2.mBackward.setup(&gpt2.mForward);
+		auto& backward = gpt2.mBackward;
+
+		backward.setup(&gpt2.mForward);
+
+		backward.backward(nextTokens);
+		
+		sumf(forward.mUnembedActivationsSoftmax, "64");
+		sumf(backward.mFinalLayer.mBias, "-0.0403");
+		sumf(backward.mFinalLayer.mWeight, "-0.5371");
+		sumf(backward.mAttnLayers.back().getOutput(), "-1.0-e08 on debug");
+		sumf(backward.mUnembedOut.viewTBlock(nextTokens.size() - 1), "-3.538e+8");
+
+		Tensor::ConstView predictions = backward.mUnembedOut.constViewT(nextTokens.size() - 1);
+
+		auto max = std::max_element(predictions.begin(), predictions.end());
+		auto maxIdx = std::distance(predictions.begin(), max);
+		std::println("Predicted: {}\n", gpt2.mTranslator.decode(maxIdx));
 
 
-		gpt2.mBackward.backward(nextTokens);
 
 		});
 

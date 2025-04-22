@@ -165,6 +165,9 @@ namespace NetworkLib {
 				Tensor::View dBias = mBias.view()
 					, dWeight = mWeight.view();
 
+				std::fill(dBias.begin(), dBias.end(), 0.0f);
+				std::fill(dWeight.begin(), dWeight.end(), 0.0f);
+
 				Tensor::ConstView weight = inputLayer.mWeight.constView();
 				const Floats& means = inputLayer.mMean
 					, &rStdDevs = inputLayer.mRStdDev;
@@ -368,7 +371,6 @@ namespace NetworkLib {
 				parallel.section(nextTokens.size());
 
 				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
-				Diagnostics::sumf(forwardSoftmax, "64");
 
 				auto softmaxSpan = forwardSoftmax.viewTBlock(nextTokens.size() - 1);
 				std::copy(softmaxSpan.begin(), softmaxSpan.end(), mUnembed.mTensor.begin());
@@ -440,13 +442,8 @@ namespace NetworkLib {
 
 				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
 
-				Diagnostics::sumf(mFinalLayer.mBias, "-0.0403");
-				Diagnostics::sumf(mFinalLayer.mWeight, "-0.5371");
-				Diagnostics::sumf(dInputs, "-1.0-e08 on debug");
-
 				const Tensor& finalOutputs = forward.mFinalLayer.getActivations();
 				const Tensor& wte = forward.mWteWeight;
-				Tensor& unembedOut = mUnembedOut;
 
 				parallel([&](auto& section) {
 
@@ -457,7 +454,7 @@ namespace NetworkLib {
 					for (auto i : std::views::iota(first, second)) {
 
 						input = finalOutputs.constViewT(i);
-						output = unembedOut.viewT(i);
+						output = mUnembedOut.viewT(i);
 
 						for (auto m : std::views::iota(0ULL, output.size() )) {
 
@@ -470,11 +467,9 @@ namespace NetworkLib {
 							output[m] = dot;
 						}
 					}
-
 					});
 
-				Diagnostics::sumf(unembedOut.viewTBlock(nextTokens.size() - 1), "-3.538e+8");
-				
+			
 			}
 
 		} mBackward;
