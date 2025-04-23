@@ -386,16 +386,18 @@ namespace NetworkLib {
 					unembed[token] -= 1.0f;
 				};
 
-				Diagnostics::sumf(mUnembed, "0.008");
 
 				Tensor& inputs = forward.mFinalLayer.getActivations();
 				Tensor& dInputs = mFinalLayer.getActivations();
-				Tensor::View dInputsSpanEnd = dInputs.viewTBlock(nextTokens.size() - 1);
+				Tensor::View dInputsBlock = dInputs.viewTBlock(nextTokens.size() - 1);
 
-				std::fill(dInputsSpanEnd.begin(), dInputsSpanEnd.end(), 0.0f);
+				std::fill(dInputsBlock.begin(), dInputsBlock.end(), 0.0f);
 
 				Tensor& wte = forward.mWteWeight;
 				Tensor& dWte = mWteWeight;
+
+				Tensor::View dWteBlock = dWte.viewTBlock(dWte.mY - 1);
+				std::fill(dWteBlock.begin(), dWteBlock.end(), 0.0f);
 
 				const float r_tokens = 1.0f / nextTokens.size();
 
@@ -425,7 +427,7 @@ namespace NetworkLib {
 
 					});
 
-				std::transform(std::execution::par_unseq, dInputsSpanEnd.begin(), dInputsSpanEnd.end(), dInputsSpanEnd.begin(), [&](auto f) {return f * r_tokens; });
+				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
 
 			void backward(TokensView nextTokens) {
@@ -435,7 +437,6 @@ namespace NetworkLib {
 				parallel.section(nextTokens.size());
 
 				unEmbedOutputs(nextTokens);
-				Diagnostics::sumf(mFinalLayer.mActivations, "-0.0403");
 
 				const Tensor& inputs = forward.mAttnLayers.back().getOutput();
 				Tensor& dInputs = mAttnLayers.back().getOutput();
