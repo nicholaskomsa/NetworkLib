@@ -1109,21 +1109,15 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		backward.backward(nextTokens);
 
+		std::println("results:");
+
 		sumf(backward.mUnembed, "0.008");
 		sumf(forward.mUnembedActivationsSoftmax, "64");
 		Diagnostics::sumf(backward.mFinalLayer.mActivations, "-0.0403");
 		sumf(backward.mFinalLayer.mBias, "-0.0403");
 		sumf(backward.mFinalLayer.mWeight, "-0.5371");
 		sumf(backward.mAttnLayers.back().getOutput(), "-1.0-e08 on debug");
-		sumf(backward.mUnembedOut.viewTBlock(nextTokens.size() - 1), "-3.538e+8");
-
-		Tensor::ConstView predictions = backward.mUnembedOut.constViewT(nextTokens.size() - 1);
-
-		auto max = std::max_element(predictions.begin(), predictions.end());
-		auto maxIdx = std::distance(predictions.begin(), max);
-		std::println("Predicted: {}\n", gpt2.mTranslator.decode(maxIdx));
-
-
+		sumAbsf(backward.mAttnLayers.back().mCProjBias, "0.4879f");
 
 		});
 

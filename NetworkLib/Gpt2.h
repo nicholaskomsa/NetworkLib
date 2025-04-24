@@ -33,7 +33,8 @@ namespace NetworkLib {
 			, mSeqModel3 = mDSeq * mDModel3
 			, mSeqModel4 = mDSeq * mDModel4
 			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
-			, mSeqVocab = mDSeq * mDVocab;
+			, mSeqVocab = mDSeq * mDVocab
+			, mModel4Model = mDModel4 * mDModel;
 
 		using Floats = std::vector<float>;
 
@@ -97,6 +98,11 @@ namespace NetworkLib {
 			static double sumf(const Tensor& tensor, std::string_view expected) {
 				return sumf(tensor.mTensor, expected);
 			}
+			static double sumAbsf(const Tensor& tensor, std::string_view expected) {
+				double sum = std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0), [](auto a, auto b) {return a + std::abs(b); });
+				std::print("{}=={}\n", expected, sum);
+				return sum;
+			}
 
 			void firstCitizenTest64();
 			void feedForwardSpeed1024();
@@ -122,11 +128,47 @@ namespace NetworkLib {
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
 		public:
 
+			void load(Floats::iterator& backwardSpace) {
+				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel4, mDModel };
+				std::advance(backwardSpace, mModel4Model);
+
+				mCFCBias = { { backwardSpace, mDModel4 }, mDModel4 };
+				std::advance(backwardSpace, mDModel4);
+
+				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel, mDModel4 };
+				std::advance(backwardSpace, mModel4Model);
+				
+				mCProjBias = { { backwardSpace, mDModel }, mDModel };
+				std::advance(backwardSpace, mDModel);
+
+				mGeluActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
+				std::advance(backwardSpace, mSeqModel4);
+
+			}
 			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& activationSpace);
 			const Tensor& getCProjActivations() const;
 
 			void forward(const Tensor& input, Parallel& parallel);
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
+
+			void backward(const Tensor& dOutputs, Parallel& parallel) {
+
+				Tensor::ConstView dOutput;
+				Tensor::View dWeight, dBias;
+
+				dBias = mCProjBias.view();
+
+				for (auto i : std::views::iota(0ULL, dBias.size())) {
+
+					dWeight = mCProjWeight.viewT(i);
+					dOutput = dOutputs.constViewT(i);
+
+					for (const auto& [b, o] : std::views::zip(dBias, dOutput)) 
+						b += o;
+				}
+
+
+			}
 		};
 
 		class LinearLayer {
@@ -275,6 +317,8 @@ namespace NetworkLib {
 				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
 				std::advance(backwardSpace, mSeqModel);
 
+
+				mMLP.load(backwardSpace);
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -282,6 +326,11 @@ namespace NetworkLib {
 
 			Tensor& getOutput() { return mResidualActivation2; } 
 		
+			void backward( AttnLayer& attn, Parallel& parallel) {
+
+				mMLP.backward(getOutput(), parallel);
+				
+			}
 		};
 
 		class Backward;
@@ -326,7 +375,7 @@ namespace NetworkLib {
 
 			Floats mBackwardSpace;
 
-			Tensor mUnembed, mWteWeight, mUnembedOut;
+			Tensor mUnembed, mWteWeight;
 
 			LinearLayer mFinalLayer;
 
@@ -342,7 +391,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab * 2 + mVocabModel + (mSeqModel + mDModel*2) + (mSeqModel) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mSeqModel + mModel4Model * 2 + mSeqModel4) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -352,9 +401,6 @@ namespace NetworkLib {
 				std::advance(backwardSpace, mVocabModel);
 
 				mFinalLayer.load(backwardSpace);
-
-				mUnembedOut = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
-				std::advance(backwardSpace, mSeqVocab);
 
 				for( auto& attnLayer : mAttnLayers ) {
 
@@ -372,8 +418,8 @@ namespace NetworkLib {
 
 				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 
-				auto softmaxSpan = forwardSoftmax.viewTBlock(nextTokens.size() - 1);
-				std::copy(softmaxSpan.begin(), softmaxSpan.end(), mUnembed.mTensor.begin());
+				auto softmaxBlock = forwardSoftmax.viewTBlock(nextTokens.size() - 1);
+				std::copy(softmaxBlock.begin(), softmaxBlock.end(), mUnembed.mTensor.begin());
 
 				Token token;
 				Tensor::View unembed;
@@ -443,34 +489,8 @@ namespace NetworkLib {
 
 				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
 
-				const Tensor& finalOutputs = forward.mFinalLayer.getActivations();
-				const Tensor& wte = forward.mWteWeight;
+				mAttnLayers.back().backward(forward.mAttnLayers.back(), parallel);
 
-				parallel([&](auto& section) {
-
-					Tensor::ConstView input, weight;
-					Tensor::View output;
-
-					auto& [first, second] = section.mOffsets;
-					for (auto i : std::views::iota(first, second)) {
-
-						input = finalOutputs.constViewT(i);
-						output = mUnembedOut.viewT(i);
-
-						for (auto m : std::views::iota(0ULL, output.size() )) {
-
-							float dot = 0.0f;
-							weight = wte.constViewT(m);
-
-							for (const auto& [i, w] : std::views::zip(input, weight))
-								dot += i * w;
-							
-							output[m] = dot;
-						}
-					}
-					});
-
-			
 			}
 
 		} mBackward;
