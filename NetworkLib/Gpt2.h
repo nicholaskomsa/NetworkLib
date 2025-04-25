@@ -118,6 +118,42 @@ namespace NetworkLib {
 		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
 
+		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
+
+			Tensor::ConstView dOutput, activations, weight;
+			Tensor::View dWeight, dBias1, dActivations;
+
+			dBias1 = dBias.view();
+
+			for (auto i : std::views::iota(0ULL, parallel.mSize)) {
+
+				dOutput = dOutputs.constViewT(i);
+
+				for (const auto& [b, o] : std::views::zip(dBias1, dOutput))
+					b += o;
+			
+				activations = inActivations.constViewT(i);
+				dActivations = outActivations.viewT(i);
+
+				for (auto m : std::views::iota(0ULL, activations.size())) {
+
+					weight = weights.constViewT(m);
+					dWeight = dWeights.viewT(m);
+
+					float in = activations[m];
+
+					float dot = 0.0f;
+
+					for (const auto& [dW, o, w] : std::views::zip(dWeight, dOutput, weight)) {
+						dW += in * o;
+						dot += w * o;
+					}
+
+					dActivations[m] = dot;
+				}
+			}
+		}
+
 		class MLP {
 
 			friend class Diagnostics;
@@ -129,17 +165,19 @@ namespace NetworkLib {
 		public:
 
 			void load(Floats::iterator& backwardSpace) {
+
 				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel4, mDModel };
 				std::advance(backwardSpace, mModel4Model);
+
+				mCProjBias = { { backwardSpace, mDModel }, mDModel };
+				std::advance(backwardSpace, mDModel);
 
 				mCFCBias = { { backwardSpace, mDModel4 }, mDModel4 };
 				std::advance(backwardSpace, mDModel4);
 
-				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel, mDModel4 };
+				mCFCWeight = { { backwardSpace, mModel4Model }, mDModel, mDModel4 };
 				std::advance(backwardSpace, mModel4Model);
 				
-				mCProjBias = { { backwardSpace, mDModel }, mDModel };
-				std::advance(backwardSpace, mDModel);
 
 				mGeluActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
 				std::advance(backwardSpace, mSeqModel4);
@@ -151,26 +189,10 @@ namespace NetworkLib {
 			void forward(const Tensor& input, Parallel& parallel);
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 
-			void backward(const Tensor& dOutputs, Parallel& parallel) {
+			void backward(const MLP& mlp, const Tensor& dOutputs, Parallel& parallel) {
 
-				Tensor::ConstView dOutput;
-				Tensor::View dWeight, dBias;
+				GPT2::backward(dOutputs, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
 
-				dBias = mCProjBias.view();
-
-				for (auto i : std::views::iota(0ULL, parallel.mSize)) {
-
-					dOutput = dOutputs.constViewT(i);
-
-					for (const auto& [b, o] : std::views::zip(dBias, dOutput))
-						b += o;
-
-					for (auto m : std::views::iota(0ULL, dBias.size())) {
-
-						dWeight = mCProjWeight.viewT(m);
-
-					}
-				}
 			}
 		};
 
@@ -331,7 +353,7 @@ namespace NetworkLib {
 		
 			void backward( AttnLayer& attn, Parallel& parallel) {
 
-				mMLP.backward(getOutput(), parallel);
+				mMLP.backward(attn.mMLP, getOutput(), parallel);
 				
 			}
 		};
