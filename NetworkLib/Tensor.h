@@ -48,6 +48,13 @@ struct Tensor {
 		return { begin, end };
 	}
 
+	View viewTBlock() {
+
+		std::size_t offset = mX * mY;
+		auto begin = mTensor.begin();
+		auto end = std::next(begin, offset);
+		return { begin, end };
+	}
 	float& at(std::size_t col) {
 		return mTensor[col];
 	}

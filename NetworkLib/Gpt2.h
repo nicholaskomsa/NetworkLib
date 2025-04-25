@@ -118,22 +118,72 @@ namespace NetworkLib {
 		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
 
+		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
 
-			Tensor::ConstView dOutput, activations, weight;
-			Tensor::View dWeight, dBias1, dActivations;
+			parallel([&](Parallel::Section& section) {
 
-			dBias1 = dBias.view();
+				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
+				pdBias.clear();
+				pdBias.resize(dBias.mX, 0.0f);
+
+				pdWeightsFloats.clear();
+				pdWeightsFloats.resize(dWeights.size2D(), 0.0f);
+				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
+
+				Tensor::ConstView dOutput, activations, weight;
+				Tensor::View pdWeight, dActivations;
+
+				auto [first, second] = section.mOffsets;
+				for (auto i : std::views::iota(first, second)) {
+
+					dOutput = dOutputs.constViewT(i);
+
+					for (const auto& [b, o] : std::views::zip(pdBias, dOutput))
+						b += o;
+
+					activations = inActivations.constViewT(i);
+					dActivations = outActivations.viewT(i);
+
+					for (auto m : std::views::iota(0ULL, activations.size())) {
+
+						weight = weights.constViewT(m);
+						pdWeight = pdWeights.viewT(m);
+
+						float in = activations[m];
+
+						float dot = 0.0f;
+
+						for (const auto& [pdW, o, w] : std::views::zip(pdWeight, dOutput, weight)) {
+							pdW += in * o;
+							dot += w * o;
+						}
+
+						dActivations[m] = dot;
+					}
+				}
+
+			}, [&](Parallel::Section& section) {
+
+				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
+
+				for (const auto& [b, pb] : std::views::zip(dBias.view(), pdBias)) 
+					b += pb;
+
+				Tensor::View wBlock = dWeights.viewTBlock()
+					, pwBlock = pdWeights.viewTBlock();
+
+				for (const auto& [w, pw] : std::views::zip(wBlock, pwBlock))
+					w += pw;
+
+
+			});
+
+			/*
 			for (auto i : std::views::iota(0ULL, parallel.mSize)) {
 
-				dOutput = dOutputs.constViewT(i);
-
-				for (const auto& [b, o] : std::views::zip(dBias1, dOutput))
-					b += o;
-			
-				activations = inActivations.constViewT(i);
-				dActivations = outActivations.viewT(i);
 
 				for (auto m : std::views::iota(0ULL, activations.size())) {
 
@@ -152,6 +202,7 @@ namespace NetworkLib {
 					dActivations[m] = dot;
 				}
 			}
+			*/
 		}
 
 		class MLP {
