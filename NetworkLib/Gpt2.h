@@ -121,6 +121,11 @@ namespace NetworkLib {
 		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
 
+			auto dWeightsBlock = dWeights.viewTBlock();
+			std::fill(dWeightsBlock.begin(), dWeightsBlock.end(), 0.0f);
+			auto dBiasView = dBias.view();
+			std::fill(dBiasView.begin(), dBiasView.end(), 0.0f);
+
 			parallel([&](Parallel::Section& section) {
 
 				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
@@ -169,40 +174,16 @@ namespace NetworkLib {
 				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
 
-				for (const auto& [b, pb] : std::views::zip(dBias.view(), pdBias)) 
+				for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
 					b += pb;
 
-				Tensor::View wBlock = dWeights.viewTBlock()
-					, pwBlock = pdWeights.viewTBlock();
+				Tensor::View pwBlock = pdWeights.viewTBlock();
 
-				for (const auto& [w, pw] : std::views::zip(wBlock, pwBlock))
+				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pwBlock))
 					w += pw;
 
 
 			});
-
-			/*
-			for (auto i : std::views::iota(0ULL, parallel.mSize)) {
-
-
-				for (auto m : std::views::iota(0ULL, activations.size())) {
-
-					weight = weights.constViewT(m);
-					dWeight = dWeights.viewT(m);
-
-					float in = activations[m];
-
-					float dot = 0.0f;
-
-					for (const auto& [dW, o, w] : std::views::zip(dWeight, dOutput, weight)) {
-						dW += in * o;
-						dot += w * o;
-					}
-
-					dActivations[m] = dot;
-				}
-			}
-			*/
 		}
 
 		class MLP {
@@ -255,7 +236,6 @@ namespace NetworkLib {
 			Tensor mActivations;
 
 			//for backward
-			using PartialBiasWeight = std::pair<Floats, Floats>;
 			Floats mMean, mRStdDev;
 		public:
 
@@ -292,7 +272,7 @@ namespace NetworkLib {
 
 				parallel([&](auto& section) {
 
-					auto& [dBias, dWeight] = std::any_cast<LinearLayer::PartialBiasWeight&>(section.mAny);
+					auto& [dBias, dWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
 					dBias.clear();
 					dBias.resize(inputs.mY, 0.0f);
@@ -343,7 +323,7 @@ namespace NetworkLib {
 
 					}, [&](Parallel::Section& section) {
 
-						auto& [partialBias, partialWeight] = std::any_cast<LinearLayer::PartialBiasWeight&>(section.mAny);
+						auto& [partialBias, partialWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
 						for (const auto& [b, w, pb, pw] : std::views::zip(dBias, dWeight, partialBias, partialWeight)) {
 							b += pb;
@@ -483,7 +463,7 @@ namespace NetworkLib {
 					attnLayer.load(backwardSpace);
 				}
 
-				mParallelInput.setup(LinearLayer::PartialBiasWeight{}, mTestInputSize, 32);
+				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
 			void unEmbedOutputs(TokensView nextTokens) {
