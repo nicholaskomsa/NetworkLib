@@ -158,16 +158,19 @@ namespace NetworkLib {
 
 				dBias = mCProjBias.view();
 
-				for (auto i : std::views::iota(0ULL, dBias.size())) {
+				for (auto i : std::views::iota(0ULL, parallel.mSize)) {
 
-					dWeight = mCProjWeight.viewT(i);
 					dOutput = dOutputs.constViewT(i);
 
-					for (const auto& [b, o] : std::views::zip(dBias, dOutput)) 
+					for (const auto& [b, o] : std::views::zip(dBias, dOutput))
 						b += o;
+
+					for (auto m : std::views::iota(0ULL, dBias.size())) {
+
+						dWeight = mCProjWeight.viewT(m);
+
+					}
 				}
-
-
 			}
 		};
 

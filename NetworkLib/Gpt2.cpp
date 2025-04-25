@@ -1113,11 +1113,11 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		sumf(backward.mUnembed, "0.008");
 		sumf(forward.mUnembedActivationsSoftmax, "64");
-		Diagnostics::sumf(backward.mFinalLayer.mActivations, "-0.0403");
+		sumf(backward.mFinalLayer.mActivations, "-0.0403");
 		sumf(backward.mFinalLayer.mBias, "-0.0403");
 		sumf(backward.mFinalLayer.mWeight, "-0.5371");
 		sumf(backward.mAttnLayers.back().getOutput(), "-1.0-e08 on debug");
-		sumAbsf(backward.mAttnLayers.back().mCProjBias, "0.4879f");
+		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjBias, "0.4879f");
 
 		});
 
