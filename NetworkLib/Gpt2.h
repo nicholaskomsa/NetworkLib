@@ -191,7 +191,11 @@ namespace NetworkLib {
 			Tensor mCFCBias, mCFCWeight, mCProjBias, mCProjWeight;
 			Tensor mCFCActivations, mCProjActivations, mGeluActivations;
 
+			Tensor mGeluCDF;
+
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
+			static const float r_sqrt2Pi;
+
 		public:
 
 			void load(Floats::iterator& backwardSpace) {
@@ -226,32 +230,36 @@ namespace NetworkLib {
 
 				auto backwardGelu = [&](){
 
+					auto& forwardCFCs = mlp.mCFCActivations;
+					auto& forwardCDFs = mlp.mGeluCDF;
+					auto& dGelus = mGeluActivations;
+					auto& dCFCs = mCFCActivations;
+
 					parallel([&](Parallel::Section& section) {
 
-						const auto& [first, second] = section.mOffsets;
+						Tensor::ConstView inputs, dGelu, cdfs;
+						Tensor::View dInputs;
 
+						const auto& [first, second] = section.mOffsets;
 						for (auto i : std::views::iota(first, second)) {
 
-							auto inputs= mlp.mCFCActivations.constViewT(i);
-							auto dOutputs = mGeluActivations.viewT(i);
-							auto dInputs = mCFCActivations.viewT(i);
+							inputs = forwardCFCs.constViewT(i);
+							cdfs = forwardCDFs.constViewT(i);
+							dGelu = dGelus.constViewT(i);
+							dInputs = dCFCs.viewT(i);
 
-							for (const auto& [dout, in, din] : std::views::zip(dOutputs, inputs, dInputs)) {
+							for (const auto& [dout, in, din, cdf] : std::views::zip(dGelu, inputs, dInputs, cdfs)) {
 
-								float cdf = 0.5f * (1.0f + std::erff(in * r_sqrt2));
-								float dGeluDIn = cdf + in * (1.0f / std::sqrt(2.0f * std::numbers::pi) * std::exp(-0.5f * in * in));
+								float dGeluDIn = cdf + in * ( r_sqrt2Pi * std::exp(-0.5f * in * in));
 
 								din = dout * dGeluDIn;
 							}
-
 						}
 
 						});
 
 				};
 				backwardGelu();
-
-
 			}
 		};
 

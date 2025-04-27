@@ -15,6 +15,7 @@ using namespace NetworkLib;
 Parallel GPT2::AttnLayer::mParallelHeads( mHeadNum, mHeadNum);
 
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
+const float GPT2::MLP::r_sqrt2Pi = 1.0f / std::sqrtf(2.0f * std::numbers::pi);
 
 GPT2::Error::Error(std::errc code, const std::string& message) : std::system_error(int(code), std::generic_category(), message) {}
 
@@ -255,7 +256,7 @@ void GPT2::Forward::load() {
 	boost::json::value j = boost::json::parse(header);
 	std::size_t floatsUsed = 0;
 
-	mActivationSpace.resize(mSeqModel + (mSeqModel * 7 + mSeqModel3 + mSeqSeqHead * 2 + mSeqModel4 * 2) * mAttnLayers.size() + mSeqModel + mSeqVocab * 2);
+	mActivationSpace.resize(mSeqModel + (mSeqModel * 7 + mSeqModel3 + mSeqSeqHead * 2 + mSeqModel4 * 3) * mAttnLayers.size() + mSeqModel + mSeqVocab * 2);
 	auto activationSpace = mActivationSpace.begin();
 
 	auto readTensorByName = [&](std::string_view name) {
@@ -421,14 +422,28 @@ void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 
 	GPT2::forward(input, mCFCActivations, mCFCWeight, mCFCBias, parallel);
 
-	//an activation function, gelu, is applied here
+	//an activation function, gelu, is applied here and cdf is cached
 
-	auto activations = mCFCActivations.viewTBlock(parallel.mSize -1 );
+	auto gelu = [&]() {
+		parallel([&](Parallel::Section& section) {
 
-	std::transform(std::execution::par_unseq, activations.begin(), activations.end(), mGeluActivations.mTensor.begin(),
-		[&](auto x) {
-			return x * 0.5f * (1.0f + std::erff(x * r_sqrt2));
-		});
+			const auto& [first, second] = section.mOffsets;
+			for (auto i : std::views::iota(first, second)) {
+
+				auto cfcActivations = mCFCActivations.viewT(i);
+				auto gelu = mGeluActivations.viewT(i);
+				auto cdf = mGeluCDF.viewT(i);
+
+				for (const auto& [cfc, gelu, cdf] : std::views::zip(cfcActivations, gelu, cdf)) {
+
+					cdf = 0.5f * (1.0f + std::erff(cfc * r_sqrt2));
+					gelu = cfc * cdf;
+				}
+			}
+
+			});
+		};
+	gelu();
 
 	GPT2::forward(mGeluActivations, mCProjActivations, mCProjWeight, mCProjBias, parallel);
 }
@@ -461,6 +476,9 @@ void GPT2::MLP::load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& 
 	std::advance(activationSpace, mSeqModel4);
 
 	mGeluActivations = { {activationSpace, mSeqModel4}, mDSeq, mDModel4 };
+	std::advance(activationSpace, mSeqModel4);
+
+	mGeluCDF = { { activationSpace, mSeqModel4 }, mDSeq, mDModel4 };
 	std::advance(activationSpace, mSeqModel4);
 
 	mCProjActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
