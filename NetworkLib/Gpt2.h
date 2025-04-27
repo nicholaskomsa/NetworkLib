@@ -177,9 +177,7 @@ namespace NetworkLib {
 				for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
 					b += pb;
 
-				Tensor::View pwBlock = pdWeights.viewTBlock();
-
-				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pwBlock))
+				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewTBlock()))
 					w += pw;
 
 
@@ -209,11 +207,12 @@ namespace NetworkLib {
 
 				mCFCWeight = { { backwardSpace, mModel4Model }, mDModel, mDModel4 };
 				std::advance(backwardSpace, mModel4Model);
-				
 
 				mGeluActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
 				std::advance(backwardSpace, mSeqModel4);
 
+				mCFCActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
+				std::advance(backwardSpace, mSeqModel4);
 			}
 			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& activationSpace);
 			const Tensor& getCProjActivations() const;
@@ -224,6 +223,34 @@ namespace NetworkLib {
 			void backward(const MLP& mlp, const Tensor& dOutputs, Parallel& parallel) {
 
 				GPT2::backward(dOutputs, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
+
+				auto backwardGelu = [&](){
+
+					parallel([&](Parallel::Section& section) {
+
+						const auto& [first, second] = section.mOffsets;
+
+						for (auto i : std::views::iota(first, second)) {
+
+							auto inputs= mlp.mCFCActivations.constViewT(i);
+							auto dOutputs = mGeluActivations.viewT(i);
+							auto dInputs = mCFCActivations.viewT(i);
+
+							for (const auto& [dout, in, din] : std::views::zip(dOutputs, inputs, dInputs)) {
+
+								float cdf = 0.5f * (1.0f + std::erff(in * r_sqrt2));
+								float dGeluDIn = cdf + in * (1.0f / std::sqrt(2.0f * std::numbers::pi) * std::exp(-0.5f * in * in));
+
+								din = dout * dGeluDIn;
+							}
+
+						}
+
+						});
+
+				};
+				backwardGelu();
+
 
 			}
 		};
@@ -272,13 +299,13 @@ namespace NetworkLib {
 
 				parallel([&](auto& section) {
 
-					auto& [dBias, dWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
+					auto& [pdBias, pdWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
-					dBias.clear();
-					dBias.resize(inputs.mY, 0.0f);
+					pdBias.clear();
+					pdBias.resize(inputs.mY, 0.0f);
 
-					dWeight.clear();
-					dWeight.resize(inputs.mY, 0.0f);
+					pdWeight.clear();
+					pdWeight.resize(inputs.mY, 0.0f);
 
 					Tensor::ConstView dOut, input;
 					Tensor::View dInput;
@@ -297,12 +324,12 @@ namespace NetworkLib {
 
 						float dInNorm;
 
-						for (const auto& [g, o, i, dW, w, dI] : std::views::zip(dBias, dOut, input, dWeight, weight, dInput)) {
+						for (const auto& [dB, o, i, dW, w, dI] : std::views::zip(pdBias, dOut, input, pdWeight, weight, dInput)) {
 
 							dI = (i - mean) * rStdDev; //==inNorm will pass through as dI
 
 							dW += o * dI;
-							g += o;
+							dB += o;
 
 							dInNorm = o * w;
 							meanPartial += dInNorm;
@@ -447,7 +474,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mSeqModel + mModel4Model * 2 + mSeqModel4) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mSeqModel + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };

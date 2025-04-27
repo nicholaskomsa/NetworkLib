@@ -22,10 +22,6 @@ struct Tensor {
 
 	Tensor() = default;
 	Tensor(View floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
-	Tensor(std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) : mX(x), mY(y), mZ(z), mW(w) {
-	
-	
-	}
 
 	std::size_t size() const {
 		return mX;
@@ -48,6 +44,13 @@ struct Tensor {
 		return { begin, end };
 	}
 
+	ConstView constViewTBlock(std::size_t col) const{
+
+		std::size_t offset = col * mY + mY;
+		auto begin = mTensor.begin();
+		auto end = std::next(begin, offset);
+		return { begin, end };
+	}
 	View viewTBlock() {
 
 		std::size_t offset = mX * mY;

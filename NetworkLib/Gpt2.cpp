@@ -1120,6 +1120,7 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjBias, "0.4879f");
 		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjWeight, "348");
 		sumAbsf(backward.mAttnLayers.back().mMLP.mGeluActivations, "58.9");
+		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCActivations, "14.5");
 
 		});
 
