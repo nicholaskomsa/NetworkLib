@@ -504,7 +504,7 @@ namespace NetworkLib {
 			void unEmbedOutputs(TokensView nextTokens) {
 
 				auto& forward = *mForward;
-				auto& parallel = forward.mParallelInput;
+				auto& parallel = mParallelInput;
 				parallel.section(nextTokens.size());
 
 				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
@@ -542,6 +542,11 @@ namespace NetworkLib {
 
 					Tensor::View input, dInput, output, weight, dWeight;
 
+					auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+					pdWeightsFloats.clear();
+					pdWeightsFloats.resize(dWte.size2D(), 0.0f);
+					Tensor pdWeights = { pdWeightsFloats, dWte.mX, dWte.mY };
+
 					auto& [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
@@ -553,7 +558,7 @@ namespace NetworkLib {
 
 							float o = output[m];
 							weight = wte.viewT(m);
-							dWeight = dWte.viewT(m);
+							dWeight = pdWeights.viewT(m);
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
@@ -562,7 +567,15 @@ namespace NetworkLib {
 						}
 					}
 
-					});
+					}, [&](Parallel::Section& section) {
+
+						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+
+						for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
+							w += pdw;
+
+
+						});
 
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
