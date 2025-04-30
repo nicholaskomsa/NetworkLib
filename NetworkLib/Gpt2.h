@@ -224,9 +224,9 @@ namespace NetworkLib {
 			void forward(const Tensor& input, Parallel& parallel);
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 
-			void backward(const MLP& mlp, const Tensor& dOutputs, Parallel& parallel) {
+			void backward(const MLP& mlp, const Tensor& linear, const Tensor& dResidual, Tensor& output, Parallel& parallel) {
 
-				GPT2::backward(dOutputs, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
+				GPT2::backward(dResidual, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
 
 				auto backwardGelu = [&](){
 
@@ -260,6 +260,8 @@ namespace NetworkLib {
 
 				};
 				backwardGelu();
+
+				GPT2::backward(mCFCActivations, mlp.mCFCWeight, mCFCWeight, mCFCBias, linear, output, parallel);
 			}
 		};
 
@@ -292,7 +294,7 @@ namespace NetworkLib {
 			void normalise(std::size_t i, const Tensor& input);
 			void normalise(const Tensor& input, Parallel& parallel);
 
-			void backward(const LinearLayer& inputLayer, const Tensor& inputs, Tensor& dInputs, Parallel& parallel) {
+			void backward(const LinearLayer& inputLayer, const Tensor& inputs, Tensor& dInputs, Parallel& parallel){
 				
 				const Tensor& dActivations = mActivations;
 				Tensor::View dBias = mBias.view()
@@ -408,8 +410,9 @@ namespace NetworkLib {
 				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
 				std::advance(backwardSpace, mSeqModel);
 
-
 				mMLP.load(backwardSpace);
+
+				mL2.load(backwardSpace);
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -419,7 +422,7 @@ namespace NetworkLib {
 		
 			void backward( AttnLayer& attn, Parallel& parallel) {
 
-				mMLP.backward(attn.mMLP, getOutput(), parallel);
+				mMLP.backward(attn.mMLP, attn.mL2.getActivations(), getOutput(), mL2.mActivations, parallel);
 				
 			}
 		};
@@ -482,7 +485,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mSeqModel + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mDModel * 2 + mSeqModel*2 + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -562,7 +565,7 @@ namespace NetworkLib {
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
-								dw += o * in * r_tokens;
+								dw += o * in;
 							}
 						}
 					}
@@ -573,10 +576,11 @@ namespace NetworkLib {
 
 						for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
 							w += pdw;
-
-
+						
+					
 						});
 
+				std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end(), dWteBlock.begin(), [&](auto f) {return f * r_tokens; });
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
 
