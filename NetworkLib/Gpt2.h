@@ -224,7 +224,7 @@ namespace NetworkLib {
 			void forward(const Tensor& input, Parallel& parallel);
 			void forward(std::size_t i, const Tensor& input, Parallel& parallel);
 
-			void backward(const MLP& mlp, const Tensor& linear, const Tensor& dResidual, Tensor& output, Parallel& parallel) {
+			void backward(const MLP& mlp, const Tensor& linear, const Tensor& dResidual, Tensor& dLinear, Parallel& parallel) {
 
 				GPT2::backward(dResidual, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
 
@@ -261,7 +261,7 @@ namespace NetworkLib {
 				};
 				backwardGelu();
 
-				GPT2::backward(mCFCActivations, mlp.mCFCWeight, mCFCWeight, mCFCBias, linear, output, parallel);
+				GPT2::backward(mCFCActivations, mlp.mCFCWeight, mCFCWeight, mCFCBias, linear, dLinear, parallel);
 			}
 		};
 
@@ -398,6 +398,14 @@ namespace NetworkLib {
 			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor);
 			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel);
 		
+			void residualBack(const Tensor& inputTensor, Tensor& outputTensor) {
+
+				Tensor::ConstView inputBlock = inputTensor.constViewTBlock();
+				Tensor::View outputBlock = outputTensor.viewTBlock();
+
+				std::transform(std::execution::par_unseq, inputBlock.begin(), inputBlock.end(), outputBlock.begin(), outputBlock.begin(), [](auto i, auto o) {return i + o; });
+			}
+
 		public:
 
 			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
@@ -412,6 +420,9 @@ namespace NetworkLib {
 
 				mMLP.load(backwardSpace);
 
+				mResidualActivation1 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
+				std::advance(backwardSpace, mSeqModel);
+
 				mL2.load(backwardSpace);
 			}
 
@@ -422,8 +433,13 @@ namespace NetworkLib {
 		
 			void backward( AttnLayer& attn, Parallel& parallel) {
 
-				mMLP.backward(attn.mMLP, attn.mL2.getActivations(), getOutput(), mL2.mActivations, parallel);
+				mMLP.backward(attn.mMLP, attn.mL2.getActivations(), mResidualActivation2, mL2.mActivations, parallel);
 				
+				mL2.backward(attn.mL2, attn.mResidualActivation1, mResidualActivation1, parallel);
+
+				residualBack(mResidualActivation2, mResidualActivation1);
+
+
 			}
 		};
 
@@ -485,7 +501,7 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mDModel * 2 + mSeqModel*2 + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mDModel * 2 + mSeqModel*3 + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
@@ -573,6 +589,11 @@ namespace NetworkLib {
 					}, [&](Parallel::Section& section) {
 
 						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+
+						//std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end()
+						//	, pdWeightsFloats.begin(), dWteBlock.begin(), [&](auto& w, auto& pw) {
+						//		return w + pw;
+						//	});
 
 						for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
 							w += pdw;

@@ -1139,7 +1139,12 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjWeight, "348");
 		sumAbsf(backward.mAttnLayers.back().mMLP.mGeluActivations, "58.9");
 		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCActivations, "14.5");
-		sumAbsf(backward.mAttnLayers.back().mL2.mActivations, "54");
+		sumAbsf(backward.mAttnLayers.back().mL2.mActivations, "54.6");
+		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCWeight, "523.4");
+		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCBias, "3.66");
+		sumAbsf(backward.mAttnLayers.back().mL2.mWeight, "5.93");
+		sumAbsf(backward.mAttnLayers.back().mL2.mBias, "11.73");
+		sumAbsf(backward.mAttnLayers.back().mResidualActivation1, "3.26");
 		});
 
 }
