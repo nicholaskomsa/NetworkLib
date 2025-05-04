@@ -34,7 +34,9 @@ namespace NetworkLib {
 			, mSeqModel4 = mDSeq * mDModel4
 			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
 			, mSeqVocab = mDSeq * mDVocab
-			, mModel4Model = mDModel4 * mDModel;
+			, mModel4Model = mDModel4 * mDModel
+			, mModel3Model = mDModel3 * mDModel
+			, mModelModel = mDModel * mDModel;
 
 		using Floats = std::vector<float>;
 
@@ -407,7 +409,9 @@ namespace NetworkLib {
 
 				return mSeqModel * 3
 					+ LinearLayer::getBackwardSize() * 2
-					+ MLP::getBackwardSize();
+					+ MLP::getBackwardSize()
+					+ mDModel3 + mModel3Model
+					+ mDModel + mModelModel;
 			}
 			void load(Floats::iterator& backwardSpace) {
 
@@ -416,6 +420,12 @@ namespace NetworkLib {
 				mL2.load(backwardSpace);
 				mResidualActivation1Out = { backwardSpace, mDSeq, mDModel };
 				mResidualActivation1 = { backwardSpace, mDSeq, mDModel };
+
+				//mBias = { backwardSpace, mDSeq, mDModel };
+				mCAttnBias = { backwardSpace, mDModel3 };
+				mCAttnWeight = { backwardSpace, mDModel, mDModel3 }; 
+				mCProjBias = { backwardSpace, mDModel }; 
+				mCProjWeight = { backwardSpace, mDModel, mDModel };
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
