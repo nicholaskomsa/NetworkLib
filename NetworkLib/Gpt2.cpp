@@ -309,19 +309,15 @@ void GPT2::Forward::load() {
 	mWpeWeight = readTensorByName("wpe.weight");
 	mWteWeight = readTensorByName("wte.weight");
 
-	mWActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mWActivations = { activationSpace, mDSeq, mDModel };
 
 	for (auto i : std::views::iota( 0ULL, mAttnLayers.size()))
 		mAttnLayers[i].load(readTensorByName, i, activationSpace);
 
 	mFinalLayer.load(readTensorByName("ln_f.bias"), readTensorByName("ln_f.weight"), activationSpace);
 
-	mUnembedActivations = { {activationSpace, mSeqVocab}, mDSeq, mDVocab };
-	std::advance(activationSpace, mSeqVocab);
-
-	mUnembedActivationsSoftmax = { {activationSpace, mSeqVocab}, mDSeq, mDVocab };
-	std::advance(activationSpace, mSeqVocab);
+	mUnembedActivations = {activationSpace, mDSeq, mDVocab };
+	mUnembedActivationsSoftmax = { activationSpace, mDSeq, mDVocab };
 
 	assert(floatsUsed == mTensorSpace.size());
 	assert(activationSpace == mActivationSpace.end());
@@ -471,18 +467,10 @@ void GPT2::MLP::load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& 
 	mCFCWeight = std::move(cfcWeight);
 	mCProjBias = std::move(cProjBias);
 	mCProjWeight = std::move(cProjWeight);
-
-	mCFCActivations = { {activationSpace, mSeqModel4}, mDSeq, mDModel4 };
-	std::advance(activationSpace, mSeqModel4);
-
-	mGeluActivations = { {activationSpace, mSeqModel4}, mDSeq, mDModel4 };
-	std::advance(activationSpace, mSeqModel4);
-
-	mGeluCDF = { { activationSpace, mSeqModel4 }, mDSeq, mDModel4 };
-	std::advance(activationSpace, mSeqModel4);
-
-	mCProjActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mCFCActivations = { activationSpace, mDSeq, mDModel4 };
+	mGeluActivations = { activationSpace, mDSeq, mDModel4 };
+	mGeluCDF = { activationSpace, mDSeq, mDModel4 };
+	mCProjActivations = { activationSpace, mDSeq, mDModel };
 }
 
 Tensor& GPT2::LinearLayer::getActivations() {
@@ -492,8 +480,7 @@ void GPT2::LinearLayer::load(Tensor&& bias, Tensor&& weight, Floats::iterator& a
 
 	mBias = std::move(bias);
 	mWeight = std::move(weight);
-	mActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mActivations = { activationSpace, mDSeq, mDModel };
 
 	mMean.resize(mTestInputSize);
 	mRStdDev.resize(mTestInputSize);
@@ -702,17 +689,11 @@ void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t lay
 	mCProjBias = attnTensor("c_proj.bias");
 	mCProjWeight = attnTensor("c_proj.weight");
 
-	mCAttnActivations = { {activationSpace, mSeqModel3}, mDSeq, mDModel3 };
-	std::advance(activationSpace, mSeqModel3);
+	mCAttnActivations = { activationSpace, mDSeq, mDModel3 };
+	mAttnActivations = { activationSpace, mDSeq, mDSeq, mHeadNum };
 
-	mAttnActivations = { {activationSpace, mSeqSeqHead}, mDSeq, mDSeq, mHeadNum };
-	std::advance(activationSpace, mSeqSeqHead);
-
-	mAttnSoftmaxActivations = { {activationSpace, mSeqSeqHead}, mDSeq, mDSeq, mHeadNum };
-	std::advance(activationSpace, mSeqSeqHead);
-
-	mAttnZ = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mAttnSoftmaxActivations = { activationSpace, mDSeq, mDSeq, mHeadNum };
+	mAttnZ = { activationSpace, mDSeq, mDModel };
 
 	auto linearTensor = [&](auto idx, const auto& name) {
 		return readTensorByName(std::format("{}ln_{}.{}", layer, idx, name));
@@ -720,11 +701,8 @@ void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t lay
 
 	mL1.load(linearTensor(1, "bias"), linearTensor(1, "weight"), activationSpace);
 
-	mCProjActivations = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
-
-	mResidualActivation1 = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mCProjActivations = { activationSpace, mDSeq, mDModel };
+	mResidualActivation1 = { activationSpace, mDSeq, mDModel };
 
 	mL2.load(linearTensor(2, "bias"), linearTensor(2, "weight"), activationSpace);
 
@@ -734,8 +712,8 @@ void GPT2::AttnLayer::load(ReadTensorFunctor&& readTensorByName, std::size_t lay
 
 	mMLP.load(mlpTensor("c_fc.bias"), mlpTensor("c_fc.weight"), mlpTensor("c_proj.bias"), mlpTensor("c_proj.weight"), activationSpace);
 
-	mResidualActivation2 = { {activationSpace, mSeqModel}, mDSeq, mDModel };
-	std::advance(activationSpace, mSeqModel);
+	mResidualActivation2 = { activationSpace, mDSeq, mDModel };
+
 }
 
 void GPT2::Forward::embedInput(std::size_t i, Token token) {

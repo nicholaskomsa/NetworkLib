@@ -14,14 +14,30 @@ struct Tensor {
 	using View = std::span<float>;
 	using ConstView = std::span<const float>;
 
-	std::vector<float> mFloats;
-
 	View mTensor;
 
 	std::size_t mX{ 0 }, mY{ 0 }, mZ{ 0 }, mW{ 0 };
 
 	Tensor() = default;
-	Tensor(View floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) : mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
+	Tensor(View floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) 
+		: mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
+
+	Tensor(std::vector<float>::iterator& begin, std::size_t x, std::size_t y = 0, std::size_t z =0, std::size_t w = 0)
+		: mX(x), mY(y), mZ(z), mW(w) {
+
+		auto size = x;
+		if( y != 0 ) 
+			size *= y;
+		if( z != 0 )
+			size *= z;
+		if( w != 0 )
+			size *= w;
+
+		mTensor = { begin, size };
+		std::advance(begin, size);
+	}
+
+
 
 	std::size_t size() const {
 		return mX;

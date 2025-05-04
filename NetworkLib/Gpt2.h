@@ -203,23 +203,12 @@ namespace NetworkLib {
 			}
 			void load(Floats::iterator& backwardSpace) {
 
-				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel4, mDModel };
-				std::advance(backwardSpace, mModel4Model);
-
-				mCProjBias = { { backwardSpace, mDModel }, mDModel };
-				std::advance(backwardSpace, mDModel);
-
-				mCFCBias = { { backwardSpace, mDModel4 }, mDModel4 };
-				std::advance(backwardSpace, mDModel4);
-
-				mCFCWeight = { { backwardSpace, mModel4Model }, mDModel, mDModel4 };
-				std::advance(backwardSpace, mModel4Model);
-
-				mGeluActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
-				std::advance(backwardSpace, mSeqModel4);
-
-				mCFCActivations = { { backwardSpace, mSeqModel4 }, mDSeq, mDModel4 };
-				std::advance(backwardSpace, mSeqModel4);
+				mCProjWeight = { backwardSpace, mDModel4, mDModel };
+				mCProjBias = { backwardSpace, mDModel };
+				mCFCBias = { backwardSpace, mDModel4 };
+				mCFCWeight = { backwardSpace, mDModel, mDModel4 };
+				mGeluActivations = { backwardSpace, mDSeq, mDModel4 };
+				mCFCActivations = { backwardSpace, mDSeq, mDModel4 };
 			}
 			void load(auto&& cfcBias, auto&& cfcWeight, auto&& cProjBias, auto&& cProjWeight, Floats::iterator& activationSpace);
 			const Tensor& getCProjActivations() const;
@@ -284,14 +273,9 @@ namespace NetworkLib {
 			}
 			void load(Floats::iterator& backwardSpace) {
 
-				mActivations = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-				std::advance(backwardSpace, mSeqModel);
-
-				mBias = { {backwardSpace, mDModel}, mDModel };
-				std::advance(backwardSpace, mDModel);
-
-				mWeight = { {backwardSpace, mDModel}, mDModel  };
-				std::advance(backwardSpace, mDModel);
+				mActivations = { backwardSpace, mDSeq, mDModel };
+				mBias = { backwardSpace, mDModel };
+				mWeight = { backwardSpace, mDModel  };
 			}
 
 			void load(Tensor&& bias, Tensor&& weight, Floats::iterator& activationSpace);
@@ -426,19 +410,11 @@ namespace NetworkLib {
 			}
 			void load(Floats::iterator& backwardSpace) {
 
-				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-				std::advance(backwardSpace, mSeqModel);
-
+				mResidualActivation2 = { backwardSpace, mDSeq, mDModel };
 				mMLP.load(backwardSpace);
-
 				mL2.load(backwardSpace);
-
-				mResidualActivations1Out = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-				std::advance(backwardSpace, mSeqModel);
-
-				mResidualActivation1 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
-				std::advance(backwardSpace, mSeqModel);
-
+				mResidualActivations1Out = { backwardSpace, mDSeq, mDModel };
+				mResidualActivation1 = { backwardSpace, mDSeq, mDModel };
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -522,18 +498,13 @@ namespace NetworkLib {
 
 				auto backwardSpace = mBackwardSpace.begin();
 				
-				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
-				std::advance(backwardSpace, mSeqVocab);
-
-				mWteWeight = { {backwardSpace, mVocabModel}, mDVocab, mDModel };
-				std::advance(backwardSpace, mVocabModel);
-
+				mUnembed = { backwardSpace, mDSeq, mDVocab };
+				mWteWeight = { backwardSpace, mDVocab, mDModel };
 				mFinalLayer.load(backwardSpace);
 
-				for( auto& attnLayer : mAttnLayers ) {
-
+				for( auto& attnLayer : mAttnLayers ) 
 					attnLayer.load(backwardSpace);
-				}
+				
 
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
