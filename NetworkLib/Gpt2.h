@@ -411,7 +411,8 @@ namespace NetworkLib {
 					+ LinearLayer::getBackwardSize() * 2
 					+ MLP::getBackwardSize()
 					+ mDModel3 + mModel3Model
-					+ mDModel + mModelModel;
+					+ mDModel + mModelModel
+					+ mSeqModel;
 			}
 			void load(Floats::iterator& backwardSpace) {
 
@@ -426,6 +427,8 @@ namespace NetworkLib {
 				mCAttnWeight = { backwardSpace, mDModel, mDModel3 }; 
 				mCProjBias = { backwardSpace, mDModel }; 
 				mCProjWeight = { backwardSpace, mDModel, mDModel };
+
+				mAttnZ = { backwardSpace, mDSeq, mDModel };
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -440,7 +443,8 @@ namespace NetworkLib {
 				mL2.backward(attn.mL2, attn.mResidualActivation1, mResidualActivation1Out, parallel);
 
 				residualBack(mResidualActivation2, mResidualActivation1Out, mResidualActivation1);
-
+				
+				GPT2::backward(mResidualActivation1, attn.mCProjWeight, mCProjWeight, mCProjBias, attn.mAttnZ, mAttnZ, parallel);
 
 			}
 		};
