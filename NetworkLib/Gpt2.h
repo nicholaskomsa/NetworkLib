@@ -372,7 +372,7 @@ namespace NetworkLib {
 			Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
 			Tensor mCAttnActivations, mAttnActivations, mAttnSoftmaxActivations, mAttnZ, mCProjActivations;
 			Tensor mResidualActivation1, mResidualActivation2
-				, mResidualActivations1Out; //for backward
+				, mResidualActivation1Out; //for backward
 
 			MLP mMLP;
 
@@ -389,12 +389,13 @@ namespace NetworkLib {
 			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor);
 			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel);
 		
-			void residualBack(const Tensor& inputTensor, Tensor& outputTensor) {
+			void residualBack(const Tensor& a, const Tensor& b, Tensor& outputTensor) {
 
-				Tensor::ConstView inputBlock = inputTensor.constViewTBlock();
+				Tensor::ConstView aBlock = a.constViewTBlock()
+					, bBlock = b.constViewTBlock();
 				Tensor::View outputBlock = outputTensor.viewTBlock();
 
-				std::transform(std::execution::par_unseq, inputBlock.begin(), inputBlock.end(), outputBlock.begin(), outputBlock.begin(), [](auto i, auto o) {return i + o; });
+				std::transform(std::execution::par_unseq, aBlock.begin(), aBlock.end(), bBlock.begin(), outputBlock.begin(), [](auto a, auto b) {return a + b; });
 			}
 
 		public:
@@ -413,7 +414,7 @@ namespace NetworkLib {
 				mResidualActivation2 = { backwardSpace, mDSeq, mDModel };
 				mMLP.load(backwardSpace);
 				mL2.load(backwardSpace);
-				mResidualActivations1Out = { backwardSpace, mDSeq, mDModel };
+				mResidualActivation1Out = { backwardSpace, mDSeq, mDModel };
 				mResidualActivation1 = { backwardSpace, mDSeq, mDModel };
 			}
 
@@ -426,9 +427,9 @@ namespace NetworkLib {
 
 				mMLP.backward(attn.mMLP, attn.mL2.getActivations(), mResidualActivation2, mL2.mActivations, parallel);
 				
-				mL2.backward(attn.mL2, attn.mResidualActivation1, mResidualActivation1, parallel);
+				mL2.backward(attn.mL2, attn.mResidualActivation1, mResidualActivation1Out, parallel);
 
-				residualBack(mResidualActivation2, mResidualActivation1);
+				residualBack(mResidualActivation2, mResidualActivation1Out, mResidualActivation1);
 
 
 			}
@@ -505,7 +506,6 @@ namespace NetworkLib {
 				for( auto& attnLayer : mAttnLayers ) 
 					attnLayer.load(backwardSpace);
 				
-
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
