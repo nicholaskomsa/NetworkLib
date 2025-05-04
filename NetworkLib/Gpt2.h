@@ -198,6 +198,9 @@ namespace NetworkLib {
 
 		public:
 
+			static std::size_t getBackwardSize() {
+				return mModel4Model * 2 + mSeqModel4 * 2 + mDModel4 + mDModel;
+			}
 			void load(Floats::iterator& backwardSpace) {
 
 				mCProjWeight = { { backwardSpace, mModel4Model }, mDModel4, mDModel };
@@ -276,6 +279,9 @@ namespace NetworkLib {
 			Floats mMean, mRStdDev;
 		public:
 
+			static std::size_t getBackwardSize() {
+				return mSeqModel + mDModel * 2;
+			}
 			void load(Floats::iterator& backwardSpace) {
 
 				mActivations = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
@@ -381,7 +387,8 @@ namespace NetworkLib {
 
 			Tensor mBias, mCAttnBias, mCAttnWeight, mCProjBias, mCProjWeight;
 			Tensor mCAttnActivations, mAttnActivations, mAttnSoftmaxActivations, mAttnZ, mCProjActivations;
-			Tensor mResidualActivation1, mResidualActivation2;
+			Tensor mResidualActivation1, mResidualActivation2
+				, mResidualActivations1Out; //for backward
 
 			MLP mMLP;
 
@@ -410,9 +417,13 @@ namespace NetworkLib {
 
 			using ReadTensorFunctor = std::function<Tensor(std::string_view)>;
 			void load(ReadTensorFunctor&& readTensorByName, std::size_t layerIdx, Floats::iterator& activationSpace);
-			
-			Tensor mUnembedOut;
 
+			static std::size_t getBackwardSize(){
+
+				return mSeqModel * 3
+					+ LinearLayer::getBackwardSize() * 2
+					+ MLP::getBackwardSize();
+			}
 			void load(Floats::iterator& backwardSpace) {
 
 				mResidualActivation2 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
@@ -420,10 +431,14 @@ namespace NetworkLib {
 
 				mMLP.load(backwardSpace);
 
+				mL2.load(backwardSpace);
+
+				mResidualActivations1Out = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
+				std::advance(backwardSpace, mSeqModel);
+
 				mResidualActivation1 = { {backwardSpace, mSeqModel}, mDSeq, mDModel };
 				std::advance(backwardSpace, mSeqModel);
 
-				mL2.load(backwardSpace);
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -501,7 +516,10 @@ namespace NetworkLib {
 
 				mForward = forward;
 
-				mBackwardSpace.resize(mSeqVocab + mVocabModel + (mSeqModel + mModel4Model*2 + mDModel4 + mDModel ) + (mDModel * 2 + mSeqModel*3 + mModel4Model * 2 + mSeqModel4*2) * mAttnLayersNum);
+				mBackwardSpace.resize(mSeqVocab + mVocabModel 
+					+ LinearLayer::getBackwardSize()
+					+ AttnLayer::getBackwardSize() * mAttnLayersNum);
+
 				auto backwardSpace = mBackwardSpace.begin();
 				
 				mUnembed = { {backwardSpace, mSeqVocab}, mDSeq, mDVocab };
