@@ -100,10 +100,13 @@ namespace NetworkLib {
 			static double sumf(const Tensor& tensor, std::string_view expected) {
 				return sumf(tensor.mTensor, expected);
 			}
-			static double sumAbsf(const Tensor& tensor, std::string_view expected) {
-				double sum = std::reduce(tensor.mTensor.begin(), tensor.mTensor.end(), double(0.0), [](auto a, auto b) {return a + std::abs(b); });
+			static double sumAbsf(const Tensor::View& tensor, std::string_view expected) {
+				double sum = std::reduce(tensor.begin(), tensor.end(), double(0.0), [](double a, float b) {return a + std::abs(b); });
 				std::print("{}=={}\n", expected, sum);
 				return sum;
+			}
+			static double sumAbsf(const Tensor& tensor, std::string_view expected) {
+				return sumAbsf(tensor.mTensor, expected);
 			}
 
 			void firstCitizenTest64();
@@ -381,12 +384,52 @@ namespace NetworkLib {
 			static const float r_sqrtHeadsPerDModel;
 
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
-			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOutSoftmax);
+			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
 			void multiHeadedAttn(std::size_t m);
 
 			void attention(std::size_t m);
 			void attention(Parallel& parallel);
+
+			void multiHeadedAttnBack(AttnLayer& attn, Parallel& parallel) {
+
+				mParallelHeads([&](Parallel::Section& section) {
+
+					const auto& [first, second] = section.mOffsets;
+					for (auto h : std::views::iota(first, second)) {
+
+						const auto headOffset = h * mHeadsPerDModel;
+
+						for (auto i : std::views::iota(0ULL, parallel.mSize)) {
+
+							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constViewT(h, i);
+							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.viewT(h, i);
+
+							const auto vOffset = mVOffset + headOffset;
+
+							Tensor::ConstView dzh = { mAttnZ.viewT(i).data() + headOffset, mHeadsPerDModel };
+
+							for (auto m : std::views::iota(0ULL, i+1 )) {
+
+								Tensor::ConstView vh = { attn.mCAttnActivations.constViewT(m).data() + vOffset, mHeadsPerDModel };
+								Tensor::View dvh = { mCAttnActivations.viewT(m).data() + vOffset, mHeadsPerDModel };
+
+								float factor = inputAttnOutSoftmax[m];
+								float dot = 0.0f;
+
+								for (const auto& [dv, dz, v] : std::views::zip( dvh, dzh, vh)) {
+									dv += factor * dz;
+									dot += v * dz;
+								}
+
+								outputAttnOutSoftmax[m] += dot;
+
+							}
+						
+						}
+					}
+					});
+			}
 
 			void residual(std::size_t i, const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor);
 			void residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel);
@@ -412,7 +455,9 @@ namespace NetworkLib {
 					+ MLP::getBackwardSize()
 					+ mDModel3 + mModel3Model
 					+ mDModel + mModelModel
-					+ mSeqModel;
+					+ mSeqModel
+					+ mSeqSeqHead
+					+ mSeqModel3;
 			}
 			void load(Floats::iterator& backwardSpace) {
 
@@ -427,8 +472,10 @@ namespace NetworkLib {
 				mCAttnWeight = { backwardSpace, mDModel, mDModel3 }; 
 				mCProjBias = { backwardSpace, mDModel }; 
 				mCProjWeight = { backwardSpace, mDModel, mDModel };
-
+				
 				mAttnZ = { backwardSpace, mDSeq, mDModel };
+				mAttnSoftmaxActivations = { backwardSpace, mDSeq, mDSeq, mHeadNum };
+				mCAttnActivations = { backwardSpace, mDSeq, mDModel3 };
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -446,6 +493,7 @@ namespace NetworkLib {
 				
 				GPT2::backward(mResidualActivation1, attn.mCProjWeight, mCProjWeight, mCProjBias, attn.mAttnZ, mAttnZ, parallel);
 
+				multiHeadedAttnBack(attn, parallel);
 			}
 		};
 

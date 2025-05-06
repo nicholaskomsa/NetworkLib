@@ -537,7 +537,7 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 
 	const auto kOffset = mKOffset + headOffset;
 
-	for (auto m : std::views::iota(0ULL, i + 1)) {
+	for (auto m : std::views::iota(0ULL, i+1)) {
 
 		Tensor::ConstView kh = { mCAttnActivations.viewT(m).data() + kOffset, mHeadsPerDModel };
 		float dot = 0.0f;
@@ -548,7 +548,7 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 		attnOut[m] = dot * r_sqrtHeadsPerDModel;
 	};
 }
-void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOutSoftmax) {
+void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax) {
 
 	//z-head is taken from the z-tensor, Z is for Activation
 	//v-head is taken from the v-tensor, V is for Value
@@ -558,7 +558,7 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 	Tensor::View zh = { mAttnZ.viewT(i).data() + headOffset, mHeadsPerDModel };
 	const auto vOffset = mVOffset + headOffset;
 
-	for (auto m : std::views::iota(0ULL, i + 1)) {
+	for (auto m : std::views::iota(0ULL, i+1)) {
 
 		Tensor::ConstView vh = { mCAttnActivations.viewT(m).data() + vOffset, mHeadsPerDModel };
 		float factor = attnOutSoftmax[m];
@@ -592,6 +592,7 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 				calculateQKAtten(headOffset, i, attnOut);
 				GPT2::softmax(i, attnOut, attnOutSoftmax);
 				calculateVAtten(headOffset, i, attnOutSoftmax);
+
 			}
 		}
 
@@ -1112,19 +1113,22 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumf(backward.mFinalLayer.mActivations, "-0.0403");
 		sumf(backward.mFinalLayer.mBias, "-0.0403");
 		sumf(backward.mFinalLayer.mWeight, "-0.5371");
-		sumf(backward.mAttnLayers.back().getOutput(), "-1.0-e08 on debug");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjBias, "0.4879f");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mCProjWeight, "348");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mGeluActivations, "58.9");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCActivations, "14.5");
-		sumAbsf(backward.mAttnLayers.back().mL2.mActivations, "54.6");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCWeight, "523.4");
-		sumAbsf(backward.mAttnLayers.back().mMLP.mCFCBias, "3.66");
-		sumAbsf(backward.mAttnLayers.back().mL2.mWeight, "5.93");
-		sumAbsf(backward.mAttnLayers.back().mL2.mBias, "11.73");
-		sumAbsf(backward.mAttnLayers.back().mResidualActivation1, "3.26");
-		sumAbsf(backward.mAttnLayers.back().mAttnZ, "10.85");
 
+		auto& attnBack = backward.mAttnLayers.back();
+
+		sumf(attnBack.getOutput(), "-1.0-e08 on debug");
+		sumAbsf(attnBack.mMLP.mCProjBias, "0.4879f");
+		sumAbsf(attnBack.mMLP.mCProjWeight, "348");
+		sumAbsf(attnBack.mMLP.mGeluActivations, "58.9");
+		sumAbsf(attnBack.mMLP.mCFCActivations, "14.5");
+		sumAbsf(attnBack.mL2.mActivations, "54.6");
+		sumAbsf(attnBack.mMLP.mCFCWeight, "523.4");
+		sumAbsf(attnBack.mMLP.mCFCBias, "3.66");
+		sumAbsf(attnBack.mL2.mWeight, "5.93");
+		sumAbsf(attnBack.mL2.mBias, "11.73");
+		sumAbsf(attnBack.mResidualActivation1, "3.26");
+		sumAbsf(attnBack.mAttnZ, "10.85");
+		sumAbsf(attnBack.mCAttnActivations.viewTBlock(), "3.116");
 		});
 
 }

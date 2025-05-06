@@ -105,7 +105,13 @@ struct Tensor {
 	float& at(std::size_t depth, std::size_t row, std::size_t col) {
 		return  mTensor[depth * (mY * mX) + row * mX + col];
 	}
+	const float& cat(std::size_t depth, std::size_t row, std::size_t col) const {
+		return  mTensor[depth * (mY * mX) + row * mX + col];
+	}
 	float& atT(std::size_t depth, std::size_t row, std::size_t col) {
+		return  mTensor[depth * (mY * mX) + col * mY + row];
+	}
+	const float& catT(std::size_t depth, std::size_t row, std::size_t col) const  {
 		return  mTensor[depth * (mY * mX) + col * mY + row];
 	}
 
@@ -136,9 +142,11 @@ struct Tensor {
 		return { &at(depth, row, 0), mX };
 	}
 	View viewT(std::size_t depth, std::size_t col) {
-		return { &at(depth, 0, col), mY };
+		return { &atT(depth, 0, col), mY };
 	}
-
+	ConstView constViewT(std::size_t depth, size_t col) const {
+		return { &catT(depth, 0, col), mY };
+	}
 	View view(std::size_t w, std::size_t z, std::size_t y) {
 		return { &at(w, z, y, 0), mX };
 	}
