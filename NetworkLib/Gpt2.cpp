@@ -533,13 +533,13 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 	//q and k are multiplied together and summed and scaled
 
 	const auto qOffset = mQOffset + headOffset;
-	Tensor::ConstView qh = { mCAttnActivations.viewT(i).data() + qOffset, mHeadsPerDModel };
+	Tensor::ConstView qh = Tensor::constField( mCAttnActivations.viewT(i), qOffset, mHeadsPerDModel );
 
 	const auto kOffset = mKOffset + headOffset;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView kh = { mCAttnActivations.viewT(m).data() + kOffset, mHeadsPerDModel };
+		Tensor::ConstView kh = Tensor::constField( mCAttnActivations.viewT(m), kOffset, mHeadsPerDModel );
 		float dot = 0.0f;
 
 		for (const auto& [q, k] : std::views::zip(qh, kh))
@@ -555,12 +555,12 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 	//for each word, accumulate the v-attention into the z-head
 	//v-attention is based on attention-softmax and v-head
 
-	Tensor::View zh = { mAttnZ.viewT(i).data() + headOffset, mHeadsPerDModel };
+	Tensor::View zh = Tensor::field( mAttnZ.viewT(i), headOffset, mHeadsPerDModel );
 	const auto vOffset = mVOffset + headOffset;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView vh = { mCAttnActivations.viewT(m).data() + vOffset, mHeadsPerDModel };
+		Tensor::ConstView vh = Tensor::constField(mCAttnActivations.viewT(m), vOffset, mHeadsPerDModel );
 		float factor = attnOutSoftmax[m];
 
 		for (const auto& [z, v] : std::views::zip(zh, vh))

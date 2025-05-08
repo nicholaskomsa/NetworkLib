@@ -10,7 +10,7 @@ struct Tensor {
 	//the third dimension is Z
 	//the fourth dimension is W
 	//TensorView is the multidimensional float data and is broken up into spannable segments depending on dimensionality.
-
+	using Floats = std::vector<float>;
 	using View = std::span<float>;
 	using ConstView = std::span<const float>;
 
@@ -22,7 +22,7 @@ struct Tensor {
 	Tensor(View floats, std::size_t x, std::size_t y = 0, std::size_t z = 0, std::size_t w = 0) 
 		: mTensor(floats), mX(x), mY(y), mZ(z), mW(w) {}
 
-	Tensor(std::vector<float>::iterator& begin, std::size_t x, std::size_t y = 0, std::size_t z =0, std::size_t w = 0)
+	Tensor(Floats::iterator& begin, std::size_t x, std::size_t y = 0, std::size_t z =0, std::size_t w = 0)
 		: mX(x), mY(y), mZ(z), mW(w) {
 
 		auto size = x;
@@ -52,6 +52,12 @@ struct Tensor {
 		return mX * mY * mZ * mW;
 	}
 
+	static View field(View view, std::size_t offset, std::size_t size) {
+		return { view.begin() + offset, size };
+	}
+	static ConstView constField(ConstView view, std::size_t offset, std::size_t size) {
+		return { view.cbegin() + offset, size };
+	}
 	View viewTBlock(std::size_t col) {
 
 		std::size_t offset = col * mY + mY;
@@ -97,15 +103,11 @@ struct Tensor {
 	float& atT(std::size_t row, std::size_t col) {
 		return  mTensor[col * mY + row];
 	}
-
 	const float& catT(std::size_t row, std::size_t col) const {
 		return mTensor[col * mY + row];
 	}
 
 	float& at(std::size_t depth, std::size_t row, std::size_t col) {
-		return  mTensor[depth * (mY * mX) + row * mX + col];
-	}
-	const float& cat(std::size_t depth, std::size_t row, std::size_t col) const {
 		return  mTensor[depth * (mY * mX) + row * mX + col];
 	}
 	float& atT(std::size_t depth, std::size_t row, std::size_t col) {
@@ -122,7 +124,6 @@ struct Tensor {
 	View view() {
 		return { &at(0), mX };
 	}
-	
 	ConstView constView() const {
 		return { &cat(0), mX };
 	}
@@ -133,7 +134,6 @@ struct Tensor {
 	View viewT(size_t col)  {
 		return { &atT(0, col), mY };
 	}
-
 	ConstView constViewT(size_t col) const {
 		return { &catT(0, col), mY };
 	}
@@ -147,6 +147,8 @@ struct Tensor {
 	ConstView constViewT(std::size_t depth, size_t col) const {
 		return { &catT(depth, 0, col), mY };
 	}
+
+
 	View view(std::size_t w, std::size_t z, std::size_t y) {
 		return { &at(w, z, y, 0), mX };
 	}

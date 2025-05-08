@@ -38,8 +38,8 @@ namespace NetworkLib {
 			, mModel3Model = mDModel3 * mDModel
 			, mModelModel = mDModel * mDModel;
 
-		using Floats = std::vector<float>;
 
+		using Floats = Tensor::Floats;
 		using Token = std::uint16_t;
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
@@ -386,6 +386,33 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
+			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
+
+				const auto vOffset = mVOffset + headOffset;
+				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.viewT(i), headOffset, mHeadsPerDModel );
+
+				Tensor::View dvh;
+				float factor, dot;
+
+				for (auto m : std::views::iota(0ULL, i + 1)) {
+
+					vh = Tensor::constField(attn.mCAttnActivations.constViewT(m), vOffset, mHeadsPerDModel);
+					dvh = Tensor::field( mCAttnActivations.viewT(m), vOffset, mHeadsPerDModel );
+
+					factor = inputAttnOutSoftmax[m];
+					dot = 0.0f;
+
+					for (const auto& [dv, dz, v] : std::views::zip(dvh, dzh, vh)) {
+						dv += factor * dz;
+						dot += v * dz;
+					}
+
+					outputAttnOutSoftmax[m] += dot;
+				}
+			}
+
+
+
 			void multiHeadedAttn(std::size_t m);
 
 			void attention(std::size_t m);
@@ -405,27 +432,7 @@ namespace NetworkLib {
 							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constViewT(h, i);
 							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.viewT(h, i);
 
-							const auto vOffset = mVOffset + headOffset;
-
-							Tensor::ConstView dzh = { mAttnZ.viewT(i).data() + headOffset, mHeadsPerDModel };
-
-							for (auto m : std::views::iota(0ULL, i+1 )) {
-
-								Tensor::ConstView vh = { attn.mCAttnActivations.constViewT(m).data() + vOffset, mHeadsPerDModel };
-								Tensor::View dvh = { mCAttnActivations.viewT(m).data() + vOffset, mHeadsPerDModel };
-
-								float factor = inputAttnOutSoftmax[m];
-								float dot = 0.0f;
-
-								for (const auto& [dv, dz, v] : std::views::zip( dvh, dzh, vh)) {
-									dv += factor * dz;
-									dot += v * dz;
-								}
-
-								outputAttnOutSoftmax[m] += dot;
-
-							}
-						
+							backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
 						}
 					}
 					});
