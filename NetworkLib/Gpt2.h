@@ -126,7 +126,7 @@ namespace NetworkLib {
 		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
 
-			auto dWeightsBlock = dWeights.viewTBlock();
+			auto dWeightsBlock = dWeights.viewBlock();
 			std::fill(dWeightsBlock.begin(), dWeightsBlock.end(), 0.0f);
 			auto dBiasView = dBias.view();
 			std::fill(dBiasView.begin(), dBiasView.end(), 0.0f);
@@ -148,18 +148,18 @@ namespace NetworkLib {
 				auto [first, second] = section.mOffsets;
 				for (auto i : std::views::iota(first, second)) {
 
-					dOutput = dOutputs.constViewT(i);
+					dOutput = dOutputs.constView(i);
 
 					for (const auto& [b, o] : std::views::zip(pdBias, dOutput))
 						b += o;
 
-					activations = inActivations.constViewT(i);
-					dActivations = outActivations.viewT(i);
+					activations = inActivations.constView(i);
+					dActivations = outActivations.view(i);
 
 					for (auto m : std::views::iota(0ULL, activations.size())) {
 
-						weight = weights.constViewT(m);
-						pdWeight = pdWeights.viewT(m);
+						weight = weights.constView(m);
+						pdWeight = pdWeights.view(m);
 
 						float in = activations[m];
 
@@ -182,7 +182,7 @@ namespace NetworkLib {
 				for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
 					b += pb;
 
-				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewTBlock()))
+				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewBlock()))
 					w += pw;
 
 
@@ -240,10 +240,10 @@ namespace NetworkLib {
 						const auto& [first, second] = section.mOffsets;
 						for (auto i : std::views::iota(first, second)) {
 
-							inputs = forwardCFCs.constViewT(i);
-							cdfs = forwardCDFs.constViewT(i);
-							dGelu = dGelus.constViewT(i);
-							dInputs = dCFCs.viewT(i);
+							inputs = forwardCFCs.constView(i);
+							cdfs = forwardCDFs.constView(i);
+							dGelu = dGelus.constView(i);
+							dInputs = dCFCs.view(i);
 
 							for (const auto& [dout, in, din, cdf] : std::views::zip(dGelu, inputs, dInputs, cdfs)) {
 
@@ -318,9 +318,9 @@ namespace NetworkLib {
 					auto [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
-						dOut = dActivations.constViewT(i);
-						input = inputs.constViewT(i);
-						dInput = dInputs.viewT(i);
+						dOut = dActivations.constView(i);
+						input = inputs.constView(i);
+						dInput = dInputs.view(i);
 
 						float mean = means[i]
 							, rStdDev = rStdDevs[i]
@@ -389,15 +389,14 @@ namespace NetworkLib {
 			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
 
 				const auto vOffset = mVOffset + headOffset;
-				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.viewT(i), headOffset, mHeadsPerDModel );
-
+				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.view(i), headOffset, mHeadsPerDModel );
 				Tensor::View dvh;
 				float factor, dot;
 
-				for (auto m : std::views::iota(0ULL, i + 1)) {
+				for (auto m : std::views::iota(0ULL, i+1)) {
 
-					vh = Tensor::constField(attn.mCAttnActivations.constViewT(m), vOffset, mHeadsPerDModel);
-					dvh = Tensor::field( mCAttnActivations.viewT(m), vOffset, mHeadsPerDModel );
+					vh = Tensor::constField(attn.mCAttnActivations.constView(m), vOffset, mHeadsPerDModel);
+					dvh = Tensor::field( mCAttnActivations.view(m), vOffset, mHeadsPerDModel );
 
 					factor = inputAttnOutSoftmax[m];
 					dot = 0.0f;
@@ -429,8 +428,8 @@ namespace NetworkLib {
 
 						for (auto i : std::views::iota(0ULL, parallel.mSize)) {
 
-							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constViewT(h, i);
-							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.viewT(h, i);
+							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constView(h, i);
+							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i);
 
 							backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
 						}
@@ -443,9 +442,9 @@ namespace NetworkLib {
 		
 			void residualBack(const Tensor& a, const Tensor& b, Tensor& outputTensor) {
 
-				Tensor::ConstView aBlock = a.constViewTBlock()
-					, bBlock = b.constViewTBlock();
-				Tensor::View outputBlock = outputTensor.viewTBlock();
+				Tensor::ConstView aBlock = a.constViewBlock()
+					, bBlock = b.constViewBlock();
+				Tensor::View outputBlock = outputTensor.viewBlock();
 
 				std::transform(std::execution::par_unseq, aBlock.begin(), aBlock.end(), bBlock.begin(), outputBlock.begin(), [](auto a, auto b) {return a + b; });
 			}
@@ -586,7 +585,7 @@ namespace NetworkLib {
 
 				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 
-				auto softmaxBlock = forwardSoftmax.viewTBlock(nextTokens.size() - 1);
+				auto softmaxBlock = forwardSoftmax.viewBlock(nextTokens.size() - 1);
 				std::copy(softmaxBlock.begin(), softmaxBlock.end(), mUnembed.mTensor.begin());
 
 				Token token;
@@ -594,7 +593,7 @@ namespace NetworkLib {
 
 				for (auto i : std::views::iota(0ULL, nextTokens.size())) {
 
-					unembed = mUnembed.viewT(i);
+					unembed = mUnembed.view(i);
 					token = nextTokens[i];
 
 					unembed[token] -= 1.0f;
@@ -603,14 +602,14 @@ namespace NetworkLib {
 
 				Tensor& inputs = forward.mFinalLayer.getActivations();
 				Tensor& dInputs = mFinalLayer.getActivations();
-				Tensor::View dInputsBlock = dInputs.viewTBlock(nextTokens.size() - 1);
+				Tensor::View dInputsBlock = dInputs.viewBlock(nextTokens.size() - 1);
 
 				std::fill(dInputsBlock.begin(), dInputsBlock.end(), 0.0f);
 
 				Tensor& wte = forward.mWteWeight;
 				Tensor& dWte = mWteWeight;
 
-				Tensor::View dWteBlock = dWte.viewTBlock(dWte.mY - 1);
+				Tensor::View dWteBlock = dWte.viewBlock(dWte.mY - 1);
 				std::fill(dWteBlock.begin(), dWteBlock.end(), 0.0f);
 
 				const float r_tokens = 1.0f / nextTokens.size();
@@ -627,15 +626,15 @@ namespace NetworkLib {
 					auto& [first, second] = section.mOffsets;
 					for (auto i : std::views::iota(first, second)) {
 
-						output = mUnembed.viewT(i);
-						dInput = dInputs.viewT(i);
-						input = inputs.viewT(i);
+						output = mUnembed.view(i);
+						dInput = dInputs.view(i);
+						input = inputs.view(i);
 
 						for (auto m : std::views::iota(0ULL, output.size())) {
 
 							float o = output[m];
-							weight = wte.viewT(m);
-							dWeight = pdWeights.viewT(m);
+							weight = wte.view(m);
+							dWeight = pdWeights.view(m);
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;

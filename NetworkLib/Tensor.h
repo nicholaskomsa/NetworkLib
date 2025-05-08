@@ -58,37 +58,35 @@ struct Tensor {
 	static ConstView constField(ConstView view, std::size_t offset, std::size_t size) {
 		return { view.cbegin() + offset, size };
 	}
-	View viewTBlock(std::size_t col) {
+
+	View viewBlock(std::size_t col) {
 
 		std::size_t offset = col * mY + mY;
 		auto begin = mTensor.begin();
 		auto end = std::next(begin, offset);
 		return { begin, end };
 	}
-
-	ConstView constViewTBlock(std::size_t col) const {
+	ConstView constViewBlock(std::size_t col) const {
 
 		std::size_t offset = col * mY + mY;
 		auto begin = mTensor.begin();
 		auto end = std::next(begin, offset);
 		return { begin, end };
 	}
-	ConstView constViewTBlock() const {
+	ConstView constViewBlock() const {
 
 		std::size_t offset = mX * mY;
 		auto begin = mTensor.begin();
 		auto end = std::next(begin, offset);
 		return { begin, end };
 	}
-
-	View viewTBlock() {
+	View viewBlock() {
 
 		std::size_t offset = mX * mY;
 		auto begin = mTensor.begin();
 		auto end = std::next(begin, offset);
 		return { begin, end };
 	}
-
 
 	float& at(std::size_t col) {
 		return mTensor[col];
@@ -98,22 +96,17 @@ struct Tensor {
 	}
 
 	float& at(std::size_t row, std::size_t col) {
-		return  mTensor[row * mX + col];
-	}
-	float& atT(std::size_t row, std::size_t col) {
 		return  mTensor[col * mY + row];
 	}
-	const float& catT(std::size_t row, std::size_t col) const {
+	const float& cat(std::size_t row, std::size_t col) const {
 		return mTensor[col * mY + row];
 	}
 
+
 	float& at(std::size_t depth, std::size_t row, std::size_t col) {
-		return  mTensor[depth * (mY * mX) + row * mX + col];
-	}
-	float& atT(std::size_t depth, std::size_t row, std::size_t col) {
 		return  mTensor[depth * (mY * mX) + col * mY + row];
 	}
-	const float& catT(std::size_t depth, std::size_t row, std::size_t col) const  {
+	const float& cat(std::size_t depth, std::size_t row, std::size_t col) const  {
 		return  mTensor[depth * (mY * mX) + col * mY + row];
 	}
 
@@ -128,30 +121,17 @@ struct Tensor {
 		return { &cat(0), mX };
 	}
 
-	View view(std::size_t row) {
-		return { &at(row,0), mX };
+	View view(size_t col)  {
+		return { &at(0, col), mY };
 	}
-	View viewT(size_t col)  {
-		return { &atT(0, col), mY };
-	}
-	ConstView constViewT(size_t col) const {
-		return { &catT(0, col), mY };
+	ConstView constView(size_t col) const {
+		return { &cat(0, col), mY };
 	}
 
-	View view(std::size_t depth, std::size_t row) {
-		return { &at(depth, row, 0), mX };
+	View view(std::size_t depth, std::size_t col) {
+		return { &at(depth, 0, col), mY };
 	}
-	View viewT(std::size_t depth, std::size_t col) {
-		return { &atT(depth, 0, col), mY };
+	ConstView constView(std::size_t depth, size_t col) const {
+		return { &cat(depth, 0, col), mY };
 	}
-	ConstView constViewT(std::size_t depth, size_t col) const {
-		return { &catT(depth, 0, col), mY };
-	}
-
-
-	View view(std::size_t w, std::size_t z, std::size_t y) {
-		return { &at(w, z, y, 0), mX };
-	}
-
-
 };

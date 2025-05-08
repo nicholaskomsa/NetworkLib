@@ -328,9 +328,9 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 	
 	//this is a "matrix * vector + vector" or "fully connected" aka "forward" o += w * i + b
 
-	Tensor::ConstView input = inputTensor.constViewT(i)
+	Tensor::ConstView input = inputTensor.constView(i)
 		, b = biasTensor.constView();
-	Tensor::View output = outputTensor.viewT(i);
+	Tensor::View output = outputTensor.view(i);
 
 	//a fully connected input and output with a bias
 	//identical to forward except for paralleled for i sample
@@ -348,7 +348,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 
 			const auto& in = input[m];
 
-			for (const auto& [o, w] : std::views::zip(outputs, weightTensor.constViewT(m)))
+			for (const auto& [o, w] : std::views::zip(outputs, weightTensor.constView(m)))
 				o += w * in;
 		}
 
@@ -375,8 +375,8 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 
 			//a fully connected input and output with a bias
 
-			input = inputTensor.constViewT(i);
-			output = outputTensor.viewT(i);
+			input = inputTensor.constView(i);
+			output = outputTensor.view(i);
 
 			std::copy(b.begin(), b.end(), output.begin());
 
@@ -386,7 +386,7 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 			for (auto m : std::views::iota(0ULL, input.size())) {
 
 				in = input[m];
-				weights = weightTensor.constViewT(m);
+				weights = weightTensor.constView(m);
 
 				for (const auto& [o, w] : std::views::zip(output, weights))
 					o += w * in;
@@ -426,9 +426,9 @@ void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 			const auto& [first, second] = section.mOffsets;
 			for (auto i : std::views::iota(first, second)) {
 
-				auto cfcActivations = mCFCActivations.viewT(i);
-				auto gelu = mGeluActivations.viewT(i);
-				auto cdf = mGeluCDF.viewT(i);
+				auto cfcActivations = mCFCActivations.view(i);
+				auto gelu = mGeluActivations.view(i);
+				auto cdf = mGeluCDF.view(i);
 
 				for (const auto& [cfc, gelu, cdf] : std::views::zip(cfcActivations, gelu, cdf)) {
 
@@ -448,7 +448,7 @@ void GPT2::MLP::forward(std::size_t i, const Tensor& input, Parallel& parallel) 
 	//should be pre-sectioned earlier
 	GPT2::forward(i, input, mCFCActivations, mCFCWeight, mCFCBias, parallel);
 
-	Tensor::View mlpActivations = mCFCActivations.viewT(i), geluActivations = mGeluActivations.viewT(i);
+	Tensor::View mlpActivations = mCFCActivations.view(i), geluActivations = mGeluActivations.view(i);
 
 	std::transform(std::execution::par_unseq, mlpActivations.begin(), mlpActivations.end(), geluActivations.begin(),
 		[&](auto x) {
@@ -492,8 +492,8 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 	//the connect is linear rather than full-connect (+=), between normalized input and output
 	//o = norm * w + b
 
-	Tensor::ConstView in = input.constViewT(m);
-	Tensor::View out = mActivations.viewT(m);
+	Tensor::ConstView in = input.constView(m);
+	Tensor::View out = mActivations.view(m);
 
 	const auto mean = std::reduce(in.begin(), in.end()) / in.size();
 	mMean[m] = mean;
@@ -533,13 +533,13 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 	//q and k are multiplied together and summed and scaled
 
 	const auto qOffset = mQOffset + headOffset;
-	Tensor::ConstView qh = Tensor::constField( mCAttnActivations.viewT(i), qOffset, mHeadsPerDModel );
+	Tensor::ConstView qh = Tensor::constField( mCAttnActivations.view(i), qOffset, mHeadsPerDModel );
 
 	const auto kOffset = mKOffset + headOffset;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView kh = Tensor::constField( mCAttnActivations.viewT(m), kOffset, mHeadsPerDModel );
+		Tensor::ConstView kh = Tensor::constField( mCAttnActivations.view(m), kOffset, mHeadsPerDModel );
 		float dot = 0.0f;
 
 		for (const auto& [q, k] : std::views::zip(qh, kh))
@@ -555,12 +555,12 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 	//for each word, accumulate the v-attention into the z-head
 	//v-attention is based on attention-softmax and v-head
 
-	Tensor::View zh = Tensor::field( mAttnZ.viewT(i), headOffset, mHeadsPerDModel );
+	Tensor::View zh = Tensor::field( mAttnZ.view(i), headOffset, mHeadsPerDModel );
 	const auto vOffset = mVOffset + headOffset;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView vh = Tensor::constField(mCAttnActivations.viewT(m), vOffset, mHeadsPerDModel );
+		Tensor::ConstView vh = Tensor::constField(mCAttnActivations.view(m), vOffset, mHeadsPerDModel );
 		float factor = attnOutSoftmax[m];
 
 		for (const auto& [z, v] : std::views::zip(zh, vh))
@@ -586,8 +586,8 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 
 			for(auto i : std::views::iota(0ULL, m + 1) ) {
 
-				Tensor::View attnOut = mAttnActivations.viewT(h, i)
-					, attnOutSoftmax = mAttnSoftmaxActivations.viewT(h, i);
+				Tensor::View attnOut = mAttnActivations.view(h, i)
+					, attnOutSoftmax = mAttnSoftmaxActivations.view(h, i);
 
 				calculateQKAtten(headOffset, i, attnOut);
 				GPT2::softmax(i, attnOut, attnOutSoftmax);
@@ -600,7 +600,7 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 }
 void GPT2::AttnLayer::attention(std::size_t m ) {
 
-	Tensor::View z = mAttnZ.viewT(m);
+	Tensor::View z = mAttnZ.view(m);
 	std::fill(z.begin(), z.end(), 0.0f);
 
 	multiHeadedAttn(m);
@@ -609,7 +609,7 @@ void GPT2::AttnLayer::attention(Parallel& parallel) {
 
 	auto m = parallel.mSize - 1;
 
-	auto activations = mAttnZ.viewTBlock(m);
+	auto activations = mAttnZ.viewBlock(m);
 
 	//activations z cleared here, attention generates mAttnZ (activations)
 	std::fill(activations.begin(), activations.end(), 0.0f);
@@ -620,7 +620,7 @@ void GPT2::AttnLayer::residual(std::size_t i, const Tensor& inputTensor, const T
 	
 	//a residual is the sum of the input and the projection
 
-	for (const auto& [out, p, in] : std::views::zip(residualTensor.viewT(i), projectionTensor.constViewT(i), inputTensor.constViewT(i)))
+	for (const auto& [out, p, in] : std::views::zip(residualTensor.view(i), projectionTensor.constView(i), inputTensor.constView(i)))
 		out = p + in;
 }
 void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel) {
@@ -723,9 +723,9 @@ void GPT2::Forward::embedInput(std::size_t i, Token token) {
 	//weight token embed, weight position embed
 	//generates an activation combining token and position
 
-	wte = mWteWeight.viewT(token);
-	wpe = mWpeWeight.viewT(i);
-	wActivations = mWActivations.viewT(i);
+	wte = mWteWeight.view(token);
+	wpe = mWpeWeight.view(i);
+	wActivations = mWActivations.view(i);
 
 	for (const auto& [a, t, p] : std::views::zip(wActivations, wte, wpe))
 		a = t + p;
@@ -751,8 +751,8 @@ void GPT2::Forward::unEmbedOutput(std::size_t i ) {
 	//weight token embed seen in embedInput
 	//input is the output of earlier forward process
 
-	input = mFinalLayer.getActivations().viewT(i);
-	output = mUnembedActivations.viewT(i);
+	input = mFinalLayer.getActivations().view(i);
+	output = mUnembedActivations.view(i);
 
 	mParallelI.section(mUnembedActivations.mY);
 	mParallelI([&](Parallel::Section& section) {
@@ -760,7 +760,7 @@ void GPT2::Forward::unEmbedOutput(std::size_t i ) {
 		auto [first, second] = section.mOffsets;
 		for( auto m : std::views::iota(first, second)){
 
-			wte = mWteWeight.viewT(m);
+			wte = mWteWeight.view(m);
 
 			float sum = 0.0f;
 
@@ -787,12 +787,12 @@ void GPT2::Forward::unEmbedOutputs() {
 			//weight token embed seen in embedInput
 			//input is the output of earlier forward process
 
-			input = mFinalLayer.getActivations().viewT(i);
-			output = mUnembedActivations.viewT(i);
+			input = mFinalLayer.getActivations().view(i);
+			output = mUnembedActivations.view(i);
 
 			for (auto m : std::views::iota(0ULL, output.size())) {
 
-				wte = mWteWeight.viewT(m);
+				wte = mWteWeight.view(m);
 
 				float dot = 0.0f;
 
@@ -879,8 +879,8 @@ float GPT2::Forward::crossEntropyLoss(TokensView nextTokens) {
 		auto& [first, second] = section.mOffsets;
 		for (auto i : std::views::iota(first, second)) {
 
-			unembed = mUnembedActivations.viewT(i);
-			unembedSoftmax = mUnembedActivationsSoftmax.viewT(i);
+			unembed = mUnembedActivations.view(i);
+			unembedSoftmax = mUnembedActivationsSoftmax.view(i);
 
 			GPT2::softmax(mUnembedActivations.mY - 1, unembed, unembedSoftmax);
 		}
@@ -892,7 +892,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView nextTokens) {
 	for (auto i : std::views::iota(0ULL, nextTokens.size())) {
 
 		Token expected = nextTokens[i];
-		unembedSoftmax = mUnembedActivationsSoftmax.viewT(i);
+		unembedSoftmax = mUnembedActivationsSoftmax.view(i);
 
 		float expectedSoftmax = unembedSoftmax[expected];
 
@@ -908,7 +908,7 @@ GPT2::Token GPT2::Forward::getPrediction(std::size_t i) const {
 	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
 	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
 
-	auto unembedActivations = mUnembedActivations.constViewT(i);
+	auto unembedActivations = mUnembedActivations.constView(i);
 	auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
 	Token predicted = std::distance(unembedActivations.begin(), selected);
 
@@ -1128,7 +1128,7 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumAbsf(attnBack.mL2.mBias, "11.73");
 		sumAbsf(attnBack.mResidualActivation1, "3.26");
 		sumAbsf(attnBack.mAttnZ, "10.85");
-		sumAbsf(attnBack.mCAttnActivations.viewTBlock(), "3.116");
+		sumAbsf(attnBack.mCAttnActivations.viewBlock(), "3.116");
 		});
 
 }
