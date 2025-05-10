@@ -533,14 +533,15 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 	//q and k are multiplied together and summed and scaled
 
 	const auto qOffset = mQOffset + headOffset;
-	Tensor::ConstView qh = Tensor::constField( mCAttnActivations.view(i), qOffset, mHeadsPerDModel );
+	Tensor::ConstView kh, qh = Tensor::constField( mCAttnActivations.view(i), qOffset, mHeadsPerDModel );
 
 	const auto kOffset = mKOffset + headOffset;
+	float dot;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView kh = Tensor::constField( mCAttnActivations.view(m), kOffset, mHeadsPerDModel );
-		float dot = 0.0f;
+		kh = Tensor::constField( mCAttnActivations.view(m), kOffset, mHeadsPerDModel );
+		dot = 0.0f;
 
 		for (const auto& [q, k] : std::views::zip(qh, kh))
 			dot += q * k;
@@ -557,11 +558,13 @@ void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Ten
 
 	Tensor::View zh = Tensor::field( mAttnZ.view(i), headOffset, mHeadsPerDModel );
 	const auto vOffset = mVOffset + headOffset;
+	Tensor::ConstView vh;
+	float factor;
 
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
-		Tensor::ConstView vh = Tensor::constField(mCAttnActivations.view(m), vOffset, mHeadsPerDModel );
-		float factor = attnOutSoftmax[m];
+		vh = Tensor::constField(mCAttnActivations.view(m), vOffset, mHeadsPerDModel );
+		factor = attnOutSoftmax[m];
 
 		for (const auto& [z, v] : std::views::zip(zh, vh))
 			z += v * factor;
@@ -1128,7 +1131,11 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumAbsf(attnBack.mL2.mBias, "11.73");
 		sumAbsf(attnBack.mResidualActivation1, "3.26");
 		sumAbsf(attnBack.mAttnZ, "10.85");
-		sumAbsf(attnBack.mCAttnActivations.viewBlock(), "3.116");
+		//sumAbsf(attnBack.mCAttnActivations.viewBlock(), "3.116");
+		attnSumAbsf(attnBack.mCAttnActivations, mVOffset, "3.116");
+		attnSumAbsf(attnBack.mCAttnActivations, mKOffset, "--");
+		attnSumAbsf(attnBack.mCAttnActivations, mQOffset, "--");
+		sumAbsf(attnBack.mCAttnActivations.viewBlock(), "6.96");
 		});
 
 }

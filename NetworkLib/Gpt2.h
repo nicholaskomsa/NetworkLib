@@ -100,7 +100,7 @@ namespace NetworkLib {
 			static double sumf(const Tensor& tensor, std::string_view expected) {
 				return sumf(tensor.mTensor, expected);
 			}
-			static double sumAbsf(const Tensor::View& tensor, std::string_view expected) {
+			static double sumAbsf(Tensor::ConstView tensor, std::string_view expected) {
 				double sum = std::reduce(tensor.begin(), tensor.end(), double(0.0), [](double a, float b) {return a + std::abs(b); });
 				std::print("{}=={}\n", expected, sum);
 				return sum;
@@ -108,7 +108,32 @@ namespace NetworkLib {
 			static double sumAbsf(const Tensor& tensor, std::string_view expected) {
 				return sumAbsf(tensor.mTensor, expected);
 			}
+			static double attnSumAbsf(const Tensor& tensor, std::size_t offset, std::string_view expected) {
 
+				auto inputs = std::views::iota(0ULL, mTestInputSize);
+
+				double fieldSum = std::reduce( inputs.begin(), inputs.end(), 0.0, [&](double sum, auto i) {
+					
+					auto tensorView = tensor.constView(i);
+
+					double sum2 = sum;
+
+					for( auto h : std::views::iota(0ULL, mHeadNum) ) {
+
+						auto headOffset = h * mHeadsPerDModel;
+
+						auto fieldView = Tensor::constField(tensorView, headOffset + offset, mHeadsPerDModel);
+
+						sum2 = std::reduce(fieldView.begin(), fieldView.end(), sum2, [](double sum2, float f) {return sum2 + std::abs(f); });
+					}
+
+					return sum2;
+				});
+
+				std::print("{}=={}\n", expected, fieldSum);
+				return fieldSum;
+			}
+		
 			void firstCitizenTest64();
 			void feedForwardSpeed1024();
 			void simpleChat();
@@ -187,6 +212,17 @@ namespace NetworkLib {
 
 
 			});
+		}
+		static void softmaxBack(std::size_t i, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax, float softmaxSum) {
+
+			float factor, dfactor;
+			for (auto m : std::views::iota(0ULL, i + 1)) {
+
+				factor = input[m];
+				dfactor = output[m];
+
+				dSoftmax[m] = factor * (dfactor - softmaxSum);
+			}
 		}
 
 		class MLP {
@@ -386,12 +422,14 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
-			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
+			float backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
 
 				const auto vOffset = mVOffset + headOffset;
 				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.view(i), headOffset, mHeadsPerDModel );
 				Tensor::View dvh;
 				float factor, dot;
+
+				float softmaxSum = 0.0f;
 
 				for (auto m : std::views::iota(0ULL, i+1)) {
 
@@ -407,11 +445,34 @@ namespace NetworkLib {
 					}
 
 					outputAttnOutSoftmax[m] += dot;
+
+					softmaxSum += dot * factor;
+				}
+
+				return softmaxSum;
+			}
+			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView attnActivations) {
+
+				const auto qOffset = mQOffset + headOffset;
+				Tensor::ConstView kh, qh = Tensor::constField(attn.mCAttnActivations.constView(i), qOffset, mHeadsPerDModel);
+				Tensor::View dkh, dqh = Tensor::field(mCAttnActivations.view(i), qOffset, mHeadsPerDModel);
+
+				float o;
+				const auto kOffset = mKOffset + headOffset;
+
+				for (auto m : std::views::iota(0ULL, i + 1)) {
+
+					kh = Tensor::constField(attn.mCAttnActivations.constView(m), kOffset, mHeadsPerDModel);
+					dkh = Tensor::field(mCAttnActivations.view(m), kOffset, mHeadsPerDModel);
+					o = attnActivations[m];
+
+					for (const auto& [q, dq, k, dk] : std::views::zip(qh, dqh, kh, dkh)) {
+
+						dq += o * k * r_sqrtHeadsPerDModel;
+						dk += o * q * r_sqrtHeadsPerDModel;
+					}
 				}
 			}
-
-
-
 			void multiHeadedAttn(std::size_t m);
 
 			void attention(std::size_t m);
@@ -429,9 +490,14 @@ namespace NetworkLib {
 						for (auto i : std::views::iota(0ULL, parallel.mSize)) {
 
 							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constView(h, i);
-							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i);
+							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i)
+								, attnActivations = mAttnActivations.view(h, i);
 
-							backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
+							float softmaxSum = backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
+							
+							softmaxBack(i, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations, softmaxSum);
+
+							backwardQKAtten(attn, headOffset, i, attnActivations);
 						}
 					}
 					});
@@ -462,7 +528,7 @@ namespace NetworkLib {
 					+ mDModel3 + mModel3Model
 					+ mDModel + mModelModel
 					+ mSeqModel
-					+ mSeqSeqHead
+					+ mSeqSeqHead*2
 					+ mSeqModel3;
 			}
 			void load(Floats::iterator& backwardSpace) {
@@ -482,6 +548,8 @@ namespace NetworkLib {
 				mAttnZ = { backwardSpace, mDSeq, mDModel };
 				mAttnSoftmaxActivations = { backwardSpace, mDSeq, mDSeq, mHeadNum };
 				mCAttnActivations = { backwardSpace, mDSeq, mDModel3 };
+
+				mAttnActivations = { backwardSpace, mDSeq, mDSeq, mHeadNum };
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
