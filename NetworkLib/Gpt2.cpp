@@ -1107,7 +1107,7 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		backward.setup(&gpt2.mForward);
 
-		backward.backward(nextTokens);
+		backward.backward(tokens, nextTokens);
 
 		std::println("results:");
 
@@ -1131,11 +1131,24 @@ void GPT2::Diagnostics::backwardTest64() {
 		sumAbsf(attnBack.mL2.mBias, "11.73");
 		sumAbsf(attnBack.mResidualActivation1, "3.26");
 		sumAbsf(attnBack.mAttnZ, "10.85");
-		//sumAbsf(attnBack.mCAttnActivations.viewBlock(), "3.116");
 		attnSumAbsf(attnBack.mCAttnActivations, mVOffset, "3.116");
 		attnSumAbsf(attnBack.mCAttnActivations, mKOffset, "--");
 		attnSumAbsf(attnBack.mCAttnActivations, mQOffset, "--");
-		sumAbsf(attnBack.mCAttnActivations.viewBlock(), "6.96");
+		sumAbsf(attnBack.mCAttnActivations, "6.96");
+		sumAbsf(attnBack.mCAttnWeight, "297");
+		sumAbsf(attnBack.mCAttnBias, "2.53");
+		sumAbsf(attnBack.mL1.mActivations, "24.27");
+		sumAbsf(attnBack.mL1.mWeight, "2.54");
+		sumAbsf(attnBack.mL1.mBias, "8.4");
+		sumAbsf(attnBack.mResidualActivation1Out, "1.06");
+
+
+		auto& attnPrev = *(backward.mAttnLayers.rbegin() + 1);
+		sumAbsf(attnPrev.getOutput(), "3.6");
+
+		sumAbsf(backward.mWActivations, "262.7");
+		sumAbsf(backward.mWte, "922");
+
 		});
 
 }

@@ -460,7 +460,7 @@ namespace NetworkLib {
 				float o;
 				const auto kOffset = mKOffset + headOffset;
 
-				for (auto m : std::views::iota(0ULL, i + 1)) {
+				for (auto m : std::views::iota(0ULL, i+1)) {
 
 					kh = Tensor::constField(attn.mCAttnActivations.constView(m), kOffset, mHeadsPerDModel);
 					dkh = Tensor::field(mCAttnActivations.view(m), kOffset, mHeadsPerDModel);
@@ -550,6 +550,8 @@ namespace NetworkLib {
 				mCAttnActivations = { backwardSpace, mDSeq, mDModel3 };
 
 				mAttnActivations = { backwardSpace, mDSeq, mDSeq, mHeadNum };
+
+				mL1.load(backwardSpace);
 			}
 
 			Tensor& forward(const Tensor& inputTensor, Parallel& parallel);
@@ -557,7 +559,7 @@ namespace NetworkLib {
 
 			Tensor& getOutput() { return mResidualActivation2; } 
 		
-			void backward( AttnLayer& attn, Parallel& parallel) {
+			void backward( AttnLayer& attn, const Tensor& forwardResidual2, Tensor& residual2, Parallel& parallel) {
 
 				mMLP.backward(attn.mMLP, attn.mL2.getActivations(), mResidualActivation2, mL2.mActivations, parallel);
 				
@@ -568,6 +570,14 @@ namespace NetworkLib {
 				GPT2::backward(mResidualActivation1, attn.mCProjWeight, mCProjWeight, mCProjBias, attn.mAttnZ, mAttnZ, parallel);
 
 				multiHeadedAttnBack(attn, parallel);
+
+				GPT2::backward(mCAttnActivations, attn.mCAttnWeight, mCAttnWeight, mCAttnBias, attn.mL1.mActivations, mL1.mActivations, parallel);
+
+				mL1.backward(attn.mL1, forwardResidual2, mResidualActivation1Out, parallel);
+
+				residualBack(mResidualActivation1Out, mResidualActivation1, residual2);
+
+
 			}
 		};
 
@@ -613,7 +623,7 @@ namespace NetworkLib {
 
 			Floats mBackwardSpace;
 
-			Tensor mUnembed, mWteWeight;
+			Tensor mUnembed, mWteWeight, mWActivations, mWte, mWpe;
 
 			LinearLayer mFinalLayer;
 
@@ -631,7 +641,9 @@ namespace NetworkLib {
 
 				mBackwardSpace.resize(mSeqVocab + mVocabModel 
 					+ LinearLayer::getBackwardSize()
-					+ AttnLayer::getBackwardSize() * mAttnLayersNum);
+					+ AttnLayer::getBackwardSize() * mAttnLayersNum
+					+ mSeqModel*2
+					+ mVocabModel);
 
 				auto backwardSpace = mBackwardSpace.begin();
 				
@@ -642,6 +654,10 @@ namespace NetworkLib {
 				for( auto& attnLayer : mAttnLayers ) 
 					attnLayer.load(backwardSpace);
 				
+				mWActivations = { backwardSpace, mDSeq, mDModel };
+				mWpe = { backwardSpace, mDSeq, mDModel };
+				mWte = { backwardSpace, mDVocab, mDModel };
+
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
@@ -730,7 +746,7 @@ namespace NetworkLib {
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
 
-			void backward(TokensView nextTokens) {
+			void backward(TokensView tokens, TokensView nextTokens) {
 
 				auto& forward = *mForward;
 				auto& parallel = mParallelInput;
@@ -743,7 +759,22 @@ namespace NetworkLib {
 
 				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
 
-				mAttnLayers.back().backward(forward.mAttnLayers.back(), parallel);
+				for (auto layer : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
+
+					auto& forwardPrev = forward.mAttnLayers[layer -1];
+					auto& attnPrev = mAttnLayers[layer - 1];
+
+					auto& attnLayer = mAttnLayers[layer];
+					auto& forwardLayer = forward.mAttnLayers[layer];
+
+					attnLayer.backward(forwardLayer, forwardPrev.getOutput(), attnPrev.getOutput(), parallel);
+				}
+
+				mAttnLayers.front().backward(forward.mAttnLayers.front(), forward.mWActivations
+					, mWActivations, parallel);
+
+
+
 
 			}
 
