@@ -655,11 +655,9 @@ namespace NetworkLib {
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
-			void unEmbedOutputs(TokensView nextTokens) {
+			void unEmbedOutputs(TokensView nextTokens, Parallel& parallel) {
 
 				auto& forward = *mForward;
-				auto& parallel = mParallelInput;
-				parallel.section(nextTokens.size());
 
 				Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 
@@ -728,9 +726,8 @@ namespace NetworkLib {
 						//for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
 						//	w += pdw;
 						
-					
 						});
-				Tensor::View dInputsBlock = dInputs.viewBlock(nextTokens.size() - 1);
+				Tensor::View dInputsBlock = dInputs.viewBlock();
 				//std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end(), dWteBlock.begin(), [&](auto f) {return f * r_tokens; });
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
@@ -739,11 +736,14 @@ namespace NetworkLib {
 
 				parallel([&](Parallel::Section& section) {
 
+					Tensor::ConstView dout;
+					Tensor::View wte, wpe;
+
 					for (auto i : section.mIotaView) {
 
-						auto dout = mEmbed.constView(i);
-						auto wte = mWteWeight.view(tokens[i]);
-						auto wpe = mWpeWeight.view(i);
+						dout = mEmbed.constView(i);
+						wte = mWteWeight.view(tokens[i]);
+						wpe = mWpeWeight.view(i);
 
 						for (const auto& [o, t, p] : std::views::zip(dout, wte, wpe)) {
 							p += o;
@@ -756,31 +756,31 @@ namespace NetworkLib {
 			void backward(TokensView tokens, TokensView nextTokens) {
 
 				auto& forward = *mForward;
-				auto& parallel = mParallelInput;
-				parallel.section(nextTokens.size());
+				mParallelInput.section(tokens.size());
 
-				unEmbedOutputs(nextTokens);
+				unEmbedOutputs(nextTokens, mParallelInput);
 
-				const Tensor& inputs = forward.mAttnLayers.back().getOutput();
-				Tensor& dInputs = mAttnLayers.back().getOutput();
+				mFinalLayer.backward(forward.mFinalLayer, forward.mAttnLayers.back().getOutput()
+					, mAttnLayers.back().getOutput(), mParallelInput);
 
-				mFinalLayer.backward(forward.mFinalLayer, inputs, dInputs, parallel);
+				auto& forwardLayers = forward.mAttnLayers;
+				auto& layers = mAttnLayers;
 
-				for (auto layer : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
+				for (auto l : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
 
-					auto& forwardPrev = forward.mAttnLayers[layer -1];
-					auto& attnPrev = mAttnLayers[layer - 1];
+					Tensor& forwardOutput = forwardLayers[l - 1].getOutput()
+						, output = layers[l - 1].getOutput();
 
-					auto& attnLayer = mAttnLayers[layer];
-					auto& forwardLayer = forward.mAttnLayers[layer];
+					AttnLayer& forwardLayer = forwardLayers[l]
+						, &layer = layers[l];
 
-					attnLayer.backward(forwardLayer, forwardPrev.getOutput(), attnPrev.getOutput(), parallel);
+					layer.backward(forwardLayer, forwardOutput, output, mParallelInput);
 				}
 
-				mAttnLayers.front().backward(forward.mAttnLayers.front(), forward.mWActivations
-					, mEmbed, parallel);
+				layers.front().backward(forwardLayers.front(), forward.mWActivations
+					, mEmbed, mParallelInput);
 
-				embedOutputs(tokens, parallel);
+				embedOutputs(tokens, mParallelInput);
 
 			}
 

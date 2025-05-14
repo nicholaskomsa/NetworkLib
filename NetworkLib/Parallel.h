@@ -30,10 +30,7 @@ namespace NetworkLib {
 		//	}
 		// });
 		
-		//when section is called it is passed a requested number of hardware sections, there will be at least this many sections 
-
 		static constexpr auto mHardwareThreads = 8, mLargeHardwareThreads = 32;
-
 
 		std::any mDefaultAny;
 
