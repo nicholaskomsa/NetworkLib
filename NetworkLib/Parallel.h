@@ -24,10 +24,8 @@ namespace NetworkLib {
 		//the "a to b" interface follows a simple process:
 		//Parallel parallel(N);
 		//parallel([&](auto& section){
-		// 
-		//	auto& [ a, b ] = section.mOffsets;
 		//
-		//	for(auto i = a; i < b; ++i){
+		//	for(auto i : section.mIotaView) {
 		//		func(i);
 		//	}
 		// });
