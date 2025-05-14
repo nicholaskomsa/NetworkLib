@@ -623,7 +623,7 @@ namespace NetworkLib {
 
 			Floats mBackwardSpace;
 
-			Tensor mUnembed, mWteWeight, mWActivations, mWte, mWpe;
+			Tensor mUnembed, mWteWeight, mEmbed, mWpeWeight;
 
 			LinearLayer mFinalLayer;
 
@@ -654,9 +654,9 @@ namespace NetworkLib {
 				for( auto& attnLayer : mAttnLayers ) 
 					attnLayer.load(backwardSpace);
 				
-				mWActivations = { backwardSpace, mDSeq, mDModel };
-				mWpe = { backwardSpace, mDSeq, mDModel };
-				mWte = { backwardSpace, mDVocab, mDModel };
+				mEmbed = { backwardSpace, mDSeq, mDModel };
+				mWpeWeight = { backwardSpace, mDSeq, mDModel };
+				mWteWeight = { backwardSpace, mDVocab, mDModel };
 
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
@@ -686,15 +686,9 @@ namespace NetworkLib {
 
 				Tensor& inputs = forward.mFinalLayer.getActivations();
 				Tensor& dInputs = mFinalLayer.getActivations();
-				Tensor::View dInputsBlock = dInputs.viewBlock(nextTokens.size() - 1);
-
-				std::fill(dInputsBlock.begin(), dInputsBlock.end(), 0.0f);
 
 				Tensor& wte = forward.mWteWeight;
 				Tensor& dWte = mWteWeight;
-
-				Tensor::View dWteBlock = dWte.viewBlock(dWte.mY - 1);
-				std::fill(dWteBlock.begin(), dWteBlock.end(), 0.0f);
 
 				const float r_tokens = 1.0f / nextTokens.size();
 
@@ -722,7 +716,7 @@ namespace NetworkLib {
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
-								dw += o * in;
+								dw += o * in * r_tokens;
 							}
 						}
 					}
@@ -731,21 +725,42 @@ namespace NetworkLib {
 
 						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
-						//std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end()
-						//	, pdWeightsFloats.begin(), dWteBlock.begin(), [&](auto& w, auto& pw) {
-						//		return w + pw;
-						//	});
+						Tensor::View dWteBlock = dWte.viewBlock();
 
-						for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
-							w += pdw;
+						std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end()
+							, pdWeightsFloats.begin(), dWteBlock.begin(), [&](auto& w, auto& pw) {
+								return w + pw;
+							});
+
+						//for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
+						//	w += pdw;
 						
 					
 						});
-
-				std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end(), dWteBlock.begin(), [&](auto f) {return f * r_tokens; });
+				Tensor::View dInputsBlock = dInputs.viewBlock(nextTokens.size() - 1);
+				//std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end(), dWteBlock.begin(), [&](auto f) {return f * r_tokens; });
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
 
+			void embedOutputs(TokensView tokens, Parallel& parallel) {
+
+				parallel([&](Parallel::Section& section) {
+
+					auto& [first, second] = section.mOffsets;
+					for (auto i : std::views::iota(first, second)) {
+
+						auto dout = mEmbed.constView(i);
+						auto wte = mWteWeight.view(tokens[i]);
+						auto wpe = mWpeWeight.view(i);
+
+						for (const auto& [o, t, p] : std::views::zip(dout, wte, wpe)) {
+							p += o;
+							t += o;
+						}
+					}
+
+					});
+			}
 			void backward(TokensView tokens, TokensView nextTokens) {
 
 				auto& forward = *mForward;
@@ -771,10 +786,9 @@ namespace NetworkLib {
 				}
 
 				mAttnLayers.front().backward(forward.mAttnLayers.front(), forward.mWActivations
-					, mWActivations, parallel);
+					, mEmbed, parallel);
 
-
-
+				embedOutputs(tokens, parallel);
 
 			}
 

@@ -1146,8 +1146,8 @@ void GPT2::Diagnostics::backwardTest64() {
 		auto& attnPrev = *(backward.mAttnLayers.rbegin() + 1);
 		sumAbsf(attnPrev.getOutput(), "3.6");
 
-		sumAbsf(backward.mWActivations, "262.7");
-		sumAbsf(backward.mWte, "922");
+		sumAbsf(backward.mEmbed, "262.7");
+		sumAbsf(backward.mWteWeight, "922");
 
 		});
 
