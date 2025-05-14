@@ -1138,7 +1138,7 @@ void GPT2::Diagnostics::backwardTest64() {
 
 		sumAbsf(backward.mEmbed, "262.7");
 		sumAbsf(backward.mWteWeight, "922");
-
+		sumAbsf(backward.mWpeWeight, "262");
 		});
 
 }
