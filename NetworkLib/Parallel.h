@@ -36,12 +36,14 @@ namespace NetworkLib {
 
 		static constexpr auto mHardwareThreads = 8, mLargeHardwareThreads = 32;
 
-		using Offsets = std::pair<std::size_t, std::size_t>;
 
 		std::any mDefaultAny;
 
 		struct Section {
-			Offsets mOffsets;
+
+			using IotaView = std::ranges::iota_view<std::size_t, std::size_t>;
+			IotaView mIotaView;
+
 			std::any mAny;
 
 			Section(const std::any& any) : mAny(any) {};
@@ -94,15 +96,15 @@ namespace NetworkLib {
 
 			mSectionsView = { mSections.begin(), sectionNum };
 
-			for (std::size_t s = 0; s < sectionNum; ++s) {
+			for (std::size_t s = 0; s < sectionNum - 1; ++s) {
 
 				end = start + sectionSize;
 
-				mSections[s].mOffsets = { start, end };
+				mSections[s].mIotaView = std::ranges::iota_view(start, end);
 
 				start = end;
 			}
-			mSectionsView.back().mOffsets.second = size;
+			mSections.back().mIotaView = std::ranges::iota_view(start, size);
 		}
 
 		void operator()(SectionFunctor&& functor, bool single = false) {

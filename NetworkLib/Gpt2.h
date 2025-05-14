@@ -170,8 +170,7 @@ namespace NetworkLib {
 				Tensor::ConstView dOutput, activations, weight;
 				Tensor::View pdWeight, dActivations;
 
-				auto [first, second] = section.mOffsets;
-				for (auto i : std::views::iota(first, second)) {
+				for (auto i : section.mIotaView) {
 
 					dOutput = dOutputs.constView(i);
 
@@ -268,13 +267,12 @@ namespace NetworkLib {
 					auto& dGelus = mGeluActivations;
 					auto& dCFCs = mCFCActivations;
 
-					parallel([&](Parallel::Section& section) {
+					parallel([&](auto& section) {
 
 						Tensor::ConstView inputs, dGelu, cdfs;
 						Tensor::View dInputs;
 
-						const auto& [first, second] = section.mOffsets;
-						for (auto i : std::views::iota(first, second)) {
+						for (auto i : section.mIotaView) {
 
 							inputs = forwardCFCs.constView(i);
 							cdfs = forwardCDFs.constView(i);
@@ -351,8 +349,7 @@ namespace NetworkLib {
 					Tensor::ConstView dOut, input;
 					Tensor::View dInput;
 
-					auto [first, second] = section.mOffsets;
-					for (auto i : std::views::iota(first, second)) {
+					for (auto i : section.mIotaView) {
 
 						dOut = dActivations.constView(i);
 						input = inputs.constView(i);
@@ -389,7 +386,7 @@ namespace NetworkLib {
 						}
 					}
 
-					}, [&](Parallel::Section& section) {
+					}, [&](auto& section) {
 
 						auto& [partialBias, partialWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
@@ -480,10 +477,9 @@ namespace NetworkLib {
 
 			void multiHeadedAttnBack(AttnLayer& attn, Parallel& parallel) {
 
-				mParallelHeads([&](Parallel::Section& section) {
+				mParallelHeads([&](auto& section) {
 
-					const auto& [first, second] = section.mOffsets;
-					for (auto h : std::views::iota(first, second)) {
+					for (auto h : section.mIotaView) {
 
 						const auto headOffset = h * mHeadsPerDModel;
 
@@ -642,8 +638,7 @@ namespace NetworkLib {
 				mBackwardSpace.resize(mSeqVocab + mVocabModel 
 					+ LinearLayer::getBackwardSize()
 					+ AttnLayer::getBackwardSize() * mAttnLayersNum
-					+ mSeqModel*2
-					+ mVocabModel);
+					+ mSeqModel*2);
 
 				auto backwardSpace = mBackwardSpace.begin();
 				
@@ -656,7 +651,6 @@ namespace NetworkLib {
 				
 				mEmbed = { backwardSpace, mDSeq, mDModel };
 				mWpeWeight = { backwardSpace, mDSeq, mDModel };
-				mWteWeight = { backwardSpace, mDVocab, mDModel };
 
 				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
@@ -701,8 +695,7 @@ namespace NetworkLib {
 					pdWeightsFloats.resize(dWte.size2D(), 0.0f);
 					Tensor pdWeights = { pdWeightsFloats, dWte.mX, dWte.mY };
 
-					auto& [first, second] = section.mOffsets;
-					for (auto i : std::views::iota(first, second)) {
+					for (auto i : section.mIotaView) {
 
 						output = mUnembed.view(i);
 						dInput = dInputs.view(i);
@@ -746,8 +739,7 @@ namespace NetworkLib {
 
 				parallel([&](Parallel::Section& section) {
 
-					auto& [first, second] = section.mOffsets;
-					for (auto i : std::views::iota(first, second)) {
+					for (auto i : section.mIotaView) {
 
 						auto dout = mEmbed.constView(i);
 						auto wte = mWteWeight.view(tokens[i]);

@@ -343,8 +343,7 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 		outputs.clear();
 		outputs.resize(output.size(), 0.0f);
 
-		auto& [first, second] = section.mOffsets;
-		for (auto m : std::views::iota(first, second)) {
+		for (auto m : section.mIotaView) {
 
 			const auto& in = input[m];
 
@@ -370,8 +369,7 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 		Tensor::ConstView input, b = biasTensor.constView();
 		Tensor::View output;
 
-		auto& [first, second] = section.mOffsets;
-		for (auto i : std::views::iota( first, second)) {
+		for (auto i : section.mIotaView) {
 
 			//a fully connected input and output with a bias
 
@@ -423,8 +421,7 @@ void GPT2::MLP::forward(const Tensor& input, Parallel& parallel) {
 	auto gelu = [&]() {
 		parallel([&](Parallel::Section& section) {
 
-			const auto& [first, second] = section.mOffsets;
-			for (auto i : std::views::iota(first, second)) {
+			for (auto i : section.mIotaView) {
 
 				auto cfcActivations = mCFCActivations.view(i);
 				auto gelu = mGeluActivations.view(i);
@@ -517,10 +514,9 @@ void GPT2::LinearLayer::normalise(std::size_t m, const Tensor& input) {
 }
 void GPT2::LinearLayer::normalise(const Tensor& input, Parallel& parallel) {
 
-	parallel([&](auto& sections) {
+	parallel([&](auto& section) {
 
-		auto& [first, second] = sections.mOffsets;
-		for( auto m : std::views::iota(first,second))
+		for (auto m : section.mIotaView) 
 			normalise(m, input);
 
 		});
@@ -582,8 +578,7 @@ void GPT2::AttnLayer::multiHeadedAttn(std::size_t m) {
 
 	mParallelHeads([&](Parallel::Section& section) {
 
-		const auto& [first, second] = section.mOffsets;
-		for (auto h : std::views::iota( first, second)) {
+		for (auto h : section.mIotaView ) {
 
 			const auto headOffset = h * mHeadsPerDModel;
 
@@ -628,10 +623,9 @@ void GPT2::AttnLayer::residual(std::size_t i, const Tensor& inputTensor, const T
 }
 void GPT2::AttnLayer::residual(const Tensor& inputTensor, const Tensor& projectionTensor, Tensor& residualTensor, Parallel& parallel) {
 
-	parallel([&](auto& sections) {
+	parallel([&](auto& section) {
 
-		auto& [first, second] = sections.mOffsets;
-		for( auto i : std::views::iota( first, second))
+		for (auto i : section.mIotaView)
 			residual(i, inputTensor, projectionTensor, residualTensor);
 
 		});
@@ -738,10 +732,9 @@ void GPT2::Forward::embedInputs(TokensView tokens) {
 	//for each token, generate a position+token embedding
 	//as a setup step before forward
 
-	mParallelInput([&](auto& sections) {
+	mParallelInput([&](auto& section) {
 
-		auto& [first, second] = sections.mOffsets;
-		for( auto i : std::views::iota(first, second))
+		for (auto i : section.mIotaView)
 			embedInput(i, tokens[i]);
 
 		});
@@ -760,8 +753,7 @@ void GPT2::Forward::unEmbedOutput(std::size_t i ) {
 	mParallelI.section(mUnembedActivations.mY);
 	mParallelI([&](Parallel::Section& section) {
 
-		auto [first, second] = section.mOffsets;
-		for( auto m : std::views::iota(first, second)){
+		for (auto m : section.mIotaView) {
 
 			wte = mWteWeight.view(m);
 
@@ -784,8 +776,7 @@ void GPT2::Forward::unEmbedOutputs() {
 		Tensor::ConstView input, wte;
 		Tensor::View output;
 
-		auto& [first, second] = section.mOffsets;
-		for (auto i : std::views::iota(first, second)) {
+		for (auto i : section.mIotaView) {
 
 			//weight token embed seen in embedInput
 			//input is the output of earlier forward process
@@ -879,8 +870,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView nextTokens) {
 		
 		Tensor::View unembed, unembedSoftmax;
 
-		auto& [first, second] = section.mOffsets;
-		for (auto i : std::views::iota(first, second)) {
+		for (auto i : section.mIotaView) {
 
 			unembed = mUnembedActivations.view(i);
 			unembedSoftmax = mUnembedActivationsSoftmax.view(i);
