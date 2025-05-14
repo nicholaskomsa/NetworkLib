@@ -734,7 +734,7 @@ namespace NetworkLib {
 
 			void embedOutputs(TokensView tokens, Parallel& parallel) {
 
-				parallel([&](Parallel::Section& section) {
+				parallel([&](auto& section) {
 
 					Tensor::ConstView dout;
 					Tensor::View wte, wpe;
@@ -769,7 +769,7 @@ namespace NetworkLib {
 				for (auto l : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
 
 					Tensor& forwardOutput = forwardLayers[l - 1].getOutput()
-						, output = layers[l - 1].getOutput();
+						, &output = layers[l - 1].getOutput();
 
 					AttnLayer& forwardLayer = forwardLayers[l]
 						, &layer = layers[l];
