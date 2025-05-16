@@ -24,9 +24,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = 64;// mDSeq;	//vs dSeq for full size or 64 for test size
-
-
+			, mTestInputSize = 64;	//vs dSeq for full size or 64 for test size
 
 		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
 			, mSeqModel = mDSeq * mDModel
@@ -116,18 +114,16 @@ namespace NetworkLib {
 					
 					auto tensorView = tensor.constView(i);
 
-					double sum2 = sum;
-
 					for( auto h : std::views::iota(0ULL, mHeadNum) ) {
 
 						auto headOffset = h * mHeadsPerDModel;
 
 						auto fieldView = Tensor::constField(tensorView, headOffset + offset, mHeadsPerDModel);
 
-						sum2 = std::reduce(fieldView.begin(), fieldView.end(), sum2, [](double sum2, float f) {return sum2 + std::abs(f); });
+						sum = std::reduce(fieldView.begin(), fieldView.end(), sum, [](double sum, float f) {return sum + std::abs(f); });
 					}
 
-					return sum2;
+					return sum;
 				});
 
 				std::print("{}=={}\n", expected, fieldSum);
@@ -139,6 +135,7 @@ namespace NetworkLib {
 			void simpleChat();
 			void crossEntropyTest64();
 			void backwardTest64();
+			void SGDTest64();
 		};
 		friend class Diagnostics;
 
@@ -223,6 +220,13 @@ namespace NetworkLib {
 				dSoftmax[m] = factor * (dfactor - softmaxSum);
 			}
 		}
+		static void sgd(Tensor::View weights, Tensor::ConstView gradients, float learnRate = 0.02) {
+
+			std::transform(weights.begin(), weights.end(), gradients.begin(), weights.begin(),
+				[&](auto& w, auto& g) {
+					return w - g * learnRate;
+				});
+		}
 
 		class MLP {
 
@@ -293,6 +297,15 @@ namespace NetworkLib {
 				backwardGelu();
 
 				GPT2::backward(mCFCActivations, mlp.mCFCWeight, mCFCWeight, mCFCBias, linear, dLinear, parallel);
+			}
+
+			void sgd(const MLP& gradients, float learnRate) {
+
+				GPT2::sgd(mCFCWeight.viewBlock(), gradients.mCFCWeight.constViewBlock(), learnRate);
+				GPT2::sgd(mCFCBias.view(), gradients.mCFCBias.constView(), learnRate);
+
+				GPT2::sgd(mCProjWeight.viewBlock(), gradients.mCProjWeight.constViewBlock(), learnRate);
+				GPT2::sgd(mCProjBias.view(), gradients.mCProjBias.constView(), learnRate);
 			}
 		};
 
@@ -398,6 +411,13 @@ namespace NetworkLib {
 						});
 
 			}
+	
+			void sgd(const LinearLayer& gradients, float learnRate) {
+
+				GPT2::sgd(mWeight.view(), gradients.mWeight.constView(), learnRate);
+				GPT2::sgd(mBias.view(), gradients.mBias.constView(), learnRate);
+			}
+
 		};
 		class AttnLayer {
 
@@ -572,8 +592,20 @@ namespace NetworkLib {
 				mL1.backward(attn.mL1, forwardResidual2, mResidualActivation1Out, parallel);
 
 				residualBack(mResidualActivation1Out, mResidualActivation1, residual2);
+			}
 
+			void sgd(const AttnLayer& gradients, float learnRate) {
 
+				mL1.sgd(gradients.mL1, learnRate);
+				mL2.sgd(gradients.mL2, learnRate);
+
+				GPT2::sgd(mCAttnWeight.viewBlock(), gradients.mCAttnWeight.constViewBlock(), learnRate);
+				GPT2::sgd(mCAttnBias.view(), gradients.mCAttnBias.constView(), learnRate);
+
+				GPT2::sgd(mCProjWeight.viewBlock(), gradients.mCProjWeight.constViewBlock(), learnRate);
+				GPT2::sgd(mCProjBias.view(), gradients.mCProjBias.constView(), learnRate);
+
+				mMLP.sgd(gradients.mMLP, learnRate);
 			}
 		};
 
@@ -728,7 +760,7 @@ namespace NetworkLib {
 						
 						});
 				Tensor::View dInputsBlock = dInputs.viewBlock();
-				//std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end(), dWteBlock.begin(), [&](auto f) {return f * r_tokens; });
+
 				std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
 			}
 
@@ -783,6 +815,27 @@ namespace NetworkLib {
 				embedOutputs(tokens, mParallelInput);
 
 			}
+
+
+			void sgd(float learnRate = 0.002) {
+
+				auto& forward = *mForward;
+				auto& forwardLayers = forward.mAttnLayers;
+				auto& layers = mAttnLayers;
+
+				auto n = mTestInputSize - 1;
+
+				GPT2::sgd(forward.mWpeWeight.viewBlock(n), mWpeWeight.viewBlock(n), learnRate);
+				GPT2::sgd(forward.mWteWeight.viewBlock(n), mWteWeight.viewBlock(n), learnRate);
+
+				GPT2::sgd(forward.mFinalLayer.mBias.view(n), mFinalLayer.mBias.view(n), learnRate);
+				GPT2::sgd(forward.mFinalLayer.mWeight.viewBlock(), mFinalLayer.mWeight.viewBlock(), learnRate);
+
+				for( const auto& [forward, gradient] : std::views::zip(forwardLayers, layers ) )
+					forward.sgd(gradient, learnRate);
+				
+			}
+
 
 		} mBackward;
 

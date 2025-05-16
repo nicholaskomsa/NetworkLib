@@ -1142,8 +1142,55 @@ void GPT2::Diagnostics::backwardTest64() {
 		});
 
 }
+void GPT2::Diagnostics::SGDTest64() {
 
+	run([&](auto& gpt2) {
 
+		auto& data = gpt2.mTestData;
+		data.load();
+
+		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize)
+			, nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
+
+		auto preText = gpt2.mTranslator.decode(tokens);
+		std::println("{}", preText);
+
+		Token predicted, expected = nextTokens.back();
+
+		float crossEntropyLoss;
+		TimeAverage<milliseconds> ffAvg;
+
+		auto& forward = gpt2.mForward;
+		auto& backward = gpt2.mBackward;
+
+		auto feedForward = [&]() {
+
+			auto elapsed = ffAvg.accumulateTime([&]() {
+
+				predicted = forward.feedForward(tokens);
+
+				crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
+
+				});
+
+			auto predictedWord = gpt2.mTranslator.decode(predicted);
+			auto expectedWord = gpt2.mTranslator.decode(expected);
+
+			std::println("{}=={}; Cross Entropy Loss: {}", predictedWord, expectedWord, crossEntropyLoss);
+
+			};
+
+		feedForward();
+
+		backward.setup(&gpt2.mForward);
+		backward.backward(tokens, nextTokens);
+		backward.sgd();
+
+		feedForward();
+
+		});
+
+}
 void GPT2::Diagnostics::simpleChat() {
 
 	run([&](auto& gpt2) {
