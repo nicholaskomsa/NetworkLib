@@ -790,6 +790,8 @@ namespace NetworkLib {
 				auto& forward = *mForward;
 				mParallelInput.section(tokens.size());
 
+				std::fill(mBackwardSpace.begin(), mBackwardSpace.end(), 0.0f);
+
 				unEmbedOutputs(nextTokens, mParallelInput);
 
 				mFinalLayer.backward(forward.mFinalLayer, forward.mAttnLayers.back().getOutput()

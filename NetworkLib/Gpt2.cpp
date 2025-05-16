@@ -1180,13 +1180,14 @@ void GPT2::Diagnostics::SGDTest64() {
 
 			};
 
-		feedForward();
-
 		backward.setup(&gpt2.mForward);
-		backward.backward(tokens, nextTokens);
-		backward.sgd();
 
-		feedForward();
+		for( auto i : std::views::iota(0, 10)) {
+
+			feedForward();
+			backward.backward(tokens, nextTokens);
+			backward.sgd();
+		}
 
 		});
 
