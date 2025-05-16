@@ -1163,9 +1163,12 @@ void GPT2::Diagnostics::SGDTest64() {
 		auto& forward = gpt2.mForward;
 		auto& backward = gpt2.mBackward;
 
-		auto feedForward = [&]() {
+		backward.setup(&gpt2.mForward);
 
-			auto elapsed = ffAvg.accumulateTime([&]() {
+		std::size_t generation = 0;
+		do{
+
+			auto forwardElapsed = ffAvg.accumulateTime([&]() {
 
 				predicted = forward.feedForward(tokens);
 
@@ -1176,18 +1179,19 @@ void GPT2::Diagnostics::SGDTest64() {
 			auto predictedWord = gpt2.mTranslator.decode(predicted);
 			auto expectedWord = gpt2.mTranslator.decode(expected);
 
-			std::println("{}=={}; Cross Entropy Loss: {}", predictedWord, expectedWord, crossEntropyLoss);
+			auto backwardElapsed = ffAvg.accumulateTime([&]() {
+				
+				backward.backward(tokens, nextTokens);
+				backward.sgd();
 
-			};
+				});
 
-		backward.setup(&gpt2.mForward);
+			std::println("{}:\t cel: {}, predicted/expected: {}/{}; took: {}, {}"
+				, generation, crossEntropyLoss, predictedWord, expectedWord, forwardElapsed, backwardElapsed);
 
-		for( auto i : std::views::iota(0, 10)) {
+			++generation;
 
-			feedForward();
-			backward.backward(tokens, nextTokens);
-			backward.sgd();
-		}
+		} while (true);
 
 		});
 

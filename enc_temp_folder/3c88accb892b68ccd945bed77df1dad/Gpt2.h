@@ -149,7 +149,9 @@ namespace NetworkLib {
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
 
 			auto dWeightsBlock = dWeights.viewBlock();
+			std::fill(dWeightsBlock.begin(), dWeightsBlock.end(), 0.0f);
 			auto dBiasView = dBias.view();
+			std::fill(dBiasView.begin(), dBiasView.end(), 0.0f);
 
 			parallel([&](Parallel::Section& section) {
 
@@ -339,6 +341,9 @@ namespace NetworkLib {
 				const Tensor& dActivations = mActivations;
 				Tensor::View dBias = mBias.view()
 					, dWeight = mWeight.view();
+
+				std::fill(dBias.begin(), dBias.end(), 0.0f);
+				std::fill(dWeight.begin(), dWeight.end(), 0.0f);
 
 				Tensor::ConstView weight = inputLayer.mWeight.constView();
 				const Floats& means = inputLayer.mMean
