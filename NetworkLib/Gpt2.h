@@ -24,7 +24,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
+			, mTestInputSize = 64;	//vs dSeq for full size or 64 for test size
 
 		using Floats = Tensor::Floats;
 		using Token = std::uint16_t;
@@ -212,10 +212,17 @@ namespace NetworkLib {
 						});
 				});
 		}
-		static void softmaxBack(std::size_t i, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax, float softmaxSum) {
+		static void softmaxBack(std::size_t i, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax) {
+			
+			auto iotaView = std::views::iota(0ULL, i + 1);
+
+			float softmaxSum = std::reduce(iotaView.begin(), iotaView.end(), 0.0f, [&](auto sum, auto m) {
+				return sum + input[m] * output[m];
+				});
 
 			float factor, dfactor;
-			for (auto m : std::views::iota(0ULL, i + 1)) {
+
+			for (auto m : iotaView ) {
 
 				factor = input[m];
 				dfactor = output[m];
@@ -451,19 +458,17 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
-			float backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
+			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
 
 				const auto vOffset = mVOffset + headOffset;
 				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.view(i), headOffset, mHeadsPerDModel );
 				Tensor::View dvh;
 				float factor, dot;
 
-				float softmaxSum = 0.0f;
-
-				for (auto m : std::views::iota(0ULL, i+1)) {
+				for (auto m : std::views::iota(0ULL, i + 1)) {
 
 					vh = Tensor::constField(attn.mCAttnActivations.constView(m), vOffset, mHeadsPerDModel);
-					dvh = Tensor::field( mCAttnActivations.view(m), vOffset, mHeadsPerDModel );
+					dvh = Tensor::field(mCAttnActivations.view(m), vOffset, mHeadsPerDModel);
 
 					factor = inputAttnOutSoftmax[m];
 					dot = 0.0f;
@@ -474,11 +479,7 @@ namespace NetworkLib {
 					}
 
 					outputAttnOutSoftmax[m] += dot;
-
-					softmaxSum += dot * factor;
 				}
-
-				return softmaxSum;
 			}
 			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView attnActivations) {
 
@@ -493,12 +494,12 @@ namespace NetworkLib {
 
 					kh = Tensor::constField(attn.mCAttnActivations.constView(m), kOffset, mHeadsPerDModel);
 					dkh = Tensor::field(mCAttnActivations.view(m), kOffset, mHeadsPerDModel);
-					o = attnActivations[m];
+					o = attnActivations[m] * r_sqrtHeadsPerDModel;
 
 					for (const auto& [q, dq, k, dk] : std::views::zip(qh, dqh, kh, dkh)) {
 
-						dq += o * k * r_sqrtHeadsPerDModel;
-						dk += o * q * r_sqrtHeadsPerDModel;
+						dq += o * k;
+						dk += o * q;
 					}
 				}
 			}
@@ -521,9 +522,9 @@ namespace NetworkLib {
 							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i)
 								, attnActivations = mAttnActivations.view(h, i);
 
-							float softmaxSum = backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
+							backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
 							
-							softmaxBack(i, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations, softmaxSum);
+							softmaxBack(i, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations);
 
 							backwardQKAtten(attn, headOffset, i, attnActivations);
 						}
@@ -741,6 +742,8 @@ namespace NetworkLib {
 					pdWeightsFloats.resize(dWte.size2D(), 0.0f);
 					Tensor pdWeights = { pdWeightsFloats, dWte.mX, dWte.mY };
 
+					float o, o2;
+
 					for (auto i : section.mIotaView) {
 
 						output = mUnembed.view(i);
@@ -749,13 +752,15 @@ namespace NetworkLib {
 
 						for (auto m : std::views::iota(0ULL, output.size())) {
 
-							float o = output[m];
+							o = output[m];
+							o2 = o * r_tokens;
+							
 							weight = wte.view(m);
 							dWeight = pdWeights.view(m);
 
 							for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
 								din += o * w;
-								dw += o * in * r_tokens;
+								dw += o2 * in;
 							}
 						}
 					}
