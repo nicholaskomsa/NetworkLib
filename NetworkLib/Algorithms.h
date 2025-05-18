@@ -53,5 +53,17 @@ namespace NetworkLib {
 		std::size_t average() const {
 			return sum.count() / count;
 		}
+		void reset() {
+			sum = TimeType(0);
+			count = 0;
+		}
+
+		std::string getString() {
+
+			const auto str = std::format("{}x{}={}", average(), count, sum );
+			reset();
+
+			return str;
+			};
 	};
 }

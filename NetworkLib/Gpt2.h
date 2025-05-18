@@ -26,17 +26,6 @@ namespace NetworkLib {
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
 			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
 
-		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
-			, mSeqModel = mDSeq * mDModel
-			, mSeqModel3 = mDSeq * mDModel3
-			, mSeqModel4 = mDSeq * mDModel4
-			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
-			, mSeqVocab = mDSeq * mDVocab
-			, mModel4Model = mDModel4 * mDModel
-			, mModel3Model = mDModel3 * mDModel
-			, mModelModel = mDModel * mDModel;
-
-
 		using Floats = Tensor::Floats;
 		using Token = std::uint16_t;
 		using Tokens = std::vector<Token>;
@@ -141,71 +130,87 @@ namespace NetworkLib {
 
 	private:
 
+		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
+			, mSeqModel = mDSeq * mDModel
+			, mSeqModel3 = mDSeq * mDModel3
+			, mSeqModel4 = mDSeq * mDModel4
+			, mSeqSeqHead = mDSeq * mDSeq * mHeadNum
+			, mSeqVocab = mDSeq * mDVocab
+			, mModel4Model = mDModel4 * mDModel
+			, mModel3Model = mDModel3 * mDModel
+			, mModelModel = mDModel * mDModel
+			, mVocabModel = mDVocab * mDModel;
+
 		static void forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
 
+		static TimeAverage<milliseconds> mBackwardTime;
+
 		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel) {
 
-			auto dWeightsBlock = dWeights.viewBlock();
-			auto dBiasView = dBias.view();
+			mBackwardTime.accumulateTime([&](){
 
-			parallel([&](Parallel::Section& section) {
+				auto dWeightsBlock = dWeights.viewBlock();
+				auto dBiasView = dBias.view();
 
-				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+				parallel([&](Parallel::Section& section) {
 
-				pdBias.clear();
-				pdBias.resize(dBias.mX, 0.0f);
+					auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
-				pdWeightsFloats.clear();
-				pdWeightsFloats.resize(dWeights.size2D(), 0.0f);
-				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
+					pdBias.clear();
+					pdBias.resize(dBias.mX, 0.0f);
 
-				Tensor::ConstView dOutput, activations, weight;
-				Tensor::View pdWeight, dActivations;
+					pdWeightsFloats.clear();
+					pdWeightsFloats.resize(dWeights.size2D(), 0.0f);
+					Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
 
-				for (auto i : section.mIotaView) {
+					Tensor::ConstView dOutput, activations, weight;
+					Tensor::View pdWeight, dActivations;
 
-					dOutput = dOutputs.constView(i);
+					for (auto i : section.mIotaView) {
 
-					for (const auto& [b, o] : std::views::zip(pdBias, dOutput))
-						b += o;
+						dOutput = dOutputs.constView(i);
 
-					activations = inActivations.constView(i);
-					dActivations = outActivations.view(i);
+						for (const auto& [b, o] : std::views::zip(pdBias, dOutput))
+							b += o;
 
-					for (auto m : std::views::iota(0ULL, activations.size())) {
+						activations = inActivations.constView(i);
+						dActivations = outActivations.view(i);
 
-						weight = weights.constView(m);
-						pdWeight = pdWeights.view(m);
+						for (auto m : std::views::iota(0ULL, activations.size())) {
 
-						float in = activations[m];
+							weight = weights.constView(m);
+							pdWeight = pdWeights.view(m);
 
-						float dot = 0.0f;
+							float in = activations[m];
 
-						for (const auto& [pdW, o, w] : std::views::zip(pdWeight, dOutput, weight)) {
-							pdW += in * o;
-							dot += w * o;
+							float dot = 0.0f;
+
+							for (const auto& [pdW, o, w] : std::views::zip(pdWeight, dOutput, weight)) {
+								pdW += in * o;
+								dot += w * o;
+							}
+
+							dActivations[m] = dot;
 						}
-
-						dActivations[m] = dot;
 					}
-				}
 
-			}, [&](Parallel::Section& section) {
+					}, [&](Parallel::Section& section) {
 
-				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
-				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
+						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+						Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
 
-				for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
-					b += pb;
+						for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
+							b += pb;
 
-				for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewBlock()))
-					w += pw;
+						for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewBlock()))
+							w += pw;
 
 
-			});
+						});
+				});
 		}
 		static void softmaxBack(std::size_t i, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax, float softmaxSum) {
 
@@ -238,6 +243,7 @@ namespace NetworkLib {
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
 			static const float r_sqrt2Pi;
 
+			static TimeAverage<milliseconds> mBackwardGeluTime;
 		public:
 
 			static std::size_t getBackwardSize() {
@@ -262,7 +268,7 @@ namespace NetworkLib {
 
 				GPT2::backward(dResidual, mlp.mCProjWeight, mCProjWeight, mCProjBias, mlp.mGeluActivations, mGeluActivations, parallel);
 
-				auto backwardGelu = [&](){
+				auto backwardGelu = [&]() {
 
 					auto& forwardCFCs = mlp.mCFCActivations;
 					auto& forwardCDFs = mlp.mGeluCDF;
@@ -283,7 +289,7 @@ namespace NetworkLib {
 
 							for (const auto& [dout, in, din, cdf] : std::views::zip(dGelu, inputs, dInputs, cdfs)) {
 
-								float dGeluDIn = cdf + in * ( r_sqrt2Pi * std::exp(-0.5f * in * in));
+								float dGeluDIn = cdf + in * (r_sqrt2Pi * std::exp(-0.5f * in * in));
 
 								din = dout * dGeluDIn;
 							}
@@ -291,8 +297,11 @@ namespace NetworkLib {
 
 						});
 
-				};
-				backwardGelu();
+					};
+
+				mBackwardGeluTime.accumulateTime([&]() {
+					backwardGelu();
+					});
 
 				GPT2::backward(mCFCActivations, mlp.mCFCWeight, mCFCWeight, mCFCBias, linear, dLinear, parallel);
 			}
@@ -316,6 +325,9 @@ namespace NetworkLib {
 
 			//for backward
 			Floats mMean, mRStdDev;
+
+			static TimeAverage<milliseconds> mBackwardTime;
+
 		public:
 
 			static std::size_t getBackwardSize() {
@@ -336,75 +348,78 @@ namespace NetworkLib {
 
 			void backward(const LinearLayer& inputLayer, const Tensor& inputs, Tensor& dInputs, Parallel& parallel){
 				
-				const Tensor& dActivations = mActivations;
-				Tensor::View dBias = mBias.view()
-					, dWeight = mWeight.view();
+				mBackwardTime.accumulateTime([&]{
 
-				Tensor::ConstView weight = inputLayer.mWeight.constView();
-				const Floats& means = inputLayer.mMean
-					, &rStdDevs = inputLayer.mRStdDev;
+					const Tensor& dActivations = mActivations;
+					Tensor::View dBias = mBias.view()
+						, dWeight = mWeight.view();
 
-				parallel([&](auto& section) {
+					Tensor::ConstView weight = inputLayer.mWeight.constView();
+					const Floats& means = inputLayer.mMean
+						, &rStdDevs = inputLayer.mRStdDev;
 
-					auto& [pdBias, pdWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
+					parallel([&](auto& section) {
 
-					pdBias.clear();
-					pdBias.resize(inputs.mY, 0.0f);
+						auto& [pdBias, pdWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
-					pdWeight.clear();
-					pdWeight.resize(inputs.mY, 0.0f);
+						pdBias.clear();
+						pdBias.resize(inputs.mY, 0.0f);
 
-					Tensor::ConstView dOut, input;
-					Tensor::View dInput;
+						pdWeight.clear();
+						pdWeight.resize(inputs.mY, 0.0f);
 
-					for (auto i : section.mIotaView) {
+						Tensor::ConstView dOut, input;
+						Tensor::View dInput;
 
-						dOut = dActivations.constView(i);
-						input = inputs.constView(i);
-						dInput = dInputs.view(i);
+						for (auto i : section.mIotaView) {
 
-						float mean = means[i]
-							, rStdDev = rStdDevs[i]
-							, meanPartial = 0.0f
-							, stdDevPartial = 0.0f;
+							dOut = dActivations.constView(i);
+							input = inputs.constView(i);
+							dInput = dInputs.view(i);
 
-						float dInNorm;
+							float mean = means[i]
+								, rStdDev = rStdDevs[i]
+								, meanPartial = 0.0f
+								, stdDevPartial = 0.0f;
 
-						for (const auto& [dB, o, i, dW, w, dI] : std::views::zip(pdBias, dOut, input, pdWeight, weight, dInput)) {
+							float dInNorm;
 
-							dI = (i - mean) * rStdDev; //==inNorm will pass through as dI
+							for (const auto& [dB, o, i, dW, w, dI] : std::views::zip(pdBias, dOut, input, pdWeight, weight, dInput)) {
 
-							dW += o * dI;
-							dB += o;
+								dI = (i - mean) * rStdDev; //==inNorm will pass through as dI
 
-							dInNorm = o * w;
-							meanPartial += dInNorm;
-							stdDevPartial += dInNorm * dI;
-						}
+								dW += o * dI;
+								dB += o;
 
-						meanPartial /= dBias.size();
-						stdDevPartial /= dBias.size();
+								dInNorm = o * w;
+								meanPartial += dInNorm;
+								stdDevPartial += dInNorm * dI;
+							}
 
-						for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
+							meanPartial /= dBias.size();
+							stdDevPartial /= dBias.size();
 
-							dInNorm = o * w;
+							for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
+
+								dInNorm = o * w;
 							
-							dI = dInNorm - meanPartial - dI * stdDevPartial;
-							dI *= rStdDev;
-						}
-					}
-
-					}, [&](auto& section) {
-
-						auto& [partialBias, partialWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
-
-						for (const auto& [b, w, pb, pw] : std::views::zip(dBias, dWeight, partialBias, partialWeight)) {
-							b += pb;
-							w += pw;
+								dI = dInNorm - meanPartial - dI * stdDevPartial;
+								dI *= rStdDev;
+							}
 						}
 
-						});
+						}, [&](auto& section) {
 
+							auto& [partialBias, partialWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
+
+							for (const auto& [b, w, pb, pw] : std::views::zip(dBias, dWeight, partialBias, partialWeight)) {
+								b += pb;
+								w += pw;
+							}
+
+							});
+
+					});
 			}
 	
 			void sgd(const LinearLayer& gradients, float learnRate) {
@@ -428,6 +443,8 @@ namespace NetworkLib {
 				, mResidualActivation1Out; //for backward
 
 			MLP mMLP;
+
+			static TimeAverage<milliseconds> mBackwardAttnTime;
 
 			static const float r_sqrtHeadsPerDModel;
 
@@ -580,8 +597,12 @@ namespace NetworkLib {
 				
 				GPT2::backward(mResidualActivation1, attn.mCProjWeight, mCProjWeight, mCProjBias, attn.mAttnZ, mAttnZ, parallel);
 
-				multiHeadedAttnBack(attn, parallel);
+				mBackwardAttnTime.accumulateTime([&] {
 
+					multiHeadedAttnBack(attn, parallel);
+
+					});
+				
 				GPT2::backward(mCAttnActivations, attn.mCAttnWeight, mCAttnWeight, mCAttnBias, attn.mL1.mActivations, mL1.mActivations, parallel);
 
 				mL1.backward(attn.mL1, forwardResidual2, mResidualActivation1Out, parallel);
@@ -654,7 +675,7 @@ namespace NetworkLib {
 
 			Forward* mForward;
 
-			static constexpr std::size_t mVocabModel = mDVocab * mDModel;
+			static TimeAverage<milliseconds> mEmbedTime, mUnembedTime, mLayersTime;
 
 		public:
 			
@@ -679,7 +700,7 @@ namespace NetworkLib {
 				mEmbed = { backwardSpace, mDSeq, mDModel };
 				mWpeWeight = { backwardSpace, mDSeq, mDModel };
 
-				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
+				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 64);
 			}
 
 			void unEmbedOutputs(TokensView nextTokens, Parallel& parallel) {
@@ -739,7 +760,7 @@ namespace NetworkLib {
 						}
 					}
 
-					}, [&](Parallel::Section& section) {
+					}, [&](auto& section) {
 
 						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
@@ -787,30 +808,37 @@ namespace NetworkLib {
 
 				std::fill(mBackwardSpace.begin(), mBackwardSpace.end(), 0.0f);
 
-				unEmbedOutputs(nextTokens, mParallelInput);
+				mUnembedTime.accumulateTime([&]() {
+					unEmbedOutputs(nextTokens, mParallelInput);
+					});
 
 				mFinalLayer.backward(forward.mFinalLayer, forward.mAttnLayers.back().getOutput()
 					, mAttnLayers.back().getOutput(), mParallelInput);
+				
 
 				auto& forwardLayers = forward.mAttnLayers;
 				auto& layers = mAttnLayers;
 
-				for (auto l : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
+				mLayersTime.accumulateTime([&]() {
 
-					Tensor& forwardOutput = forwardLayers[l - 1].getOutput()
-						, &output = layers[l - 1].getOutput();
+					for (auto l : std::views::iota(1ULL, mAttnLayers.size()) | std::views::reverse) {
 
-					AttnLayer& forwardLayer = forwardLayers[l]
-						, &layer = layers[l];
+						Tensor& forwardOutput = forwardLayers[l - 1].getOutput()
+							, & output = layers[l - 1].getOutput();
 
-					layer.backward(forwardLayer, forwardOutput, output, mParallelInput);
-				}
+						AttnLayer& forwardLayer = forwardLayers[l]
+							, & layer = layers[l];
 
-				layers.front().backward(forwardLayers.front(), forward.mWActivations
-					, mEmbed, mParallelInput);
+						layer.backward(forwardLayer, forwardOutput, output, mParallelInput);
+					}
 
-				embedOutputs(tokens, mParallelInput);
+					layers.front().backward(forwardLayers.front(), forward.mWActivations
+						, mEmbed, mParallelInput);
+					});
 
+				mEmbedTime.accumulateTime([&]() {
+					embedOutputs(tokens, mParallelInput);
+					});
 			}
 
 
@@ -821,6 +849,11 @@ namespace NetworkLib {
 				auto& layers = mAttnLayers;
 
 				auto n = mTestInputSize - 1;
+
+
+
+
+
 
 				GPT2::sgd(forward.mWpeWeight.viewBlock(n), mWpeWeight.viewBlock(n), learnRate);
 				GPT2::sgd(forward.mWteWeight.viewBlock(n), mWteWeight.viewBlock(n), learnRate);

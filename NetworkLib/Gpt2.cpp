@@ -14,6 +14,12 @@ using namespace NetworkLib;
 
 Parallel GPT2::AttnLayer::mParallelHeads( mHeadNum, mHeadNum);
 
+TimeAverage<milliseconds> GPT2::LinearLayer::mBackwardTime
+, GPT2::AttnLayer::mBackwardAttnTime
+, GPT2::MLP::mBackwardGeluTime
+, GPT2::mBackwardTime
+, GPT2::Backward::mEmbedTime, GPT2::Backward::mUnembedTime, GPT2::Backward::mLayersTime;
+
 const float GPT2::AttnLayer::r_sqrtHeadsPerDModel = 1.0f / std::sqrtf(GPT2::mHeadsPerDModel);
 const float GPT2::MLP::r_sqrt2Pi = 1.0f / std::sqrtf(2.0f * std::numbers::pi);
 
@@ -1158,7 +1164,7 @@ void GPT2::Diagnostics::SGDTest64() {
 		Token predicted, expected = nextTokens.back();
 
 		float crossEntropyLoss;
-		TimeAverage<milliseconds> ffAvg;
+		TimeAverage<milliseconds> ffAvg, bAvg, sgdAvg;
 
 		auto& forward = gpt2.mForward;
 		auto& backward = gpt2.mBackward;
@@ -1179,19 +1185,35 @@ void GPT2::Diagnostics::SGDTest64() {
 			auto predictedWord = gpt2.mTranslator.decode(predicted);
 			auto expectedWord = gpt2.mTranslator.decode(expected);
 
-			auto backwardElapsed = ffAvg.accumulateTime([&]() {
+			auto backwardElapsed = bAvg.accumulateTime([&]() {
 				
 				backward.backward(tokens, nextTokens);
+
+				});
+
+			auto sgdElapsed = bAvg.accumulateTime([&]() {
+
 				backward.sgd();
 
 				});
 
-			std::println("{}:\t cel: {}, predicted/expected: {}/{}; took: {}, {}"
-				, generation, crossEntropyLoss, predictedWord, expectedWord, forwardElapsed, backwardElapsed);
+			std::println("{}:\t cel: {}, predicted/expected: {}/{}; took: forward: {}, back: {}, sgd: {}"
+				", battn: {}, bgelu : {}, blin : {}"
+				", backward: {}"
+				", bembed: {}, bunembed: {}, blayers: {}"
+
+				, generation, crossEntropyLoss, predictedWord, expectedWord, forwardElapsed, backwardElapsed, sgdElapsed
+				, AttnLayer::mBackwardAttnTime.getString()
+				, MLP::mBackwardGeluTime.getString()
+				, LinearLayer::mBackwardTime.getString()
+				, mBackwardTime.getString()
+				, Backward::mEmbedTime.getString()
+				, Backward::mUnembedTime.getString()
+				, Backward::mLayersTime.getString());
 
 			++generation;
 
-		} while (true);
+		} while (predicted != expected);
 
 		});
 
