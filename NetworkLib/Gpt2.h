@@ -30,6 +30,7 @@ namespace NetworkLib {
 		using Token = std::uint16_t;
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
+		using IotaView = std::ranges::iota_view<std::size_t, std::size_t>;
 
 		struct Error : public std::system_error {
 
@@ -155,7 +156,7 @@ namespace NetworkLib {
 				auto dWeightsBlock = dWeights.viewBlock();
 				auto dBiasView = dBias.view();
 
-				parallel([&](Parallel::Section& section) {
+				parallel([&](auto& section) {
 
 					auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 
@@ -197,7 +198,7 @@ namespace NetworkLib {
 						}
 					}
 
-					}, [&](Parallel::Section& section) {
+					}, [&](auto& section) {
 
 						auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
 						Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
@@ -212,25 +213,17 @@ namespace NetworkLib {
 						});
 				});
 		}
-		static void softmaxBack(std::size_t i, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax) {
+		static void softmaxBack(const IotaView& iotaView, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax) {
 			
-			auto iotaView = std::views::iota(0ULL, i + 1);
-
 			float softmaxSum = std::reduce(iotaView.begin(), iotaView.end(), 0.0f, [&](auto sum, auto m) {
 				return sum + input[m] * output[m];
 				});
 
-			float factor, dfactor;
-
-			for (auto m : iotaView ) {
-
-				factor = input[m];
-				dfactor = output[m];
-
-				dSoftmax[m] = factor * (dfactor - softmaxSum);
-			}
+			for (auto m : iotaView ) 
+				dSoftmax[m] = input[m] * (output[m] - softmaxSum);
+			
 		}
-		static void sgd(Tensor::View weights, Tensor::ConstView gradients, float learnRate = 0.02) {
+		static void sgd(Tensor::View weights, Tensor::ConstView gradients, float learnRate) {
 
 			std::transform(std::execution::seq, weights.begin(), weights.end(), gradients.begin(), weights.begin(),
 				[&](auto& w, auto& g) {
@@ -458,14 +451,14 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
-			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
+			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qView, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
 
 				const auto vOffset = mVOffset + headOffset;
 				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.view(i), headOffset, mHeadsPerDModel );
 				Tensor::View dvh;
 				float factor, dot;
 
-				for (auto m : std::views::iota(0ULL, i + 1)) {
+				for (auto m : qView) {
 
 					vh = Tensor::constField(attn.mCAttnActivations.constView(m), vOffset, mHeadsPerDModel);
 					dvh = Tensor::field(mCAttnActivations.view(m), vOffset, mHeadsPerDModel);
@@ -481,7 +474,7 @@ namespace NetworkLib {
 					outputAttnOutSoftmax[m] += dot;
 				}
 			}
-			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, std::size_t i, Tensor::ConstView attnActivations) {
+			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qView, std::size_t i, Tensor::ConstView attnActivations) {
 
 				const auto qOffset = mQOffset + headOffset;
 				Tensor::ConstView kh, qh = Tensor::constField(attn.mCAttnActivations.constView(i), qOffset, mHeadsPerDModel);
@@ -490,7 +483,7 @@ namespace NetworkLib {
 				float o;
 				const auto kOffset = mKOffset + headOffset;
 
-				for (auto m : std::views::iota(0ULL, i+1)) {
+				for (auto m : qView) {
 
 					kh = Tensor::constField(attn.mCAttnActivations.constView(m), kOffset, mHeadsPerDModel);
 					dkh = Tensor::field(mCAttnActivations.view(m), kOffset, mHeadsPerDModel);
@@ -510,23 +503,30 @@ namespace NetworkLib {
 
 			void multiHeadedAttnBack(AttnLayer& attn, Parallel& parallel) {
 
+
+				auto iView = std::views::iota(0ULL, mTestInputSize);
+				
 				mParallelHeads([&](auto& section) {
+
+					IotaView qView;
 
 					for (auto h : section.mIotaView) {
 
 						const auto headOffset = h * mHeadsPerDModel;
 
-						for (auto i : std::views::iota(0ULL, parallel.mSize)) {
+						for (auto i : iView ) {
 
 							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constView(h, i);
 							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i)
 								, attnActivations = mAttnActivations.view(h, i);
 
-							backwardVAtten( attn, headOffset, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
-							
-							softmaxBack(i, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations);
+							qView = std::views::iota(0ULL, i + 1);
 
-							backwardQKAtten(attn, headOffset, i, attnActivations);
+							backwardVAtten( attn, headOffset, qView, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
+							
+							softmaxBack(qView, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations);
+
+							backwardQKAtten(attn, headOffset, qView, i, attnActivations);
 						}
 					}
 					});
@@ -701,7 +701,7 @@ namespace NetworkLib {
 				mEmbed = { backwardSpace, mDSeq, mDModel };
 				mWpeWeight = { backwardSpace, mDSeq, mDModel };
 
-				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 64);
+				mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
 			}
 
 			void unEmbedOutputs(TokensView nextTokens, Parallel& parallel) {
