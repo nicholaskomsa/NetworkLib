@@ -451,14 +451,14 @@ namespace NetworkLib {
 			void calculateQKAtten(std::size_t headOffset, std::size_t i, Tensor::View attnOut);
 			void calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax);
 			
-			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qView, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
+			void backwardVAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qIotaView, std::size_t i, Tensor::ConstView inputAttnOutSoftmax, Tensor::View outputAttnOutSoftmax) {
 
 				const auto vOffset = mVOffset + headOffset;
 				Tensor::ConstView vh, dzh = Tensor::constField(mAttnZ.view(i), headOffset, mHeadsPerDModel );
 				Tensor::View dvh;
 				float factor, dot;
 
-				for (auto m : qView) {
+				for (auto m : qIotaView) {
 
 					vh = Tensor::constField(attn.mCAttnActivations.constView(m), vOffset, mHeadsPerDModel);
 					dvh = Tensor::field(mCAttnActivations.view(m), vOffset, mHeadsPerDModel);
@@ -474,7 +474,7 @@ namespace NetworkLib {
 					outputAttnOutSoftmax[m] += dot;
 				}
 			}
-			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qView, std::size_t i, Tensor::ConstView attnActivations) {
+			void backwardQKAtten(const AttnLayer& attn, std::size_t headOffset, const IotaView& qIotaView, std::size_t i, Tensor::ConstView attnActivations) {
 
 				const auto qOffset = mQOffset + headOffset;
 				Tensor::ConstView kh, qh = Tensor::constField(attn.mCAttnActivations.constView(i), qOffset, mHeadsPerDModel);
@@ -483,7 +483,7 @@ namespace NetworkLib {
 				float o;
 				const auto kOffset = mKOffset + headOffset;
 
-				for (auto m : qView) {
+				for (auto m : qIotaView) {
 
 					kh = Tensor::constField(attn.mCAttnActivations.constView(m), kOffset, mHeadsPerDModel);
 					dkh = Tensor::field(mCAttnActivations.view(m), kOffset, mHeadsPerDModel);
@@ -504,29 +504,31 @@ namespace NetworkLib {
 			void multiHeadedAttnBack(AttnLayer& attn, Parallel& parallel) {
 
 
-				auto iView = std::views::iota(0ULL, mTestInputSize);
+				auto inputIotaView = std::views::iota(0ULL, mTestInputSize);
 				
 				mParallelHeads([&](auto& section) {
 
-					IotaView qView;
+					IotaView qIotaView;
+					Tensor::ConstView inputAttnOutSoftmax;
+					Tensor::View outputAttnOutSoftmax, attnActivations;
 
 					for (auto h : section.mIotaView) {
 
 						const auto headOffset = h * mHeadsPerDModel;
 
-						for (auto i : iView ) {
+						for (auto i : inputIotaView) {
 
-							Tensor::ConstView inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constView(h, i);
-							Tensor::View outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i)
-								, attnActivations = mAttnActivations.view(h, i);
+							inputAttnOutSoftmax = attn.mAttnSoftmaxActivations.constView(h, i);
+							outputAttnOutSoftmax = mAttnSoftmaxActivations.view(h, i);
+							attnActivations = mAttnActivations.view(h, i);
 
-							qView = std::views::iota(0ULL, i + 1);
+							qIotaView = std::views::iota(0ULL, i + 1);
 
-							backwardVAtten( attn, headOffset, qView, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
+							backwardVAtten( attn, headOffset, qIotaView, i, inputAttnOutSoftmax, outputAttnOutSoftmax);
 							
-							softmaxBack(qView, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations);
+							softmaxBack(qIotaView, inputAttnOutSoftmax, outputAttnOutSoftmax, attnActivations);
 
-							backwardQKAtten(attn, headOffset, qView, i, attnActivations);
+							backwardQKAtten(attn, headOffset, qIotaView, i, attnActivations);
 						}
 					}
 					});
@@ -744,13 +746,15 @@ namespace NetworkLib {
 
 					float o, o2;
 
+					IotaView outputsIotaView = std::views::iota(0ULL, mUnembed.mY );
+
 					for (auto i : section.mIotaView) {
 
 						output = mUnembed.view(i);
 						dInput = dInputs.view(i);
 						input = inputs.view(i);
 
-						for (auto m : std::views::iota(0ULL, output.size())) {
+						for (auto m : outputsIotaView) {
 
 							o = output[m];
 							o2 = o * r_tokens;
