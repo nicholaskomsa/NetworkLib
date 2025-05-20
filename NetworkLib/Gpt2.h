@@ -98,7 +98,8 @@ namespace NetworkLib {
 
 	private:
 
-		static constexpr auto  mDModel3 = mDModel * 3, mDModel4 = mDModel * 4
+		static constexpr auto  mDModel3 = mDModel * 3
+			, mDModel4 = mDModel * 4
 			, mSeqModel = mDSeq * mDModel
 			, mSeqModel3 = mDSeq * mDModel3
 			, mSeqModel4 = mDSeq * mDModel4
