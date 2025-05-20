@@ -99,6 +99,7 @@
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
     <ClCompile Include="Gpt2.cpp" />
+    <ClCompile Include="Gpt2Diagnostics.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />

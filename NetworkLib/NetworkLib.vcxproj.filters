@@ -41,6 +41,9 @@
     <ClCompile Include="Gpt2.cpp">
       <Filter>Gpt</Filter>
     </ClCompile>
+    <ClCompile Include="Gpt2Diagnostics.cpp">
+      <Filter>Gpt</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />
