@@ -85,6 +85,7 @@ void Diagnostics::firstCitizenTest64() {
 
 			assert(-3859 == getSum(layer.mResidualActivation2));
 
+			sumf(layer.mResidualActivation2, "-3859");
 			};
 
 		auto testOutput = [&]() {
@@ -95,7 +96,7 @@ void Diagnostics::firstCitizenTest64() {
 			//std::println("{} == {} is {}", finalSum, testSum, finalSum == testSum);
 
 			assert(finalSum == testSum);
-
+			sumf(forward.mFinalLayer.getActivations(), "16654");
 			};
 
 

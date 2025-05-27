@@ -68,7 +68,10 @@ namespace NetworkLib {
 
 			section(size);
 		}
-
+		void section(std::size_t size, std::size_t sectionNum) {
+			mSectionNum = sectionNum;
+			section(size);
+		}
 		void section(std::size_t size) {
 
 			mSize = size;
@@ -119,7 +122,11 @@ namespace NetworkLib {
 			operator()(std::move(functor), single);
 			operator()(std::move(finale), true);
 		}
-
+		//setup done insde functor(parallel), followed by single threaded finale
+		void operator()(SectionFunctor&& functor, SectionsFunctor&& finale, bool single = false) {
+			operator()(std::move(functor), single);
+			finale(mSectionsView);
+		}
 		//single threaded setup, parallel, single threaded finale
 		void operator()(SectionFunctor&& setup, SectionFunctor&& functor, SectionFunctor&& finale, bool single = false) {
 

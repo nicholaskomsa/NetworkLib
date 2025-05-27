@@ -23,15 +23,16 @@ void GPT2::Backward::setup(Forward* forward) {
 	mEmbed = { backwardSpace, mDSeq, mDModel };
 	mWpeWeight = { backwardSpace, mDSeq, mDModel };
 
-	mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 32);
+	mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 128);
+	mParallelUnembed.setup({}, mUnembed.mY, 128);
 }
-void GPT2::Backward::unEmbedOutputs(TokensView nextTokens, Parallel& parallel) {
+void GPT2::Backward::unEmbedOutputs(TokensView nextTokens) {
 
 	auto& forward = *mForward;
 
 	Tensor& forwardSoftmax = forward.mUnembedActivationsSoftmax;
 
-	auto softmaxBlock = forwardSoftmax.viewBlock(nextTokens.size() - 1);
+	auto softmaxBlock = forwardSoftmax.constViewBlock();
 	std::copy(softmaxBlock.begin(), softmaxBlock.end(), mUnembed.mTensor.begin());
 
 	Token token;
@@ -45,63 +46,55 @@ void GPT2::Backward::unEmbedOutputs(TokensView nextTokens, Parallel& parallel) {
 		unembed[token] -= 1.0f;
 	};
 
-	Tensor& inputs = forward.mFinalLayer.getActivations();
+	const Tensor& inputs = forward.mFinalLayer.getActivations();
 	Tensor& dInputs = mFinalLayer.getActivations();
 
-	Tensor& wte = forward.mWteWeight;
+	const Tensor& wte = forward.mWteWeight;
 	Tensor& dWte = mWteWeight;
 
 	const float r_tokens = 1.0f / nextTokens.size();
 
-	parallel([&](auto& section) {
+	IotaView outputsIotaView = std::views::iota(0ULL, mUnembed.mY);
 
-		Tensor::View input, dInput, output, weight, dWeight;
-
-		auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
-		pdWeightsFloats.clear();
-		pdWeightsFloats.resize(dWte.size2D(), 0.0f);
-		Tensor pdWeights = { pdWeightsFloats, dWte.mX, dWte.mY };
-
-		float o, o2;
-
-		IotaView outputsIotaView = std::views::iota(0ULL, mUnembed.mY);
+	mParallelInput([&](auto& section) {
 
 		for (auto i : section.mIotaView) {
-
-			output = mUnembed.view(i);
-			dInput = dInputs.view(i);
-			input = inputs.view(i);
+		
+			auto dInput = dInputs.view(i);
+			auto output = mUnembed.constView(i);
 
 			for (auto m : outputsIotaView) {
+				
+				float o = output[m];
+				auto weight = wte.constView(m);
 
-				o = output[m];
-				o2 = o * r_tokens;
-
-				weight = wte.view(m);
-				dWeight = pdWeights.view(m);
-
-				for (const auto& [din, in, w, dw] : std::views::zip(dInput, input, weight, dWeight)) {
+				for (const auto& [din, w] : std::views::zip(dInput, weight))
 					din += o * w;
-					dw += o2 * in;
-				}
+			}
+		}
+		});
+
+	mParallelUnembed([&](auto& section) {
+
+		for (auto m : section.mIotaView) {
+
+			auto dWeight = dWte.view(m);
+
+			for (auto i : std::views::iota(0ULL, mParallelInput.mSize)) {
+
+				auto output = mUnembed.constView(i);
+
+				auto input = inputs.constView(i);
+
+				float o = output[m] * r_tokens;
+
+				for (const auto& [dw, in] : std::views::zip(dWeight, input))
+					dw += o * in;
 			}
 		}
 
-		}, [&](auto& section) {
+		});
 
-			auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
-
-			Tensor::View dWteBlock = dWte.viewBlock();
-
-			std::transform(std::execution::par_unseq, dWteBlock.begin(), dWteBlock.end()
-				, pdWeightsFloats.begin(), dWteBlock.begin(), [&](auto& w, auto& pw) {
-					return w + pw;
-				});
-
-			//for (const auto& [w, pdw] : std::views::zip(dWteBlock, pdWeightsFloats))
-			//	w += pdw;
-
-			});
 		Tensor::View dInputsBlock = dInputs.viewBlock();
 
 		std::transform(std::execution::par_unseq, dInputsBlock.begin(), dInputsBlock.end(), dInputsBlock.begin(), [&](auto f) {return f * r_tokens; });
@@ -134,7 +127,7 @@ void GPT2::Backward::backward(TokensView tokens, TokensView nextTokens) {
 	std::fill(mBackwardSpace.begin(), mBackwardSpace.end(), 0.0f);
 
 	mUnembedTime.accumulateTime([&]() {
-		unEmbedOutputs(nextTokens, mParallelInput);
+		unEmbedOutputs(nextTokens);
 		});
 
 	auto& forwardLayers = forward.mAttnLayers;

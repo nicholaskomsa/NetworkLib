@@ -10,7 +10,7 @@ using namespace NetworkLib;
 
 void GPT2::Forward::setup() {
 
-	mParallelInput.setup({}, mTestInputSize, 64);
+	mParallelInput.setup({}, mTestInputSize, 256);
 	mParallelI.setup(Floats{}, mTestInputSize, 8);
 
 	load();

@@ -274,7 +274,7 @@ namespace NetworkLib {
 
 			friend class Diagnostics;
 
-			Parallel mParallelInput;
+			Parallel mParallelInput, mParallelUnembed;
 
 			Floats mBackwardSpace;
 
@@ -292,7 +292,7 @@ namespace NetworkLib {
 
 			void setup(Forward* forward);
 
-			void unEmbedOutputs(TokensView nextTokens, Parallel& parallel);
+			void unEmbedOutputs(TokensView nextTokens);
 			void embedOutputs(TokensView tokens, Parallel& parallel);
 			void backward(TokensView tokens, TokensView nextTokens);
 			void sgd(float learnRate = 0.0002);

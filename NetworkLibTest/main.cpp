@@ -8,6 +8,8 @@ int main() {
 	using GPT2 = NetworkLib::GPT2;
 
 	GPT2::Diagnostics diag;
+	//diag.firstCitizenTest64();
+
 	//diag.feedForwardSpeed1024();
 	//diag.backwardTest64();
 

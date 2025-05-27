@@ -8,6 +8,7 @@
 #include <map>
 
 #include "Algorithms.h"
+#include <Gpt2Forward.cpp>
 using namespace NetworkLib;
 
 Parallel GPT2::AttnLayer::mParallelHeads( mHeadNum, mHeadNum);
@@ -75,44 +76,28 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 	
 	//this is a "matrix * vector + vector" or "fully connected" aka "forward" o += w * i + b
 
-	Tensor::ConstView input = inputTensor.constView(i)
+	Tensor::ConstView inputs = inputTensor.constView(i)
 		, b = biasTensor.constView();
-	Tensor::View output = outputTensor.view(i);
+	Tensor::View outputs = outputTensor.view(i);
 
 	//a fully connected input and output with a bias
 	//identical to forward except for paralleled for i sample
 
-	std::copy(b.begin(), b.end(), output.begin());
+	std::copy(b.begin(), b.end(), outputs.begin());
 
-	parallel([&](auto& section) {
+	Parallel parallel2(outputs.size(), 64);
+	
+	auto inputIota = std::views::iota(0ULL, parallel.mSize);
 
-		auto& partialOutput = std::any_cast<Floats&>(section.mAny);
-		partialOutput.clear();
-		partialOutput.resize(output.size(), 0.0f);
+	auto weights = weightTensor.constView(i);
 
-		float in;
+	parallel2([&](auto& section) {
 
-		for (auto m : section.mIotaView) {
-
-			in = input[m];
-
-			for (const auto& [o, w] : std::views::zip(partialOutput, weightTensor.constView(m)))
-				o += w * in;
-		}
-
-		}, [&](auto& section) {
-
-			auto& partialOutput = std::any_cast<Floats&>(section.mAny);
-
-			//std::transform(std::execution::par_unseq, output.begin(), output.end(), outputs.begin(), output.begin(),
-			//	[&](auto a, auto b) {
-			//		return a + b;
-
-			//	});
-			for (auto m : std::views::iota(0ULL, output.size()))
-				output[m] += partialOutput[m];
-				
-			});
+		for (auto o : section.mIotaView)
+			for (auto i : inputIota)
+				outputs[o] += weights[o] * inputs[i];
+		
+		});
 }
 void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
@@ -179,45 +164,44 @@ void GPT2::backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeig
 
 	mBackwardTime.accumulateTime([&]() {
 
+		auto inputIota = std::views::iota(0ULL, parallel.mSize);
+		Parallel parallel2(dBias.size(), 64);
+
 		auto dWeightsBlock = dWeights.viewBlock();
 		auto dBiasView = dBias.view();
 
-		parallel([&](auto& section) {
+		auto biasIota = std::views::iota(0ULL, dBias.size());
 
-			auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
+		parallel2([&](auto& section) {
+			
+			for( auto b : section.mIotaView )
+				for (auto i : inputIota) {
 
-			pdBias.clear();
-			pdBias.resize(dBias.mX, 0.0f);
+					auto dOutput = dOutputs.constView(i);
 
-			pdWeightsFloats.clear();
-			pdWeightsFloats.resize(dWeights.size2D(), 0.0f);
-			Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
+					dBiasView[b] += dOutput[b];
+				}
+			});
 
-			Tensor::ConstView dOutput, activations, weight;
-			Tensor::View pdWeight, dActivations;
+		parallel2.section(inActivations.mY, 128);
 
-			IotaView activationsIotaView = std::views::iota(0ULL, inActivations.mY);
+		parallel2([&](auto& section) {
 
-			for (auto i : section.mIotaView) {
+			for (auto m : section.mIotaView) {
 
-				dOutput = dOutputs.constView(i);
+				auto weight = weights.constView(m);
+				auto dWeight = dWeights.view(m);
 
-				for (const auto& [b, o] : std::views::zip(pdBias, dOutput))
-					b += o;
+				for (auto i : inputIota) {
 
-				activations = inActivations.constView(i);
-				dActivations = outActivations.view(i);
-
-				for (auto m : activationsIotaView) {
-
-					weight = weights.constView(m);
-					pdWeight = pdWeights.view(m);
-
+					auto dOutput = dOutputs.constView(i);
+					auto activations = inActivations.constView(i);
+					auto dActivations = outActivations.view(i);
 					float in = activations[m];
 
 					float dot = 0.0f;
 
-					for (const auto& [pdW, o, w] : std::views::zip(pdWeight, dOutput, weight)) {
+					for (const auto& [pdW, o, w] : std::views::zip(dWeight, dOutput, weight)) {
 						pdW += in * o;
 						dot += w * o;
 					}
@@ -225,27 +209,8 @@ void GPT2::backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeig
 					dActivations[m] = dot;
 				}
 			}
+			});
 
-			}, [&](auto& section) {
-
-				auto& [pdBias, pdWeightsFloats] = std::any_cast<PartialBiasWeight&>(section.mAny);
-				Tensor pdWeights = { pdWeightsFloats, dWeights.mX, dWeights.mY };
-
-				for (const auto& [b, pb] : std::views::zip(dBiasView, pdBias))
-					b += pb;
-				
-				auto pdWeightsBlock = pdWeights.viewBlock();
-				auto weightsBlock = pdWeights.viewBlock();
-
-				std::transform(std::execution::par_unseq, pdWeightsBlock.begin(), pdWeightsBlock.end()
-					, weightsBlock.begin(), weightsBlock.begin(), [&](auto pw, auto w) {
-					return pw + w;
-					});
-				//for (const auto& [w, pw] : std::views::zip(dWeightsBlock, pdWeights.viewBlock()))
-			//		w += pw;
-
-
-				});
 		});
 }
 void GPT2::softmaxBack(const IotaView& iotaView, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax) {
