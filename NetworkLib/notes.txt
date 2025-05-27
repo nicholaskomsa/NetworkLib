@@ -1,0 +1,9 @@
+19:      cel: 3.7320938, predicted/expected:  for/ us; took: forward: 3004ms, back: 17479ms, sgd: 21ms, battn: 342x12=4106ms, bgelu : 1x12=12ms, blin : 0x25=0ms, backward: 191x48=9170ms, bembed: 1x1=1ms, bunembed: 4017x1=4017ms, blayers: 13341x1=13341ms
+20:      cel: 3.7228212, predicted/expected:  for/ us; took: forward: 3111ms, back: 17746ms, sgd: 20ms, battn: 351x12=4222ms, bgelu : 1x12=12ms, blin : 0x25=1ms, backward: 190x48=9161ms, bembed: 1x1=1ms, bunembed: 4180x1=4180ms, blayers: 13445x1=13445ms
+21:      cel: 3.7139595, predicted/expected:  for/ us; took: forward: 3138ms, back: 17919ms, sgd: 20ms, battn: 355x12=4266ms, bgelu : 1x12=12ms, blin : 0x25=0ms, backward: 191x48=9184ms, bembed: 1x1=1ms, bunembed: 4277x1=4277ms, blayers: 13517x1=13517ms
+22:      cel: 3.7054548, predicted/expected:  for/ us; took: forward: 3122ms, back: 17993ms, sgd: 20ms, battn: 355x12=4266ms, bgelu : 1x12=12ms, blin : 0x25=0ms,
+backward: 190x48=9160ms, bembed: 0x1=0ms, bunembed: 4391x1=4391ms, blayers: 13490x1=13490ms
+
+
+2:       cel: 4.12868, predicted/expected:  for/ us; took: forward: 3886ms, back: 17351ms, sgd: 24ms, battn: 350x12=4211ms, bgelu : 1x12=12ms, blin : 0x25=0ms, 
+backward: 173x48=8313ms, bembed: 1x1=1ms, bunembed: 4620x1=4620ms, blayers: 12596x1=12596ms

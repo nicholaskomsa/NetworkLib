@@ -5,8 +5,9 @@
 
 using namespace NetworkLib;
 
+using Translator = GPT2::Translator;
 
-void GPT2::Translator::load() {
+void Translator::load() {
 
 	//we need to load the translator file, written by raffK project.
 	//in raffK project, the gpt2 python code exported all of its vocabulary to file
@@ -52,7 +53,7 @@ void GPT2::Translator::load() {
 		mWordMap.insert({ word, token });
 	}
 }
-std::string GPT2::Translator::decode(TokensView tokens) const {
+std::string Translator::decode(TokensView tokens) const {
 
 	//concat a series of tokens into a string
 
@@ -63,10 +64,10 @@ std::string GPT2::Translator::decode(TokensView tokens) const {
 
 	return sstr.str();
 }
-std::string GPT2::Translator::decode(Token token) const {
+std::string Translator::decode(Token token) const {
 	return std::string(getWord(token));
 }
-GPT2::Translator::Word GPT2::Translator::getWord(Token token) const {
+Translator::Word Translator::getWord(Token token) const {
 
 	//this function will take a token and convert it into a gpt word
 	//this would only fail if token is larger than vocab size
@@ -77,7 +78,7 @@ GPT2::Translator::Word GPT2::Translator::getWord(Token token) const {
 
 	return found->get_left();
 }
-GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
+GPT2::Tokens Translator::encode(std::string_view remaining) const {
 
 	//take a string potentially containing many tokens, and generate all tokens
 	//many gpt "words" begin with a white space " ", 
@@ -125,7 +126,7 @@ GPT2::Tokens GPT2::Translator::encode(std::string_view remaining) const {
 
 	return tokens;
 }
-GPT2::Token GPT2::Translator::getToken(std::string_view word) const {
+GPT2::Token Translator::getToken(std::string_view word) const {
 
 	//convert a word to a token
 	//this will only fail if for some reason word is not a true GPT "word" found in vocabulary

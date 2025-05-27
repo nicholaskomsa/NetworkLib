@@ -1,25 +1,28 @@
 #include "Gpt2.h"
 
-using namespace NetworkLib;
 
-double GPT2::Diagnostics::sumf(Tensor::ConstView tensorView, std::string_view expected) {
+
+using namespace NetworkLib;
+using Diagnostics = GPT2::Diagnostics;
+
+double Diagnostics::sumf(Tensor::ConstView tensorView, std::string_view expected) {
 
 	double sum = std::reduce(tensorView.begin(), tensorView.end(), double(0.0));
 	std::print("{}=={}\n", expected, sum);
 	return sum;
 }
-double GPT2::Diagnostics::sumf(const Tensor& tensor, std::string_view expected) {
+double Diagnostics::sumf(const Tensor& tensor, std::string_view expected) {
 	return sumf(tensor.mTensor, expected);
 }
-double GPT2::Diagnostics::sumAbsf(Tensor::ConstView tensor, std::string_view expected) {
+double Diagnostics::sumAbsf(Tensor::ConstView tensor, std::string_view expected) {
 	double sum = std::reduce(tensor.begin(), tensor.end(), double(0.0), [](double a, float b) {return a + std::abs(b); });
 	std::print("{}=={}\n", expected, sum);
 	return sum;
 }
-double GPT2::Diagnostics::sumAbsf(const Tensor& tensor, std::string_view expected) {
+double Diagnostics::sumAbsf(const Tensor& tensor, std::string_view expected) {
 	return sumAbsf(tensor.mTensor, expected);
 }
-double GPT2::Diagnostics::attnSumAbsf(const Tensor& tensor, std::size_t offset, std::string_view expected) {
+double Diagnostics::attnSumAbsf(const Tensor& tensor, std::size_t offset, std::string_view expected) {
 
 	auto inputs = std::views::iota(0ULL, mTestInputSize);
 
@@ -42,7 +45,8 @@ double GPT2::Diagnostics::attnSumAbsf(const Tensor& tensor, std::size_t offset, 
 	std::print("{}=={}\n", expected, fieldSum);
 	return fieldSum;
 }
-void GPT2::Diagnostics::firstCitizenTest64() {
+
+void Diagnostics::firstCitizenTest64() {
 
 	//this test is used to check the specific values of feed forward for correctness
 
@@ -126,8 +130,7 @@ void GPT2::Diagnostics::firstCitizenTest64() {
 
 		});
 }
-
-void GPT2::Diagnostics::feedForwardSpeed1024() {
+void Diagnostics::feedForwardSpeed1024() {
 
 	//this test is used to examine feedforward speed
 
@@ -159,7 +162,7 @@ void GPT2::Diagnostics::feedForwardSpeed1024() {
 
 		});
 }
-void GPT2::Diagnostics::crossEntropyTest64() {
+void Diagnostics::crossEntropyTest64() {
 
 	run([&](auto& gpt2) {
 
@@ -194,7 +197,7 @@ void GPT2::Diagnostics::crossEntropyTest64() {
 		});
 
 }
-void GPT2::Diagnostics::backwardTest64() {
+void Diagnostics::backwardTest64() {
 
 	run([&](auto& gpt2) {
 
@@ -275,7 +278,7 @@ void GPT2::Diagnostics::backwardTest64() {
 		});
 
 }
-void GPT2::Diagnostics::SGDTest64() {
+void Diagnostics::SGDTest64() {
 
 	run([&](auto& gpt2) {
 
@@ -291,7 +294,6 @@ void GPT2::Diagnostics::SGDTest64() {
 		Token predicted, expected = nextTokens.back();
 
 		float crossEntropyLoss;
-		TimeAverage<milliseconds> ffAvg, bAvg, sgdAvg;
 
 		auto& forward = gpt2.mForward;
 		auto& backward = gpt2.mBackward;
@@ -301,42 +303,23 @@ void GPT2::Diagnostics::SGDTest64() {
 		std::size_t generation = 0;
 		do {
 
-			auto forwardElapsed = ffAvg.accumulateTime([&]() {
+			predicted = forward.feedForward(tokens);
 
-				predicted = forward.feedForward(tokens);
-
-				crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
-
-				});
+			crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
 
 			auto predictedWord = gpt2.mTranslator.decode(predicted);
 			auto expectedWord = gpt2.mTranslator.decode(expected);
 
-			auto backwardElapsed = bAvg.accumulateTime([&]() {
+			backward.backward(tokens, nextTokens);
 
-				backward.backward(tokens, nextTokens);
+			backward.sgd();
 
-				});
+			auto equality = (predicted == expected ? "==" : "!=");
 
-			auto sgdElapsed = bAvg.accumulateTime([&]() {
-
-				backward.sgd();
-
-				});
-
-			std::println("{}:\t cel: {}, predicted/expected: {}/{}; took: forward: {}, back: {}, sgd: {}"
-				", battn: {}, bgelu : {}, blin : {}"
-				", backward: {}"
-				", bembed: {}, bunembed: {}, blayers: {}"
-
-				, generation, crossEntropyLoss, predictedWord, expectedWord, forwardElapsed, backwardElapsed, sgdElapsed
-				, AttnLayer::mBackwardAttnTime.getString()
-				, MLP::mBackwardGeluTime.getString()
-				, LinearLayer::mBackwardTime.getString()
-				, mBackwardTime.getString()
-				, Backward::mEmbedTime.getString()
-				, Backward::mUnembedTime.getString()
-				, Backward::mLayersTime.getString());
+			std::println("{}; ce: {}, {}{}{}; {}; {}"
+				, generation, crossEntropyLoss, predictedWord, equality, expectedWord
+				, forward.getTimeAverages()
+				, backward.getTimeAverages());
 
 			++generation;
 
@@ -345,14 +328,14 @@ void GPT2::Diagnostics::SGDTest64() {
 		});
 
 }
-void GPT2::Diagnostics::simpleChat() {
+void Diagnostics::simpleChat() {
 
 	run([&](auto& gpt2) {
 		gpt2.chat();
 		});
 }
 
-void GPT2::Diagnostics::run(TestFunction&& test) {
+void Diagnostics::run(TestFunction&& test) {
 
 	try {
 

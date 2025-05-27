@@ -5,11 +5,11 @@
 #include <print>
 #include <numbers>
 
+#include <boost/bimap.hpp>
+
 #include "Algorithms.h"
 #include "Tensor.h"
 #include "Parallel.h";
-
-#include <boost/bimap.hpp>
 
 namespace NetworkLib {
 
@@ -110,11 +110,11 @@ namespace NetworkLib {
 			, mModelModel = mDModel * mDModel
 			, mVocabModel = mDVocab * mDModel;
 
+		static TimeAverage<milliseconds> mForwardTime, mBackwardTime;
+
 		static void forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
-
-		static TimeAverage<milliseconds> mBackwardTime;
 
 		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel);
@@ -132,8 +132,6 @@ namespace NetworkLib {
 
 			static constexpr float r_sqrt2 = 1.0f / std::numbers::sqrt2;
 			static const float r_sqrt2Pi;
-
-			static TimeAverage<milliseconds> mBackwardGeluTime;
 		public:
 
 			static std::size_t getBackwardSize();
@@ -146,6 +144,8 @@ namespace NetworkLib {
 
 			void backward(const MLP& mlp, const Tensor& linear, const Tensor& dResidual, Tensor& dLinear, Parallel& parallel);
 			void sgd(const MLP& gradients, float learnRate);
+
+			static TimeAverage<milliseconds> mBackwardGeluTime;
 		};
 
 		class LinearLayer {
@@ -190,7 +190,6 @@ namespace NetworkLib {
 
 			MLP mMLP;
 
-			static TimeAverage<milliseconds> mBackwardAttnTime;
 
 			static const float r_sqrtHeadsPerDModel;
 
@@ -225,6 +224,9 @@ namespace NetworkLib {
 		
 			void backward(AttnLayer& attn, const Tensor& forwardResidual2, Tensor& residual2, Parallel& parallel);
 			void sgd(const AttnLayer& gradients, float learnRate);
+
+			static TimeAverage<milliseconds> mForwardAttnTime, mBackwardAttnTime;
+
 		};
 
 		class Backward;
@@ -259,9 +261,16 @@ namespace NetworkLib {
 			Token getPrediction(std::size_t i) const;
 			float crossEntropyLoss(TokensView nextTokens);
 
+			static TimeAverage<milliseconds> mUnembedTime, mLayersTime;
+
+			static std::string getTimeAverages() {
+				return std::format("{},{},{},{}",
+					mUnembedTime.getString(), mLayersTime.getString()
+					, mForwardTime.getString(), AttnLayer::mForwardAttnTime.getString() );
+			}
 		} mForward;
 
-		struct Backward {
+		class Backward {
 
 			friend class Diagnostics;
 
@@ -277,7 +286,7 @@ namespace NetworkLib {
 
 			Forward* mForward;
 
-			static TimeAverage<milliseconds> mEmbedTime, mUnembedTime, mLayersTime;
+			static TimeAverage<milliseconds> mUnembedTime, mLayersTime;
 
 		public:
 
@@ -287,6 +296,12 @@ namespace NetworkLib {
 			void embedOutputs(TokensView tokens, Parallel& parallel);
 			void backward(TokensView tokens, TokensView nextTokens);
 			void sgd(float learnRate = 0.0002);
+
+			static std::string getTimeAverages() {
+				return std::format("{},{},{},{}"
+					, mUnembedTime.getString(), mLayersTime.getString()
+					, mBackwardTime.getString(), AttnLayer::mBackwardAttnTime.getString());
+			}
 
 		} mBackward;
 	};
