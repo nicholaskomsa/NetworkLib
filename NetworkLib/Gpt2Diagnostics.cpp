@@ -279,7 +279,7 @@ void Diagnostics::backwardTest64() {
 		});
 
 }
-void Diagnostics::SGDTest64() {
+void Diagnostics::SGDTest() {
 
 	run([&](auto& gpt2) {
 
@@ -289,7 +289,8 @@ void Diagnostics::SGDTest64() {
 		TokensView tokens(data.mTokens.begin(), GPT2::mTestInputSize)
 			, nextTokens(data.mTokens.begin() + 1, GPT2::mTestInputSize);
 
-		auto preText = gpt2.mTranslator.decode(tokens);
+		auto& translator = gpt2.mTranslator;
+		auto preText = translator.decode(tokens);
 		std::println("{}", preText);
 
 		Token predicted = InvalidToken, expected = nextTokens.back();
@@ -305,8 +306,8 @@ void Diagnostics::SGDTest64() {
 
 		auto print = [&]() {
 
-			auto predictedWord = gpt2.mTranslator.decode(predicted);
-			auto expectedWord = gpt2.mTranslator.decode(expected);
+			auto predictedWord = translator.decode(predicted);
+			auto expectedWord = translator.decode(expected);
 			auto equality = (predicted == expected ? "==" : "!=");
 
 			std::println("{}; ce: {}, {}{}{}; {}; {}"
@@ -333,9 +334,6 @@ void Diagnostics::SGDTest64() {
 			print();
 
 			++generation;
-
-
-			//draw frame
 
 		} while (true);
 

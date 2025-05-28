@@ -11,9 +11,9 @@ int main() {
 	//diag.firstCitizenTest64();
 
 	//diag.feedForwardSpeed1024();
-	//diag.backwardTest64();
+	diag.backwardTest64();
 
-	diag.SGDTest64();
+	//diag.SGDTest();
 	//diag.simpleChat();
 
 	std::puts("\nProgram Finished press enter to exit");

@@ -107,10 +107,11 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 
 		auto inputIota = std::views::iota(0ULL, inputTensor.mY);
 
-		parallel([&](Parallel::Section& section) {
+		parallel([&](auto& section) {
 
-			Tensor::ConstView input, b = biasTensor.constView();
+			Tensor::ConstView weights, input, b = biasTensor.constView();
 			Tensor::View output;
+			float in;
 
 			for (auto i : section.mIotaView) {
 
@@ -120,9 +121,6 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 				output = outputTensor.view(i);
 
 				std::copy(b.begin(), b.end(), output.begin());
-
-				float in;
-				Tensor::ConstView weights;
 
 				for (auto m : inputIota ) {
 
@@ -197,8 +195,8 @@ void GPT2::backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeig
 
 					float dot = 0.0f;
 
-					for (const auto& [pdW, o, w] : std::views::zip(dWeight, dOutput, weight)) {
-						pdW += in * o;
+					for (const auto& [dW, o, w] : std::views::zip(dWeight, dOutput, weight)) {
+						dW += in * o;
 						dot += w * o;
 					}
 
@@ -356,7 +354,7 @@ Tensor& GPT2::LinearLayer::getActivations() {
 	return mActivations;
 }
 std::size_t GPT2::LinearLayer::getBackwardSize() {
-	return mSeqModel + mDModel * 2;
+	return mSeqModel  + mDModel * 2;
 }
 void GPT2::LinearLayer::load(Floats::iterator& backwardSpace) {
 
@@ -426,14 +424,6 @@ void GPT2::LinearLayer::backward(const LinearLayer& inputLayer, const Tensor& in
 
 		parallel([&](auto& section) {
 
-			auto& [pdBias, pdWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
-
-			pdBias.clear();
-			pdBias.resize(inputs.mY, 0.0f);
-
-			pdWeight.clear();
-			pdWeight.resize(inputs.mY, 0.0f);
-
 			Tensor::ConstView dOut, input;
 			Tensor::View dInput;
 
@@ -448,43 +438,57 @@ void GPT2::LinearLayer::backward(const LinearLayer& inputLayer, const Tensor& in
 					, meanPartial = 0.0f
 					, stdDevPartial = 0.0f;
 
-				float dInNorm;
+				float inNorm, dInNorm;
 
-				for (const auto& [dB, o, i, dW, w, dI] : std::views::zip(pdBias, dOut, input, pdWeight, weight, dInput)) {
+				for (const auto& [o, i, w] : std::views::zip(dOut, input, weight)) {
 
-					dI = (i - mean) * rStdDev; //==inNorm will pass through as dI
-
-					dW += o * dI;
-					dB += o;
-
+					inNorm = (i - mean) * rStdDev; 
 					dInNorm = o * w;
+
 					meanPartial += dInNorm;
-					stdDevPartial += dInNorm * dI;
+					stdDevPartial += dInNorm * inNorm;
 				}
 
 				meanPartial /= dBias.size();
 				stdDevPartial /= dBias.size();
 
 				for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
-
+					
+					inNorm = (i - mean) * rStdDev; 
 					dInNorm = o * w;
 
-					dI = dInNorm - meanPartial - dI * stdDevPartial;
+					dI = dInNorm - meanPartial - inNorm * stdDevPartial;
 					dI *= rStdDev;
 				}
 			}
 
-			}, [&](auto& section) {
+			});
 
-				auto& [partialBias, partialWeight] = std::any_cast<PartialBiasWeight&>(section.mAny);
+		Parallel parallel2(dBias.size());
 
-				for (const auto& [b, w, pb, pw] : std::views::zip(dBias, dWeight, partialBias, partialWeight)) {
-					b += pb;
-					w += pw;
+		parallel2([&](auto& section) {
+
+			for (auto n : section.mIotaView) {
+
+				float& dB = dBias[n];
+				float& dW = dWeight[n];
+
+				for (auto i : std::views::iota(0ULL, parallel.mSize)){
+					
+					float input = inputs.constView(i)[n];
+					float mean = means[i]
+						, rStdDev = rStdDevs[i];
+
+					float o = dActivations.constView(i)[n];
+					
+					float inNorm = (input - mean) * rStdDev;
+
+					dW += o * inNorm;
+					dB += o;
 				}
+			}
 
-				});
-
+			});
 		});
 }
 
