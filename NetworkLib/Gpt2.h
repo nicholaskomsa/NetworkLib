@@ -28,6 +28,7 @@ namespace NetworkLib {
 
 		using Floats = Tensor::Floats;
 		using Token = std::uint16_t;
+		static constexpr Token InvalidToken = std::numeric_limits<Token>::max();
 		using Tokens = std::vector<Token>;
 		using TokensView = std::span<Token>;
 		using IotaView = std::ranges::iota_view<std::size_t, std::size_t>;

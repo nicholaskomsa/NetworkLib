@@ -93,9 +93,9 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 
 	parallel2([&](auto& section) {
 
-		for (auto o : section.mIotaView)
+		for (auto m : section.mIotaView)
 			for (auto i : inputIota)
-				outputs[o] += weights[o] * inputs[i];
+				outputs[m] += weights[m] * inputs[i];
 		
 		});
 }
@@ -104,6 +104,8 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 	//each input is doing "matrix * vector + vector" or is "fully connected"
 
 	mForwardTime.accumulateTime([&]() {
+
+		auto inputIota = std::views::iota(0ULL, inputTensor.mY);
 
 		parallel([&](Parallel::Section& section) {
 
@@ -122,19 +124,13 @@ void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor
 				float in;
 				Tensor::ConstView weights;
 
-				for (auto m : std::views::iota(0ULL, input.size())) {
+				for (auto m : inputIota ) {
 
 					in = input[m];
 					weights = weightTensor.constView(m);
 
 					for (const auto& [o, w] : std::views::zip(output, weights))
 						o += w * in;
-
-					//std::transform(std::execution::seq, output.begin(), output.end(), weights.begin(), output.begin()
-					//	, [&](auto o, auto w) {
-
-					//		return o + w * in;
-					//	});
 				}
 			}
 

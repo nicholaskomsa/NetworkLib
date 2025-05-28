@@ -292,7 +292,7 @@ void Diagnostics::SGDTest64() {
 		auto preText = gpt2.mTranslator.decode(tokens);
 		std::println("{}", preText);
 
-		Token predicted, expected = nextTokens.back();
+		Token predicted = InvalidToken, expected = nextTokens.back();
 
 		float crossEntropyLoss;
 
@@ -302,32 +302,44 @@ void Diagnostics::SGDTest64() {
 		backward.setup(&gpt2.mForward);
 
 		std::size_t generation = 0;
-		do {
 
-			predicted = forward.feedForward(tokens);
-
-			crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
+		auto print = [&]() {
 
 			auto predictedWord = gpt2.mTranslator.decode(predicted);
 			auto expectedWord = gpt2.mTranslator.decode(expected);
-
-			backward.backward(tokens, nextTokens);
-
-			backward.sgd();
-
 			auto equality = (predicted == expected ? "==" : "!=");
 
 			std::println("{}; ce: {}, {}{}{}; {}; {}"
 				, generation, crossEntropyLoss, predictedWord, equality, expectedWord
 				, forward.getTimeAverages()
 				, backward.getTimeAverages());
+			};
+
+		do{
+
+			predicted = forward.feedForward(tokens);
+
+			if (predicted == expected){
+				print();
+				break;
+			}
+
+			crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
+
+			backward.backward(tokens, nextTokens);
+
+			backward.sgd();
+			
+			print();
 
 			++generation;
 
-		} while (predicted != expected);
+
+			//draw frame
+
+		} while (true);
 
 		});
-
 }
 void Diagnostics::simpleChat() {
 
@@ -335,7 +347,6 @@ void Diagnostics::simpleChat() {
 		gpt2.chat();
 		});
 }
-
 void Diagnostics::run(TestFunction&& test) {
 
 	try {
