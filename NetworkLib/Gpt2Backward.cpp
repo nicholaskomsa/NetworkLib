@@ -166,8 +166,7 @@ void GPT2::Backward::sgd(float learnRate) {
 	GPT2::sgd(forward.mWpeWeight.viewBlock(), mWpeWeight.viewBlock(), learnRate);
 	GPT2::sgd(forward.mWteWeight.viewBlock(), mWteWeight.viewBlock(), learnRate);
 
-	GPT2::sgd(forward.mFinalLayer.mBias.view(), mFinalLayer.mBias.view(), learnRate);
-	GPT2::sgd(forward.mFinalLayer.mWeight.viewBlock(), mFinalLayer.mWeight.viewBlock(), learnRate);
+	forward.mFinalLayer.sgd(mFinalLayer, learnRate);
 
 	auto iotaView = std::ranges::iota_view(0ULL, layers.size());
 

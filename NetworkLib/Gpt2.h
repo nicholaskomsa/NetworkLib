@@ -24,7 +24,7 @@ namespace NetworkLib {
 			, mHeadNum = 12, mAttnLayersNum = 12
 			, mHeadsPerDModel = mDModel / mHeadNum
 			, mQOffset = 0, mKOffset = mDModel, mVOffset = mDModel * 2
-			, mTestInputSize = 64;	//vs dSeq for full size or 64 for test size
+			, mTestInputSize = mDSeq;	//vs dSeq for full size or 64 for test size
 
 		using Floats = Tensor::Floats;
 		using Token = std::uint16_t;

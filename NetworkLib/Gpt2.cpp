@@ -438,26 +438,25 @@ void GPT2::LinearLayer::backward(const LinearLayer& inputLayer, const Tensor& in
 					, meanPartial = 0.0f
 					, stdDevPartial = 0.0f;
 
-				float inNorm, dInNorm;
+				float dInNorm;
 
-				for (const auto& [o, i, w] : std::views::zip(dOut, input, weight)) {
+				for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
 
-					inNorm = (i - mean) * rStdDev; 
+					dI = (i - mean) * rStdDev;  //inNorm passthrough as di
 					dInNorm = o * w;
 
 					meanPartial += dInNorm;
-					stdDevPartial += dInNorm * inNorm;
+					stdDevPartial += dInNorm * dI;
 				}
 
 				meanPartial /= dBias.size();
 				stdDevPartial /= dBias.size();
 
 				for (const auto& [o, i, w, dI] : std::views::zip(dOut, input, weight, dInput)) {
-					
-					inNorm = (i - mean) * rStdDev; 
+				
 					dInNorm = o * w;
 
-					dI = dInNorm - meanPartial - inNorm * stdDevPartial;
+					dI = dInNorm - meanPartial - dI * stdDevPartial;
 					dI *= rStdDev;
 				}
 			}
