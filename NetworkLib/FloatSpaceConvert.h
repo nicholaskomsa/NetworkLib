@@ -179,6 +179,16 @@ namespace FloatSpaceConvert {
 		}
 	}
 
+	std::pair<int, int> getDimensions(auto size, float aspectRatio = 3840.0f / 2160.0f) {
+
+		int width = 0, height = 0;
+
+		width = std::sqrt(size * aspectRatio);
+		height = std::ceil(size / float(width));
+
+		return { width, height };
+	}
+
 	void colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats) {
 
 		std::println("Colorizing float space: {}", baseFileName);
@@ -244,19 +254,13 @@ namespace FloatSpaceConvert {
 
 			};
 
-		auto getDimensions = [&](auto size, float aspectRatio = 3840.0f / 2160.0f) ->std::pair<int, int> {
 
-			int width = 0, height = 0;
-
-			width = std::sqrt(size * aspectRatio);
-			height = std::ceil(size / float(width));
-
-			return { width, height };
-			};
 
 		auto [width, height] = getDimensions(floats.size());
 
 		writeColorizedImages(floats, width, height);
 
 	}
+
+	
 };	

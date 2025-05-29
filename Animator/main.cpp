@@ -14,26 +14,9 @@
 #include <FloatSpaceConvert.h>
 
 int main() {
-    // Initialize SDL3
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        SDL_Log("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-        return -1;
-    }
 
-    // Create a fullscreen window
-    SDL_Window* window = SDL_CreateWindow("SDL3 Fullscreen Example",
-                1920, 1080
-        , SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL); //SDL_WINDOW_FULLSCREEN || 
+    auto [width, height] = FloatSpaceConvert::getDimensions(100000);
 
-    if (!window) {
-        SDL_Log("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-        SDL_Quit();
-        return -1;
-    }
-    
-    auto glContext = SDL_GL_CreateContext(window);
-    GLuint texture;
-    constexpr std::size_t width = 256, height = 256;
     std::vector<std::uint32_t> pixels(width * height); 
 
     std::vector<float> floats(pixels.size());
@@ -41,12 +24,34 @@ int main() {
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
     std::generate(floats.begin(), floats.end(), [&]() {
-        return  range(random);
+        return range(random);
 	});
 
     FloatSpaceConvert::floatSpaceConvert(floats, pixels);
 
+    SDL_GLContext glContext;
+    GLuint texture;
+    SDL_Window* window;
+
     auto initOpenGL = [&]() {
+        // Initialize SDL3
+        if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+            SDL_Log("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
+            return -1;
+        }
+
+        // Create a fullscreen window
+        window = SDL_CreateWindow("SDL3 Fullscreen Example",
+            1920, 1080
+            , SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL); //SDL_WINDOW_FULLSCREEN || 
+
+        if (!window) {
+            SDL_Log("Window could not be created! SDL_Error: %s\n", SDL_GetError());
+            SDL_Quit();
+            return -1;
+        }
+
+        glContext = SDL_GL_CreateContext(window);
 
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
@@ -63,6 +68,10 @@ int main() {
 
     bool running = true;
     SDL_Event event;
+    std::size_t generation = 0;
+
+    glBindTexture(GL_TEXTURE_2D, texture);
+
     while (running) {
 
         while (SDL_PollEvent(&event)) {
@@ -71,8 +80,7 @@ int main() {
             }
         }
   
-        glClear(GL_COLOR_BUFFER_BIT);
-        glBindTexture(GL_TEXTURE_2D, texture);
+       
         glBegin(GL_QUADS);
         glTexCoord2f(0, 0); glVertex2f(-1, -1);
         glTexCoord2f(1, 0); glVertex2f(1, -1);
@@ -83,7 +91,6 @@ int main() {
         SDL_GL_SwapWindow(window);
     }
 
-    // Cleanup
     SDL_DestroyWindow(window);
     SDL_Quit();
    
