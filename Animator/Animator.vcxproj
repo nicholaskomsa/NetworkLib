@@ -11,19 +11,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{1F0B8E0C-CE54-45C3-934D-EBDD0261F164}</ProjectGuid>
-    <RootNamespace>NetworkLib</RootNamespace>
+    <ProjectGuid>{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}</ProjectGuid>
+    <RootNamespace>Animator</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
     <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
@@ -42,12 +42,14 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(LibraryPath)</LibraryPath>
+    <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
+    <IncludePath>F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(LibraryPath)</LibraryPath>
+    <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
+    <IncludePath>F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -59,7 +61,7 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>NetworkLib.lib; FreeImage_d.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -79,7 +81,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>NetworkLib.lib; FreeImage.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -89,24 +91,7 @@
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Algorithms.h" />
-    <ClInclude Include="CpuNetwork.h" />
-    <ClInclude Include="FloatSpaceConvert.h" />
-    <ClInclude Include="Gpt2.h" />
-    <ClInclude Include="Parallel.h" />
-    <ClInclude Include="Tensor.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="CpuNetwork.cpp" />
-    <ClCompile Include="Gpt2.cpp" />
-    <ClCompile Include="Gpt2Backward.cpp" />
-    <ClCompile Include="Gpt2Diagnostics.cpp" />
-    <ClCompile Include="Gpt2Forward.cpp" />
-    <ClCompile Include="Gpt2Translator.cpp" />
-    <ClCompile Include="Tensor.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="notes.txt" />
+    <ClCompile Include="main.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

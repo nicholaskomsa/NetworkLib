@@ -12,6 +12,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NetworkLib", "NetworkLib\Ne
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "RaffK", "RaffK\RaffK.vcxproj", "{1129901B-0BCB-48BD-A15E-D8BDBEA59D44}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Animator", "Animator\Animator.vcxproj", "{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}"
+	ProjectSection(ProjectDependencies) = postProject
+		{1F0B8E0C-CE54-45C3-934D-EBDD0261F164} = {1F0B8E0C-CE54-45C3-934D-EBDD0261F164}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -44,6 +49,14 @@ Global
 		{1129901B-0BCB-48BD-A15E-D8BDBEA59D44}.Release|x64.Build.0 = Release|x64
 		{1129901B-0BCB-48BD-A15E-D8BDBEA59D44}.Release|x86.ActiveCfg = Release|Win32
 		{1129901B-0BCB-48BD-A15E-D8BDBEA59D44}.Release|x86.Build.0 = Release|Win32
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Debug|x64.ActiveCfg = Debug|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Debug|x64.Build.0 = Debug|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Debug|x86.ActiveCfg = Debug|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Debug|x86.Build.0 = Debug|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Release|x64.ActiveCfg = Release|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Release|x64.Build.0 = Release|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Release|x86.ActiveCfg = Release|x64
+		{7A6F6C8A-3D75-419C-9767-FB5B7F96A30C}.Release|x86.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
