@@ -11,27 +11,24 @@
 #include <random>
 #include <algorithm>
 
+#include <Algorithms.h>
 #include <FloatSpaceConvert.h>
+#include <future>
 
 int main() {
 
     auto [width, height] = FloatSpaceConvert::getDimensions(100000);
 
-    std::vector<std::uint32_t> pixels(width * height); 
+
+    SDL_GLContext glContext;
+    GLuint texture;
+    SDL_Window* window;
+    std::vector<std::uint32_t> pixels(width * height);
 
     std::vector<float> floats(pixels.size());
 
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
-    std::generate(floats.begin(), floats.end(), [&]() {
-        return range(random);
-	});
-
-    FloatSpaceConvert::floatSpaceConvert(floats, pixels);
-
-    SDL_GLContext glContext;
-    GLuint texture;
-    SDL_Window* window;
 
     auto initOpenGL = [&]() {
         // Initialize SDL3
@@ -61,26 +58,14 @@ int main() {
 
         glEnable(GL_TEXTURE_2D);
 
+
+    };
+
+    auto render = [&]() {
+        glBindTexture(GL_TEXTURE_2D, texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
             , GL_UNSIGNED_INT_8_8_8_8_REV, pixels.data());
-    };
-    initOpenGL();
 
-    bool running = true;
-    SDL_Event event;
-    std::size_t generation = 0;
-
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    while (running) {
-
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                running = false;
-            }
-        }
-  
-       
         glBegin(GL_QUADS);
         glTexCoord2f(0, 0); glVertex2f(-1, -1);
         glTexCoord2f(1, 0); glVertex2f(1, -1);
@@ -89,10 +74,93 @@ int main() {
         glEnd();
 
         SDL_GL_SwapWindow(window);
-    }
+        };
 
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    bool running = true;
+
+    auto doEvents = [&]() {
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT) {
+                running = false;
+            }
+        }
+        };
+
+    auto step = [&]() {
+
+        std::generate(floats.begin(), floats.end(), [&]() {
+            return range(random);
+            });
+
+        FloatSpaceConvert::floatSpaceConvert(floats, pixels);
+
+        };
+
+
+    auto animationFuture = std::async(std::launch::async, [&]() {
+
+        initOpenGL();
+
+        std::size_t generation = 0;
+        std::chrono::milliseconds mLengthOfStep{ 100 };
+
+        using namespace std::chrono;
+        using namespace std::chrono_literals;
+
+        nanoseconds lag(0), timeElapsed(0s);
+        steady_clock::time_point nowTime, fpsStartTime
+            , oldTime = steady_clock::now(), fpsEndTime = oldTime;
+
+        std::uint32_t frameCount = 0, tickCount = 0;
+
+        do {
+            nowTime = high_resolution_clock::now();
+            timeElapsed = duration_cast<nanoseconds>(nowTime - oldTime);
+            oldTime = nowTime;
+
+            lag += timeElapsed;
+            while (lag >= mLengthOfStep) {
+
+                step();
+
+                lag -= mLengthOfStep;
+
+                ++tickCount;
+            }
+
+            fpsStartTime = high_resolution_clock::now();
+
+            doEvents();
+            render();
+
+            ++frameCount;
+
+            nanoseconds fpsElapsedTime(duration_cast<nanoseconds>(fpsStartTime - fpsEndTime));
+            if (fpsElapsedTime >= 1s) {
+
+                fpsEndTime = fpsStartTime;
+
+                //updateSecondStatus(tickCount, frameCount);
+                std::cout << std::format("Ticks: {} FPS: {}", tickCount, frameCount);
+
+                ++generation;
+
+                frameCount = 0;
+                tickCount = 0;
+            }
+        } while (running && generation < 30);
+
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+
+        });
+
+    while( animationFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready  ) {
+        std::this_thread::yield();
+	}
+
+
    
 	return 0;
 }
