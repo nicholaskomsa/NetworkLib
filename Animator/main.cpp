@@ -40,7 +40,7 @@ int main() {
         // Create a fullscreen window
         window = SDL_CreateWindow("SDL3 Fullscreen Example",
             1920, 1080
-            , SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL); //SDL_WINDOW_FULLSCREEN || 
+            , SDL_WINDOW_BORDERLESS | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN); //SDL_WINDOW_FULLSCREEN || 
 
         if (!window) {
             SDL_Log("Window could not be created! SDL_Error: %s\n", SDL_GetError());
@@ -50,6 +50,8 @@ int main() {
 
         glContext = SDL_GL_CreateContext(window);
 
+        SDL_GL_SetSwapInterval(0); //triple buffering
+
         glGenTextures(1, &texture);
         glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -58,12 +60,15 @@ int main() {
 
         glEnable(GL_TEXTURE_2D);
 
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
+            , GL_UNSIGNED_INT_8_8_8_8_REV, pixels.data());
 
     };
 
     auto render = [&]() {
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
+
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA
             , GL_UNSIGNED_INT_8_8_8_8_REV, pixels.data());
 
         glBegin(GL_QUADS);
@@ -97,69 +102,61 @@ int main() {
 
         };
 
+    initOpenGL();
 
-    auto animationFuture = std::async(std::launch::async, [&]() {
+    std::size_t generation = 0;
+    std::chrono::milliseconds mLengthOfStep{ 1000 / 10 };
 
-        initOpenGL();
+    using namespace std::chrono;
+    using namespace std::chrono_literals;
 
-        std::size_t generation = 0;
-        std::chrono::milliseconds mLengthOfStep{ 100 };
+    nanoseconds lag(0), timeElapsed(0s);
+    steady_clock::time_point nowTime, fpsStartTime
+        , oldTime = steady_clock::now(), fpsEndTime = oldTime;
 
-        using namespace std::chrono;
-        using namespace std::chrono_literals;
+    std::uint32_t frameCount = 0, tickCount = 0;
 
-        nanoseconds lag(0), timeElapsed(0s);
-        steady_clock::time_point nowTime, fpsStartTime
-            , oldTime = steady_clock::now(), fpsEndTime = oldTime;
+    do {
+        nowTime = high_resolution_clock::now();
+        timeElapsed = duration_cast<nanoseconds>(nowTime - oldTime);
+        oldTime = nowTime;
 
-        std::uint32_t frameCount = 0, tickCount = 0;
+        lag += timeElapsed;
+        while (lag >= mLengthOfStep) {
 
-        do {
-            nowTime = high_resolution_clock::now();
-            timeElapsed = duration_cast<nanoseconds>(nowTime - oldTime);
-            oldTime = nowTime;
+            step();
 
-            lag += timeElapsed;
-            while (lag >= mLengthOfStep) {
+            lag -= mLengthOfStep;
 
-                step();
+            ++tickCount;
 
-                lag -= mLengthOfStep;
-
-                ++tickCount;
-            }
+            render();
+            ++frameCount;
 
             fpsStartTime = high_resolution_clock::now();
-
-            doEvents();
-            render();
-
-            ++frameCount;
 
             nanoseconds fpsElapsedTime(duration_cast<nanoseconds>(fpsStartTime - fpsEndTime));
             if (fpsElapsedTime >= 1s) {
 
                 fpsEndTime = fpsStartTime;
 
-                //updateSecondStatus(tickCount, frameCount);
-                std::cout << std::format("Ticks: {} FPS: {}", tickCount, frameCount);
+   
+              // std::cout << std::format("Ticks: {} FPS: {}", tickCount, frameCount);
+                   
 
                 ++generation;
 
                 frameCount = 0;
                 tickCount = 0;
             }
-        } while (running && generation < 30);
+        }
 
-        SDL_DestroyWindow(window);
-        SDL_Quit();
+        doEvents();
 
-        });
+    } while (running && generation < 100 );
 
-    while( animationFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready  ) {
-        std::this_thread::yield();
-	}
-
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 
    
 	return 0;
