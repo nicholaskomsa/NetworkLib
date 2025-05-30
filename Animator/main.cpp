@@ -25,6 +25,7 @@ public:
         static void sdlError() {
             throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError() ));
         }
+
         void msgbox() const {
             MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
         }
@@ -95,19 +96,19 @@ public:
 
             mGLContext = SDL_GL_CreateContext(mWindow);
 
-            SDL_GL_SetSwapInterval(-1);
+            SDL_GL_SetSwapInterval(0);
 
             glGenTextures(1, &mTexture);
+
             glBindTexture(GL_TEXTURE_2D, mTexture);
+
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
+                , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
 
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
             glEnable(GL_TEXTURE_2D);
-
-            glBindTexture(GL_TEXTURE_2D, mTexture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
-                , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
 
             };
 
@@ -118,6 +119,10 @@ public:
 
         auto shutdownGL = [&]() {
             
+            glDeleteTextures(1, &mTexture);
+
+            SDL_GL_DestroyContext(mGLContext);
+
             if( mWindow ) SDL_DestroyWindow(mWindow);
             SDL_Quit();
 
@@ -134,7 +139,7 @@ public:
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
-        constexpr std::chrono::milliseconds mLengthOfStep = milliseconds(1s) / 10;
+        constexpr auto mLengthOfStep = milliseconds(1s) / 10;
 
         nanoseconds lag(0), elapsedTime(0);
         steady_clock::time_point nowTime, oldTime = steady_clock::now() - mLengthOfStep;
