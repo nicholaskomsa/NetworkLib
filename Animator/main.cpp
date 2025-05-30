@@ -23,7 +23,7 @@ public:
             : std::system_error(int(code), std::generic_category(), message) {}
 
         static void sdlError() {
-            throw Error(std::errc::operation_canceled, std::format("Graphics Error: {}", SDL_GetError() ));
+            throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError() ));
         }
         void msgbox() const {
             MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
@@ -162,19 +162,11 @@ public:
         } while (mRunning);
     }
 
-    std::size_t getSize(){ return mWidth * mHeight; }
-};
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd){
-    
-    try {
-        auto [width, height] = FloatSpaceConvert::getDimensions(100000);
-
-        Animator animator(width, height);
+    void animateStatic() {
 
         std::mt19937 random;
         std::uniform_real_distribution<float> range(-1.0f, 1.0f);
-        std::vector<float> floats(animator.getSize());
+        std::vector<float> floats(getSize());
 
         auto step = [&](auto pixels) {
 
@@ -186,10 +178,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
             };
 
-        animator.run(step);
+        run(step);
     }
-    catch (const Animator::Error& e) {
+
+    std::size_t getSize(){ return mWidth * mHeight; }
+};
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd){
+    
+    try {
+        auto [width, height] = FloatSpaceConvert::getDimensions(100000);
+
+        Animator animator(width, height);
+
+        animator.animateStatic();
+    
+    } catch (const Animator::Error& e) {
         e.msgbox();
     }
+
 	return 0;
 }
