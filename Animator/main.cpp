@@ -13,16 +13,14 @@
 #include <execution>
 
 #include <FloatSpaceConvert.h>
-#include <future>
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd){
-
-    auto [width, height] = FloatSpaceConvert::getDimensions(50000);
 
     SDL_GLContext glContext;
     GLuint texture;
     SDL_Window* window;
 
+    auto [width, height] = FloatSpaceConvert::getDimensions(1000);
     std::vector<std::uint32_t> pixels(width * height);
     std::vector<float> floats(pixels.size());
 
