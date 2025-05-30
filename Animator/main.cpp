@@ -15,19 +15,63 @@
 
 #include <FloatSpaceConvert.h>
 
-struct Animator {
+class Animator {
+public:
+    struct Error : public std::system_error {
 
-    std::size_t mWidth, mHeight;
+        Error(std::errc code, const std::string& message)
+            : std::system_error(int(code), std::generic_category(), message) {}
+
+        static void sdlError() {
+            throw Error(std::errc::operation_canceled, std::format("Graphics Error: {}", SDL_GetError() ));
+        }
+        void msgbox() const {
+            MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
+        }
+    };
+
+private:
+
+    std::size_t mWidth = 0 , mHeight = 0;
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
 
-    SDL_GLContext mGLContext;
-    GLuint mTexture;
-    SDL_Window* mWindow;
 
-    bool mRunning=false;
+    SDL_GLContext mGLContext = nullptr;
+    GLuint mTexture = 0;
+    SDL_Window* mWindow = nullptr;
 
+    bool mRunning = false;
+
+public:
+    void render() {
+
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, GL_RGBA
+            , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0, 0); glVertex2f(-1, -1);
+        glTexCoord2f(1, 0); glVertex2f(1, -1);
+        glTexCoord2f(1, 1); glVertex2f(1, 1);
+        glTexCoord2f(0, 1); glVertex2f(-1, 1);
+        glEnd();
+
+        glFlush();
+
+        SDL_GL_SwapWindow(mWindow);
+    }
+    void doEvents() {
+
+        std::this_thread::yield();
+
+        SDL_Event event;
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_EVENT_QUIT) {
+                mRunning = false;
+            }
+        }
+    }
     Animator(std::size_t width, std::size_t height) {
 
         mWidth = width;
@@ -37,10 +81,8 @@ struct Animator {
 
         auto initOpenGL = [&]() {
             // Initialize SDL3
-            if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-                SDL_Log("SDL could not initialize! SDL_Error: %s\n", SDL_GetError());
-                return;
-            }
+            if (SDL_Init(SDL_INIT_VIDEO) < 0) 
+                Error::sdlError();
 
             // Create a fullscreen window
             mWindow = SDL_CreateWindow("Float Space Animator",
@@ -48,11 +90,8 @@ struct Animator {
                 , SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_INPUT_FOCUS
                 | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
 
-            if (!mWindow) {
-                SDL_Log("Window could not be created! SDL_Error: %s\n", SDL_GetError());
-                SDL_Quit();
-                return;
-            }
+            if (!mWindow) 
+                Error::sdlError();
 
             mGLContext = SDL_GL_CreateContext(mWindow);
 
@@ -78,7 +117,8 @@ struct Animator {
     ~Animator() {
 
         auto shutdownGL = [&]() {
-            SDL_DestroyWindow(mWindow);
+            
+            if( mWindow ) SDL_DestroyWindow(mWindow);
             SDL_Quit();
 
             mWindow = nullptr;
@@ -121,65 +161,35 @@ struct Animator {
 
         } while (mRunning);
     }
-    
-    void render() {
 
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, GL_RGBA
-            , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
-
-        glBegin(GL_QUADS);
-        glTexCoord2f(0, 0); glVertex2f(-1, -1);
-        glTexCoord2f(1, 0); glVertex2f(1, -1);
-        glTexCoord2f(1, 1); glVertex2f(1, 1);
-        glTexCoord2f(0, 1); glVertex2f(-1, 1);
-        glEnd();
-
-        glFlush();
-
-        SDL_GL_SwapWindow(mWindow);
-    }
-    void doEvents() {
-
-        std::this_thread::yield();
-
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                mRunning = false;
-            }
-        }
-    }
-
-
-
+    std::size_t getSize(){ return mWidth * mHeight; }
 };
 
-
-
-
-
-
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd){
+    
+    try {
+        auto [width, height] = FloatSpaceConvert::getDimensions(100000);
 
-    auto [width, height] = FloatSpaceConvert::getDimensions(100000);
+        Animator animator(width, height);
 
-    Animator animator(width, height);
+        std::mt19937 random;
+        std::uniform_real_distribution<float> range(-1.0f, 1.0f);
+        std::vector<float> floats(animator.getSize());
 
-    std::mt19937 random;
-    std::uniform_real_distribution<float> range(-1.0f, 1.0f);
-    std::vector<float> floats(animator.mPixels.size());
+        auto step = [&](auto pixels) {
 
-    auto step = [&](Animator:: PixelsView pixels) {
+            std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
+                return range(random);
+                });
 
-        std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
-            return range(random);
-            });
+            FloatSpaceConvert::floatSpaceConvert(floats, pixels);
 
-        FloatSpaceConvert::floatSpaceConvert(floats, pixels);
+            };
 
-        };
-
-    animator.run(step);
-
+        animator.run(step);
+    }
+    catch (const Animator::Error& e) {
+        e.msgbox();
+    }
 	return 0;
 }
