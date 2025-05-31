@@ -341,7 +341,7 @@ public:
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
     try {
-        auto [width, height] = FloatSpaceConvert::getDimensions(10000, Animator::mAspectRatio);
+        auto [width, height] = FloatSpaceConvert::getDimensions(100000, Animator::mAspectRatio);
 
         Animator animator(width, height);
 
