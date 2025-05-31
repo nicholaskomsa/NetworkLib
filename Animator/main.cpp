@@ -8,15 +8,14 @@
 #include <GL/glew.h>
 #include <GL/wglew.h>
 
+#include <FloatSpaceConvert.h>
+
 #include <format>
 #include <vector>
 #include <numeric>
 #include <random>
 #include <algorithm>
 #include <execution>
-#include <functional>
-
-#include <FloatSpaceConvert.h>
 
 class Animator {
 public:
@@ -28,13 +27,22 @@ public:
         static void sdlError() {
             throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError()));
         }
-        static void glError(std::string_view msg) {
-            throw Error(std::errc::operation_canceled, std::format("GL Error: {}", msg));
+        static void glewError(auto error) {
+            throw Error(std::errc::operation_canceled, std::format("GLew Error: {}", reinterpret_cast<const char*>(error)));
+        }
+
+        static void glCompilationError(auto shaderProgram) {
+            char infoLog[512];
+            glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+            throw Error(std::errc::operation_canceled, std::format("GL Shader Compilation Error: {}", infoLog));
         }
         void msgbox() const {
             MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
         }
     };
+
+    constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
+    constexpr static float mAspectRatio = float(mWindowWidth) / float(mWindowHeight);
 
 private:
 
@@ -42,7 +50,6 @@ private:
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
-
 
     SDL_GLContext mGLContext = nullptr;
     GLuint mTexture = 0;
@@ -52,7 +59,6 @@ private:
     GLBuffers mGLBuffers;
 
     GLuint mShaderProgram = 0;
-    std::vector<float> mProjection;
 
     bool mRunning = false;
 
@@ -79,11 +85,9 @@ public:
             }
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_ESCAPE) {
-                    mRunning = false; // Exit when ESC is pressed
+                    mRunning = false;
                 }
             }
-
-
         }
     }
 
@@ -99,11 +103,9 @@ public:
             if (SDL_Init(SDL_INIT_VIDEO) < 0)
                 Error::sdlError();
 
-            constexpr auto windowWidth = 1920, windowHeight = 1080;
-
             // Create a fullscreen window
             mWindow = SDL_CreateWindow("Float Space Animator",
-                windowWidth, windowHeight
+                mWindowWidth, mWindowHeight
                 , SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_INPUT_FOCUS
                 | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
 
@@ -114,6 +116,7 @@ public:
             SDL_GL_SetSwapInterval(1);
 
             auto setupModernGL = [&]() {
+
                 auto compileShader = [&](GLenum shaderType, const std::string& source) {
                     GLuint shader = glCreateShader(shaderType);
                     const char* src = source.c_str();
@@ -123,11 +126,9 @@ public:
                     // Check for compilation errors
                     GLint success;
                     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-                    if (!success) {
-                        char infoLog[512];
-                        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
-                        // std::cerr << "Shader Compilation Error: " << infoLog << std::endl;
-                    }
+                    if (!success)
+                        Error::glCompilationError(shader);
+
                     return shader;
                     };
 
@@ -144,20 +145,18 @@ public:
                     // Check for linking errors
                     GLint success;
                     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-                    if (!success) {
-                        char infoLog[512];
-                        glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
-                        //  std::cerr << "Shader Linking Error: " << infoLog << std::endl;
-                    }
 
                     // Cleanup shaders (they are now linked)
                     glDeleteShader(vertexShader);
                     glDeleteShader(fragmentShader);
 
+                    if (!success)
+                        Error::glCompilationError(shaderProgram);
+
                     return shaderProgram;
                     };
 
-                auto getOrtho = [&](float left, float right, float top, float bottom, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
+                auto getOrtho = [&](float left=-1, float right=1, float top=1, float bottom=-1, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
                     return {
                         2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
                         0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
@@ -169,7 +168,7 @@ public:
                 glewExperimental = GL_TRUE;
                 GLenum err = glewInit();
                 if (err != GLEW_OK)
-                    Error::glError(std::format("GLEW Init failed. {}", reinterpret_cast<const char*>(glewGetErrorString(err))));
+                    Error::glewError(glewGetErrorString(err));
 
                 std::string vertexShader = R"(
                     #version 330 core
@@ -186,7 +185,7 @@ public:
                     }
 
                     )"
-                    , fragmentShader = R"(
+                , fragmentShader = R"(
                     #version 330 core
                     in vec2 fragTexCoord;
                     out vec4 color;
@@ -202,7 +201,7 @@ public:
                 glUseProgram(mShaderProgram);
 
                 GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
-                glUniformMatrix4fv(projLoc, 1, GL_FALSE, getOrtho(-1.0, 1.0, 1.0, -1.0).data());
+                glUniformMatrix4fv(projLoc, 1, GL_FALSE, getOrtho().data());
                 };
             auto createQuad = [&]() {
 
@@ -336,13 +335,13 @@ public:
         run(step);
     }
 
-    std::size_t getSize() { return mWidth * mHeight; }
+    std::size_t getSize() { return mPixels.size(); }
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
     try {
-        auto [width, height] = FloatSpaceConvert::getDimensions(10000);
+        auto [width, height] = FloatSpaceConvert::getDimensions(10000, Animator::mAspectRatio);
 
         Animator animator(width, height);
 
