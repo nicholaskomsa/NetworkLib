@@ -98,6 +98,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
+    <ClCompile Include="FloatSpaceConvert.cpp" />
     <ClCompile Include="Gpt2.cpp" />
     <ClCompile Include="Gpt2Backward.cpp" />
     <ClCompile Include="Gpt2Diagnostics.cpp" />

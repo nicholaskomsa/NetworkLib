@@ -4,8 +4,11 @@
 #include <windows.h>
 
 #include <SDL3/SDL.h>
-#include <helper_gl.h> //NVIDIA CUDA TOOLKIT
 
+#include <GL/glew.h>
+#include <GL/wglew.h>
+
+#include <format>
 #include <vector>
 #include <numeric>
 #include <random>
@@ -23,9 +26,11 @@ public:
             : std::system_error(int(code), std::generic_category(), message) {}
 
         static void sdlError() {
-            throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError() ));
+            throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError()));
         }
-
+        static void glError(std::string_view msg) {
+            throw Error(std::errc::operation_canceled, std::format("GL Error: {}", msg));
+        }
         void msgbox() const {
             MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
         }
@@ -33,7 +38,7 @@ public:
 
 private:
 
-    std::size_t mWidth = 0 , mHeight = 0;
+    std::size_t mWidth = 0, mHeight = 0;
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
@@ -42,23 +47,23 @@ private:
     SDL_GLContext mGLContext = nullptr;
     GLuint mTexture = 0;
     SDL_Window* mWindow = nullptr;
+    
+    using GLBuffers = std::pair<GLuint, GLuint>; // Vertex Array Object, Vertex Buffer Object
+    GLBuffers mGLBuffers;
+
+    GLuint mShaderProgram = 0;
+    std::vector<float> mProjection;
 
     bool mRunning = false;
 
 public:
     void render() {
 
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, GL_RGBA
-            , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+        glBindTexture(GL_TEXTURE_2D, mTexture);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
 
-        glBegin(GL_QUADS);
-        glTexCoord2f(0, 0); glVertex2f(-1, -1);
-        glTexCoord2f(1, 0); glVertex2f(1, -1);
-        glTexCoord2f(1, 1); glVertex2f(1, 1);
-        glTexCoord2f(0, 1); glVertex2f(-1, 1);
-        glEnd();
-
-        glFlush();
+        glBindVertexArray(mGLBuffers.first);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         SDL_GL_SwapWindow(mWindow);
     }
@@ -70,9 +75,18 @@ public:
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_EVENT_QUIT) {
                 mRunning = false;
+
             }
+            else if (event.type == SDL_EVENT_KEY_DOWN) {
+                if (event.key.key == SDLK_ESCAPE) {
+                    mRunning = false; // Exit when ESC is pressed
+                }
+            }
+
+
         }
     }
+
     Animator(std::size_t width, std::size_t height) {
 
         mWidth = width;
@@ -80,50 +94,186 @@ public:
 
         mPixels.resize(width * height);
 
-        auto initOpenGL = [&]() {
+        auto initGL = [&]() {
             // Initialize SDL3
-            if (SDL_Init(SDL_INIT_VIDEO) < 0) 
+            if (SDL_Init(SDL_INIT_VIDEO) < 0)
                 Error::sdlError();
+
+            constexpr auto windowWidth = 1920, windowHeight = 1080;
 
             // Create a fullscreen window
             mWindow = SDL_CreateWindow("Float Space Animator",
-                1920, 1080
+                windowWidth, windowHeight
                 , SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_INPUT_FOCUS
                 | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
 
-            if (!mWindow) 
+            if (!mWindow)
                 Error::sdlError();
 
             mGLContext = SDL_GL_CreateContext(mWindow);
+            SDL_GL_SetSwapInterval(1);
 
-            SDL_GL_SetSwapInterval(0);
+            auto setupModernGL = [&]() {
+                auto compileShader = [&](GLenum shaderType, const std::string& source) {
+                    GLuint shader = glCreateShader(shaderType);
+                    const char* src = source.c_str();
+                    glShaderSource(shader, 1, &src, nullptr);
+                    glCompileShader(shader);
 
-            glGenTextures(1, &mTexture);
+                    // Check for compilation errors
+                    GLint success;
+                    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+                    if (!success) {
+                        char infoLog[512];
+                        glGetShaderInfoLog(shader, 512, nullptr, infoLog);
+                        // std::cerr << "Shader Compilation Error: " << infoLog << std::endl;
+                    }
+                    return shader;
+                    };
 
-            glBindTexture(GL_TEXTURE_2D, mTexture);
+                auto createShaderProgram = [&](const std::string& vertexSrc, const std::string& fragmentSrc) {
 
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA
-                , GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+                    GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSrc);
+                    GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSrc);
 
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                    GLuint shaderProgram = glCreateProgram();
+                    glAttachShader(shaderProgram, vertexShader);
+                    glAttachShader(shaderProgram, fragmentShader);
+                    glLinkProgram(shaderProgram);
 
-            glEnable(GL_TEXTURE_2D);
+                    // Check for linking errors
+                    GLint success;
+                    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+                    if (!success) {
+                        char infoLog[512];
+                        glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
+                        //  std::cerr << "Shader Linking Error: " << infoLog << std::endl;
+                    }
 
+                    // Cleanup shaders (they are now linked)
+                    glDeleteShader(vertexShader);
+                    glDeleteShader(fragmentShader);
+
+                    return shaderProgram;
+                    };
+
+                auto getOrtho = [&](float left, float right, float top, float bottom, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
+                    return {
+                        2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
+                        0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
+                        0.0f,                   0.0f,                   -2.0f / (f - n), 0.0f,
+                        -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
+                    };
+                    };
+
+                glewExperimental = GL_TRUE;
+                GLenum err = glewInit();
+                if (err != GLEW_OK)
+                    Error::glError(std::format("GLEW Init failed. {}", reinterpret_cast<const char*>(glewGetErrorString(err))));
+
+                std::string vertexShader = R"(
+                    #version 330 core
+                    layout(location = 0) in vec2 position;
+                    layout(location = 1) in vec2 texCoord;
+
+                    out vec2 fragTexCoord;
+
+                    uniform mat4 projection;
+
+                    void main() {
+                        fragTexCoord = texCoord;
+                        gl_Position = projection * vec4(position, 0.0, 1.0);
+                    }
+
+                    )"
+                    , fragmentShader = R"(
+                    #version 330 core
+                    in vec2 fragTexCoord;
+                    out vec4 color;
+
+                    uniform sampler2D textureSampler;
+
+                    void main() {
+                        color = texture(textureSampler, fragTexCoord);
+                    }
+                    )";
+
+                mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
+                glUseProgram(mShaderProgram);
+
+                GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
+                glUniformMatrix4fv(projLoc, 1, GL_FALSE, getOrtho(-1.0, 1.0, 1.0, -1.0).data());
+                };
+            auto createQuad = [&]() {
+
+                auto& [vao, vbo] = mGLBuffers;
+
+                GLfloat quadVertices[] = {
+                    // X, Y positions   // Texture Coords
+                    -1.0f,  1.0f,       0.0f, 0.0f,  // Top-left
+                     1.0f,  1.0f,       1, 0.0f,  // Top-right
+                    -1.0f, -1.0f,       0.0f, 1,  // Bottom-left
+                     1.0f, -1.0f,       1, 1   // Bottom-right
+                };
+
+                glGenVertexArrays(1, &vao);
+                glGenBuffers(1, &vbo);
+
+                glBindVertexArray(vao);
+                glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+                // Position Attribute
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
+                glEnableVertexAttribArray(0);
+
+                // Texture Coordinate Attribute
+                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+                glEnableVertexAttribArray(1);
+
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                glBindVertexArray(0);
+
+                };
+            auto createTexture = [&]() {
+
+                glGenTextures(1, &mTexture);
+
+                glEnable(GL_TEXTURE_2D);
+                glBindTexture(GL_TEXTURE_2D, mTexture);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mWidth, mHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
+
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+                glBindTexture(GL_TEXTURE_2D, 0); // Unbind for safety
+                };
+
+            setupModernGL();
+            createQuad();
+            createTexture();
             };
 
-        initOpenGL();
+        initGL();
 
     }
     ~Animator() {
 
         auto shutdownGL = [&]() {
-            
+
             glDeleteTextures(1, &mTexture);
+
+            glDeleteBuffers(1, &mGLBuffers.second); // Delete Vertex Buffer Object
+
+            glDeleteVertexArrays(1, &mGLBuffers.first); // Delete Vertex Array Object
+
+            glDeleteProgram(mShaderProgram);
 
             SDL_GL_DestroyContext(mGLContext);
 
-            if( mWindow ) SDL_DestroyWindow(mWindow);
+            if (mWindow) SDL_DestroyWindow(mWindow);
             SDL_Quit();
 
             mWindow = nullptr;
@@ -139,15 +289,15 @@ public:
         using namespace std::chrono;
         using namespace std::chrono_literals;
 
-        constexpr auto mLengthOfStep = milliseconds(1s) / 10;
+        constexpr auto mLengthOfStep = nanoseconds(1s) / 10;
 
         nanoseconds lag(0), elapsedTime(0);
-        steady_clock::time_point nowTime, oldTime = steady_clock::now() - mLengthOfStep;
+        steady_clock::time_point nowTime, oldTime = steady_clock::now();
         std::uint32_t tickCount = 0;
 
         do {
             nowTime = high_resolution_clock::now();
-            elapsedTime = duration_cast<nanoseconds>(nowTime - oldTime);
+            elapsedTime = nowTime - oldTime;
             oldTime = nowTime;
 
             lag += elapsedTime;
@@ -186,21 +336,22 @@ public:
         run(step);
     }
 
-    std::size_t getSize(){ return mWidth * mHeight; }
+    std::size_t getSize() { return mWidth * mHeight; }
 };
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd){
-    
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
+
     try {
-        auto [width, height] = FloatSpaceConvert::getDimensions(100000);
+        auto [width, height] = FloatSpaceConvert::getDimensions(10000);
 
         Animator animator(width, height);
 
         animator.animateStatic();
-    
-    } catch (const Animator::Error& e) {
+
+    }
+    catch (const Animator::Error& e) {
         e.msgbox();
     }
 
-	return 0;
+    return 0;
 }
