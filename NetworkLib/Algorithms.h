@@ -6,7 +6,7 @@
 namespace NetworkLib {
 
 	using namespace std::chrono;
-
+	using namespace std::chrono_literals;
 
 	template<typename TimeType>
 	TimeType time(auto&& functor) {

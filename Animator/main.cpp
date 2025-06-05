@@ -17,6 +17,10 @@
 #include <algorithm>
 #include <execution>
 
+
+using namespace std::chrono;
+using namespace std::chrono_literals;
+
 class Animator {
 public:
     struct Error : public std::system_error {
@@ -28,9 +32,9 @@ public:
             throw Error(std::errc::operation_canceled, std::format("SDL Error: {}", SDL_GetError()));
         }
         static void glewError(auto error) {
-            throw Error(std::errc::operation_canceled, std::format("GLew Error: {}", reinterpret_cast<const char*>(error)));
+            
+            throw Error(std::errc::operation_canceled, std::format("GLew Error: {}", reinterpret_cast<const char*>(glewGetErrorString(error))));
         }
-
         static void glCompilationError(auto shaderProgram) {
             char infoLog[512];
             glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
@@ -43,10 +47,11 @@ public:
 
     constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
     constexpr static float mAspectRatio = float(mWindowWidth) / float(mWindowHeight);
+    constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 7;
 
 private:
 
-    std::size_t mWidth = 0, mHeight = 0;
+    std::size_t mTextureWidth = 0, mTextureHeight = 0;
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
@@ -55,10 +60,7 @@ private:
     GLuint mTexture = 0;
     SDL_Window* mWindow = nullptr;
     
-    using GLBuffers = std::pair<GLuint, GLuint>; // Vertex Array Object, Vertex Buffer Object
-    GLBuffers mGLBuffers;
-
-    GLuint mShaderProgram = 0;
+    GLuint mShaderProgram = 0, mVao = 0, mVbo = 0;
 
     bool mRunning = false;
 
@@ -66,9 +68,9 @@ public:
     void render() {
 
         glBindTexture(GL_TEXTURE_2D, mTexture);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mWidth, mHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mTextureWidth, mTextureHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
 
-        glBindVertexArray(mGLBuffers.first);
+        glBindVertexArray(mVao);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         SDL_GL_SwapWindow(mWindow);
@@ -93,10 +95,12 @@ public:
 
     Animator(std::size_t width, std::size_t height) {
 
-        mWidth = width;
-        mHeight = height;
+        mTextureWidth = width;
+        mTextureHeight = height;
+    }
+    void setup(){
 
-        mPixels.resize(width * height);
+        mPixels.resize(mTextureWidth * mTextureHeight, 0.0f);
 
         auto initGL = [&]() {
             // Initialize SDL3
@@ -107,7 +111,7 @@ public:
             mWindow = SDL_CreateWindow("Float Space Animator",
                 mWindowWidth, mWindowHeight
                 , SDL_WINDOW_MOUSE_FOCUS | SDL_WINDOW_INPUT_FOCUS
-                | SDL_WINDOW_OPENGL | SDL_WINDOW_FULLSCREEN);
+                | SDL_WINDOW_OPENGL  | SDL_WINDOW_FULLSCREEN);
 
             if (!mWindow)
                 Error::sdlError();
@@ -142,13 +146,13 @@ public:
                     glAttachShader(shaderProgram, fragmentShader);
                     glLinkProgram(shaderProgram);
 
-                    // Check for linking errors
-                    GLint success;
-                    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-
                     // Cleanup shaders (they are now linked)
                     glDeleteShader(vertexShader);
                     glDeleteShader(fragmentShader);
+
+                    // Check for linking errors
+                    GLint success;
+                    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
 
                     if (!success)
                         Error::glCompilationError(shaderProgram);
@@ -168,7 +172,7 @@ public:
                 glewExperimental = GL_TRUE;
                 GLenum err = glewInit();
                 if (err != GLEW_OK)
-                    Error::glewError(glewGetErrorString(err));
+                    Error::glewError(err);
 
                 std::string vertexShader = R"(
                     #version 330 core
@@ -205,8 +209,6 @@ public:
                 };
             auto createQuad = [&]() {
 
-                auto& [vao, vbo] = mGLBuffers;
-
                 GLfloat quadVertices[] = {
                     // X, Y positions   // Texture Coords
                     -1.0f,  1.0f,       0.0f, 0.0f,  // Top-left
@@ -215,11 +217,11 @@ public:
                      1.0f, -1.0f,       1, 1   // Bottom-right
                 };
 
-                glGenVertexArrays(1, &vao);
-                glGenBuffers(1, &vbo);
+                glGenVertexArrays(1, &mVao);
+                glGenBuffers(1, &mVbo);
 
-                glBindVertexArray(vao);
-                glBindBuffer(GL_ARRAY_BUFFER, vbo);
+                glBindVertexArray(mVao);
+                glBindBuffer(GL_ARRAY_BUFFER, mVbo);
                 glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 
                 // Position Attribute
@@ -240,7 +242,7 @@ public:
 
                 glEnable(GL_TEXTURE_2D);
                 glBindTexture(GL_TEXTURE_2D, mTexture);
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mWidth, mHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTextureWidth, mTextureHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
 
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -258,24 +260,23 @@ public:
         initGL();
 
     }
-    ~Animator() {
+    void shutdown() {
 
         auto shutdownGL = [&]() {
 
             glDeleteTextures(1, &mTexture);
 
-            glDeleteBuffers(1, &mGLBuffers.second); // Delete Vertex Buffer Object
+            glDeleteBuffers(1, &mVbo); // Delete Vertex Buffer Object
 
-            glDeleteVertexArrays(1, &mGLBuffers.first); // Delete Vertex Array Object
+            glDeleteVertexArrays(1, &mVao); // Delete Vertex Array Object
 
             glDeleteProgram(mShaderProgram);
 
             SDL_GL_DestroyContext(mGLContext);
 
-            if (mWindow) SDL_DestroyWindow(mWindow);
+            SDL_DestroyWindow(mWindow);
             SDL_Quit();
 
-            mWindow = nullptr;
             };
 
         shutdownGL();
@@ -284,11 +285,6 @@ public:
     void run(StepFunction&& step) {
 
         mRunning = true;
-
-        using namespace std::chrono;
-        using namespace std::chrono_literals;
-
-        constexpr auto mLengthOfStep = nanoseconds(1s) / 10;
 
         nanoseconds lag(0), elapsedTime(0);
         steady_clock::time_point nowTime, oldTime = steady_clock::now();
@@ -305,6 +301,9 @@ public:
                 step(mPixels);
 
                 render();
+
+
+
 
                 lag -= mLengthOfStep;
 
@@ -332,10 +331,12 @@ public:
 
             };
 
+        setup();
         run(step);
+        shutdown();
     }
 
-    std::size_t getSize() { return mPixels.size(); }
+    std::size_t getSize() { return mTextureWidth * mTextureHeight; }
 };
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
