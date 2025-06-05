@@ -16,7 +16,7 @@
 #include <random>
 #include <algorithm>
 #include <execution>
-
+#include <array>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -59,6 +59,9 @@ private:
     FloatsView mFloats;
     using ColorizeMode = FloatSpaceConvert::ColorizeMode;
     ColorizeMode mColorizeMode = ColorizeMode::ROYGBIV;
+    using Stripes = std::array<std::size_t, 5 >;
+    Stripes mStripes = { 1,2,10,50,100 };
+    Stripes::iterator mSelectedStripes;
 
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
@@ -97,12 +100,42 @@ public:
                     break;
                 }
 
-                switch (key) {
-                case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
-                case SDLK_2: mColorizeMode = ColorizeMode::SHORTNRGB; break;
-                case SDLK_3: mColorizeMode = ColorizeMode::ROYGBIV; break;
-                case SDLK_4: mColorizeMode = ColorizeMode::GREYSCALE; break;
-                case SDLK_5: mColorizeMode = ColorizeMode::BINARY; break;
+                //do keys at most sometimes
+                constexpr auto keyRepeatTime = milliseconds(1s) / 3;
+                auto nowTime = steady_clock::now();
+                static auto endTime = nowTime - keyRepeatTime;
+                auto elapsed = nowTime - endTime;
+
+                if (elapsed >= keyRepeatTime) {
+
+                    endTime = nowTime;
+
+                    switch (key) {
+                    case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
+                    case SDLK_2: mColorizeMode = ColorizeMode::SHORTNRGB; break;
+                    case SDLK_3: mColorizeMode = ColorizeMode::ROYGBIV; break;
+                    case SDLK_4: mColorizeMode = ColorizeMode::GREYSCALE; break;
+                    case SDLK_5: mColorizeMode = ColorizeMode::BINARY; break;
+                    }
+
+                    switch (key) {
+                    case SDLK_LEFT: 
+
+                        if (mSelectedStripes == mStripes.begin())
+                            mSelectedStripes = mStripes.end() - 1;
+                        else 
+                            mSelectedStripes = std::prev(mSelectedStripes, 1);
+                        
+                        break;
+                 
+                    case SDLK_RIGHT:
+                        
+                        std::advance(mSelectedStripes, 1);
+                        if (mSelectedStripes == mStripes.end())
+							mSelectedStripes = mStripes.begin();
+
+                        break;
+                    }
                 }
             }
         }
@@ -278,6 +311,9 @@ public:
             };
 
         initGL();
+
+        mSelectedStripes = mStripes.begin();
+
     }
     void shutdown() {
 
