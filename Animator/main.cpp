@@ -61,10 +61,9 @@ private:
     ColorizeMode mColorizeMode = ColorizeMode::ROYGBIV;
 
     SDL_GLContext mGLContext = nullptr;
-    GLuint mTexture = 0;
     SDL_Window* mWindow = nullptr;
     
-    GLuint mShaderProgram = 0, mVao = 0, mVbo = 0;
+    GLuint mTexture = 0, mShaderProgram = 0, mVao = 0, mVbo = 0;
 
     bool mRunning = false;
 
@@ -90,12 +89,15 @@ public:
 
             }
             else if (event.type == SDL_EVENT_KEY_DOWN) {
-                if (event.key.key == SDLK_ESCAPE) {
+                
+                const auto& key = event.key.key;
+
+                if (key == SDLK_ESCAPE) {
                     mRunning = false;
                     break;
                 }
 
-                switch (event.key.key) {
+                switch (key) {
                 case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
                 case SDLK_2: mColorizeMode = ColorizeMode::SHORTNRGB; break;
                 case SDLK_3: mColorizeMode = ColorizeMode::ROYGBIV; break;
@@ -110,6 +112,9 @@ public:
 
         mTextureWidth = width;
         mTextureHeight = height;
+    }
+    ~Animator() {
+        shutdown();
     }
     void setup(FloatsView floats){
 
@@ -343,7 +348,6 @@ public:
 
         setup(floats);
         run(step);
-        shutdown();
     }
 
     std::size_t getSize() { return mTextureWidth * mTextureHeight; }
