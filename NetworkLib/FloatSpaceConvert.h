@@ -28,7 +28,9 @@ namespace FloatSpaceConvert {
 
 	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1);
 
-	std::pair<int, int> getDimensions(std::size_t size, float aspectRatio = 3840.0f / 2160.0f);
+	std::pair<std::size_t, std::size_t> getDimensions(std::size_t size, float aspectRatio = 3840.0f / 2160.0f);
 
 	void colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats);
+
+	ColorNames getColorNames();
 };	

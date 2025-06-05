@@ -46,7 +46,7 @@ public:
     };
 
     constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
-    constexpr static float mAspectRatio = float(mWindowWidth) / float(mWindowHeight);
+    constexpr static float mAspectRatio = float(mWindowWidth) / mWindowHeight;
     constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 7;
 
 private:
@@ -55,6 +55,10 @@ private:
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
+    using FloatsView = std::span<float>;
+    FloatsView mFloats;
+    using ColorizeMode = FloatSpaceConvert::ColorizeMode;
+    ColorizeMode mColorizeMode = ColorizeMode::ROYGBIV;
 
     SDL_GLContext mGLContext = nullptr;
     GLuint mTexture = 0;
@@ -88,6 +92,15 @@ public:
             else if (event.type == SDL_EVENT_KEY_DOWN) {
                 if (event.key.key == SDLK_ESCAPE) {
                     mRunning = false;
+                    break;
+                }
+
+                switch (event.key.key) {
+                case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
+                case SDLK_2: mColorizeMode = ColorizeMode::SHORTNRGB; break;
+                case SDLK_3: mColorizeMode = ColorizeMode::ROYGBIV; break;
+                case SDLK_4: mColorizeMode = ColorizeMode::GREYSCALE; break;
+                case SDLK_5: mColorizeMode = ColorizeMode::BINARY; break;
                 }
             }
         }
@@ -98,7 +111,9 @@ public:
         mTextureWidth = width;
         mTextureHeight = height;
     }
-    void setup(){
+    void setup(FloatsView floats){
+
+        mFloats = floats;
 
         mPixels.resize(mTextureWidth * mTextureHeight, 0.0f);
 
@@ -258,7 +273,6 @@ public:
             };
 
         initGL();
-
     }
     void shutdown() {
 
@@ -281,13 +295,13 @@ public:
 
         shutdownGL();
     }
-    using StepFunction = std::function<void(PixelsView)>;
+    using StepFunction = std::function<void(FloatsView)>;
     void run(StepFunction&& step) {
 
         mRunning = true;
 
         nanoseconds lag(0), elapsedTime(0);
-        steady_clock::time_point nowTime, oldTime = steady_clock::now();
+        steady_clock::time_point nowTime, oldTime = steady_clock::now()-mLengthOfStep;
         std::uint32_t tickCount = 0;
 
         do {
@@ -298,12 +312,11 @@ public:
             lag += elapsedTime;
             while (lag >= mLengthOfStep) {
 
-                step(mPixels);
+                step(mFloats);
+                
+                FloatSpaceConvert::floatSpaceConvert(mFloats, mPixels, mColorizeMode);
 
                 render();
-
-
-
 
                 lag -= mLengthOfStep;
 
@@ -321,17 +334,14 @@ public:
         std::uniform_real_distribution<float> range(-1.0f, 1.0f);
         std::vector<float> floats(getSize());
 
-        auto step = [&](auto pixels) {
+        auto step = [&]( auto floats) {
 
             std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
                 return range(random);
                 });
-
-            FloatSpaceConvert::floatSpaceConvert(floats, pixels);
-
             };
 
-        setup();
+        setup(floats);
         run(step);
         shutdown();
     }

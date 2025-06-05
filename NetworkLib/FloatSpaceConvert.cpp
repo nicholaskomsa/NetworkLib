@@ -164,7 +164,7 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 	}
 }
 
-std::pair<int, int> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
+std::pair<std::size_t, std::size_t> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
 	int width = 0, height = 0;
 
@@ -245,4 +245,14 @@ void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std:
 
 	writeColorizedImages(floats, width, height);
 
+}
+
+FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
+	return {
+		{ ColorizeMode::NICKRGB, "nickrgb"}
+		,{ ColorizeMode::SHORTNRGB, "shortnrgb" }
+		,{ ColorizeMode::ROYGBIV, "roygbiv" }
+		,{ ColorizeMode::GREYSCALE, "greyscale" }
+		,{ ColorizeMode::BINARY, "binary" }
+	};
 }
