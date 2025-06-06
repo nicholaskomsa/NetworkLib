@@ -13,7 +13,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         Animator animator(width, height);
 
         animator.animateStatic();
-
     }
     catch (const Animator::Error& e) {
         e.msgbox();

@@ -30,29 +30,7 @@ void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mTextureWidth, mTextureHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
-    
-    //scale and translate == sat
-    auto sat = [&](float f, float t) {
-        return (f + t) * mScale;
-		};
-    auto satx = [&](float x) {
-		return sat(x, mX);
-	    };
-    auto saty = [&](float y) {
-        return sat(y, mY);
-        };
-
-    GLfloat quadVertices[] = {
-        // X, Y positions   // Texture Coords
-        satx(-1.0f), saty(1.0f),    0.0f, 0.0f,  // Top-left
-        satx(1.0f), saty(1.0f),     1.0f, 0.0f,  // Top-right
-        satx(-1.0f), saty(-1.0f),   0.0f, 1.0f,  // Bottom-left
-        satx(1.0f), saty(-1.0f),    1.0f, 1.0f   // Bottom-right
-    };
-
     glBindVertexArray(mVao);
-    glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(quadVertices), quadVertices);
     glUseProgram(mShaderProgram);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -63,44 +41,56 @@ void Animator::doEvents() {
 
     std::this_thread::yield();
 
-    auto keyRepeatGuard = [&](const auto& key, auto&& keyGuardCode) {
-        //do keys at most sometimes
-        constexpr auto keyRepeatTime = milliseconds(1s) / 3;
-        auto nowTime = steady_clock::now();
-        static auto endTime = nowTime - keyRepeatTime;
-        auto elapsed = nowTime - endTime;
-        static auto oldKey = SDLK_UNKNOWN;
+    SDL_Event event;
+    const auto& type = event.type;
+    const auto& key = event.key.key;
 
-        if (oldKey == key && elapsed < keyRepeatTime) return;
+    auto keyRepeatGuard = [&](auto&& keyRepeatCode) {
+
+        //do keys at most sometimes
+        auto nowTime = steady_clock::now();
+        static auto endTime = nowTime - mKeyRepeatTime;
+        static auto oldKey = SDLK_UNKNOWN;
+        auto elapsed = nowTime - endTime;
+       
+        if (oldKey == key && elapsed < mKeyRepeatTime) return;
 
         oldKey = key;
         endTime = nowTime;
 
-        keyGuardCode();
+        keyRepeatCode();
 
         };
 
+    auto doQuit = [&]() {
+        return type == SDL_EVENT_QUIT
+            || type == SDL_EVENT_KEY_DOWN && key == SDLK_ESCAPE;
+        };
+    auto keydown = [&]() {
+		return type == SDL_EVENT_KEY_DOWN;
+		};
 
+    auto doUpdateQuad = [&]() {
 
-    SDL_Event event;
+        return key == SDLK_LEFT
+			|| key == SDLK_RIGHT
+			|| key == SDLK_UP
+			|| key == SDLK_DOWN
+			|| key == SDLK_S
+			|| key == SDLK_A
+			|| key == SDLK_R;
+		};
+
     while (SDL_PollEvent(&event)) {
-
-        const auto& type = event.type;
-        const auto& key = event.key.key;
-
-        auto doQuit = [&]() {
-            return type == SDL_EVENT_QUIT
-                || type == SDL_EVENT_KEY_DOWN && key == SDLK_ESCAPE;
-            };
 
         if (doQuit()) {
 
             mRunning = false;
             return;
         
-        } else if (type == SDL_EVENT_KEY_DOWN) {
+        } else if(keydown()) {
 
-            keyRepeatGuard(key, [&]() {
+            keyRepeatGuard([&]() {
 
                 switch (key) {
                 case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
@@ -111,7 +101,7 @@ void Animator::doEvents() {
 
                 case SDLK_Q:
                     if (mSelectedStripes == mStripes.begin())
-                        mSelectedStripes = mStripes.end() - 1;
+                        mSelectedStripes = std::prev(mStripes.end(), 1);
                     else
                         mSelectedStripes = std::prev(mSelectedStripes, 1);
                     break;
@@ -128,9 +118,9 @@ void Animator::doEvents() {
                     mX -= mTranslateSpeed;
                     break;
                 case SDLK_UP:
-					mY -= mTranslateSpeed;
-					break;
-                case SDLK_DOWN: 
+                    mY -= mTranslateSpeed;
+                    break;
+                case SDLK_DOWN:
                     mY += mTranslateSpeed;
                     break;
                 case SDLK_A:
@@ -140,15 +130,17 @@ void Animator::doEvents() {
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
-					mX = 0.0f;
-					mY = 0.0f;
-					mScale = 1.0f;
-					break;
+                    mX = 0.0f;
+                    mY = 0.0f;
+                    mScale = 1.0f;
+                    break;
                 }
 
-                mScale = std::clamp(mScale, 0.001f, 10.0f);
+                if (doUpdateQuad())
+                    updateQuad();
 
                 });
+
         }
     }
 }
@@ -158,6 +150,53 @@ Animator::Animator(std::size_t width, std::size_t height) {
 }
 Animator::~Animator() {
     shutdown();
+}
+
+void Animator::updateQuad(bool generate) {
+
+    //scale and translate == sat
+    auto sat = [&](float f, float t) {
+        return (f + t) * mScale;
+        };
+    auto satx = [&](float x) {
+        return sat(x, mX);
+        };
+    auto saty = [&](float y) {
+        return sat(y, mY);
+        };
+
+    mQuadVertices = {
+        //vertex = X, Y, U, V
+        satx(-1.0f), saty(1.0f),    0.0f, 0.0f  // Top-left
+        , satx(1.0f), saty(1.0f),     1.0f, 0.0f  // Top-right
+        , satx(-1.0f), saty(-1.0f),   0.0f, 1.0f  // Bottom-left
+        , satx(1.0f), saty(-1.0f),    1.0f, 1.0f   // Bottom-right
+    };
+
+    if (generate) {
+        glGenVertexArrays(1, &mVao);
+        glGenBuffers(1, &mVbo);
+
+        glBindVertexArray(mVao);
+        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * mQuadVertices.size(), mQuadVertices.data(), GL_DYNAMIC_DRAW);
+
+        // Position Attribute
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
+        glEnableVertexAttribArray(0);
+
+        // Texture Coordinate Attribute
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(1);
+
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+    }
+    else {
+        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * mQuadVertices.size(), mQuadVertices.data());
+    }
 }
 void Animator::setup(FloatsView floats) {
 
@@ -201,10 +240,10 @@ void Animator::setup(FloatsView floats) {
 
             auto createShaderProgram = [&](const std::string& vertexSrc, const std::string& fragmentSrc) {
 
-                GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSrc);
-                GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSrc);
+                GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexSrc)
+                    , fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentSrc)
+                    , shaderProgram = glCreateProgram();
 
-                GLuint shaderProgram = glCreateProgram();
                 glAttachShader(shaderProgram, vertexShader);
                 glAttachShader(shaderProgram, fragmentShader);
                 glLinkProgram(shaderProgram);
@@ -221,15 +260,6 @@ void Animator::setup(FloatsView floats) {
                     Error::glCompilationError(shaderProgram);
 
                 return shaderProgram;
-                };
-
-            auto getOrtho = [&](float left = -1, float right = 1, float top = 1, float bottom = -1, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
-                return {
-                    2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
-                    0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
-                    0.0f,                   0.0f,                   -2.0f / (f - n), 0.0f,
-                    -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
-                };
                 };
 
             glewExperimental = GL_TRUE;
@@ -268,38 +298,19 @@ void Animator::setup(FloatsView floats) {
             glUseProgram(mShaderProgram);
 
             GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
+
+            auto getOrtho = [&](float left = -1, float right = 1, float top = 1, float bottom = -1, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
+                return {
+                    2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
+                    0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
+                    0.0f,                   0.0f,                   -2.0f / (f - n), 0.0f,
+                    -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
+                };
+                };
+
             glUniformMatrix4fv(projLoc, 1, GL_FALSE, getOrtho().data());
             };
 
-        auto createQuad = [&]() {
-
-            GLfloat quadVertices[] = {
-                // X, Y positions   // Texture Coords
-                -1.0f,  1.0f,       0.0f, 0.0f,  // Top-left
-                 1.0f,  1.0f,       1.0f, 0.0f,  // Top-right
-                -1.0f, -1.0f,       0.0f, 1.0f,  // Bottom-left
-                 1.0f, -1.0f,       1.0f, 1.0f   // Bottom-right
-            };
-
-            glGenVertexArrays(1, &mVao);
-            glGenBuffers(1, &mVbo);
-
-            glBindVertexArray(mVao);
-            glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-            glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_DYNAMIC_DRAW);
-
-            // Position Attribute
-            glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
-            glEnableVertexAttribArray(0);
-
-            // Texture Coordinate Attribute
-            glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-            glEnableVertexAttribArray(1);
-
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-            glBindVertexArray(0);
-
-            };
         auto createTexture = [&]() {
 
             glGenTextures(1, &mTexture);
@@ -313,12 +324,13 @@ void Animator::setup(FloatsView floats) {
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-            glBindTexture(GL_TEXTURE_2D, 0); // Unbind for safety
+            glBindTexture(GL_TEXTURE_2D, 0);
             };
 
         setupModernGL();
-        createQuad();
         createTexture();
+
+        updateQuad(true);
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 

@@ -44,15 +44,19 @@ private:
     Stripes mStripes = { 1,2,10,50,100 };
     Stripes::iterator mSelectedStripes;
     float mX = 0.0f, mY = 0.0f, mTranslateSpeed = 0.1f, mScale = 1.0f;
+    static constexpr milliseconds mKeyRepeatTime = 1000ms / 3;
 
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
     GLuint mTexture = 0, mShaderProgram = 0, mVao = 0, mVbo = 0;
+    using QuadVertices = std::array<float, 16>;
+    QuadVertices mQuadVertices;
 
     bool mRunning = false;
 
     void render();
     void doEvents();
+    void updateQuad(bool generate = false);
 
 public:
     Animator(std::size_t width, std::size_t height);
