@@ -88,7 +88,7 @@ void Animator::doEvents() {
             mRunning = false;
             return;
         
-        } else if(keydown()) {
+        }else if(keydown()) {
 
             keyRepeatGuard([&]() {
 
@@ -165,7 +165,7 @@ void Animator::updateQuad(bool generate) {
         return sat(y, mY);
         };
 
-    mQuadVertices = {
+    std::array<float, 16> vertices = {
         //vertex = X, Y, U, V
         satx(-1.0f), saty(1.0f),    0.0f, 0.0f  // Top-left
         , satx(1.0f), saty(1.0f),     1.0f, 0.0f  // Top-right
@@ -179,7 +179,7 @@ void Animator::updateQuad(bool generate) {
 
         glBindVertexArray(mVao);
         glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * mQuadVertices.size(), mQuadVertices.data(), GL_DYNAMIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertices.size(), vertices.data(), GL_DYNAMIC_DRAW);
 
         // Position Attribute
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
@@ -195,7 +195,7 @@ void Animator::updateQuad(bool generate) {
     }
     else {
         glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * mQuadVertices.size(), mQuadVertices.data());
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * vertices.size(), vertices.data());
     }
 }
 void Animator::setup(FloatsView floats) {
@@ -395,7 +395,12 @@ void Animator::run(StepFunction&& step) {
     } while (mRunning);
 }
 
-void Animator::animateStatic() {
+void Animator::animateStatic(std::size_t floatCount) {
+
+    auto [width, height] = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
+
+    mTextureWidth = width;
+    mTextureHeight = height;
 
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);

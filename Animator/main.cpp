@@ -8,9 +8,8 @@
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 
     try {
-        auto [width, height] = FloatSpaceConvert::getDimensions(100000, Animator::mAspectRatio);
 
-        Animator animator(width, height);
+        Animator animator;
 
         animator.animateStatic();
     }
