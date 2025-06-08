@@ -69,17 +69,6 @@ void Animator::doEvents() {
         return type == SDL_EVENT_KEY_DOWN;
         };
 
-    auto doUpdateQuad = [&]() {
-
-        return key == SDLK_LEFT
-            || key == SDLK_RIGHT
-            || key == SDLK_UP
-            || key == SDLK_DOWN
-            || key == SDLK_S
-            || key == SDLK_A
-            || key == SDLK_R;
-		};
-
     while (SDL_PollEvent(&event)) {
 
         if (doQuit()) {
@@ -90,6 +79,8 @@ void Animator::doEvents() {
         }else if(keydown()) {
 
             keyRepeatGuard([&]() {
+
+                bool doUpdateQuad = false;
 
                 switch (key) {
                 case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
@@ -111,31 +102,38 @@ void Animator::doEvents() {
                     break;
 
                 case SDLK_LEFT:
+                    doUpdateQuad = true;
                     mX += mTranslateSpeed;
                     break;
                 case SDLK_RIGHT:
+                    doUpdateQuad = true;
                     mX -= mTranslateSpeed;
                     break;
                 case SDLK_UP:
+                    doUpdateQuad = true;
                     mY -= mTranslateSpeed;
                     break;
                 case SDLK_DOWN:
+                    doUpdateQuad = true;
                     mY += mTranslateSpeed;
                     break;
                 case SDLK_A:
+                    doUpdateQuad = true;
                     mScale /= 2.0f;
                     break;
                 case SDLK_S:
+                    doUpdateQuad = true;
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
+                    doUpdateQuad = true;
                     mX = 0.0f;
                     mY = 0.0f;
                     mScale = 1.0f;
                     break;
                 }
 
-                if (doUpdateQuad())
+                if (doUpdateQuad)
                     updateQuad();
 
                 });
@@ -169,9 +167,8 @@ void Animator::updateQuad(bool generate) {
         satx(-1.0f), saty(1.0f),    0.0f, 0.0f  // Top-left
         , satx(1.0f), saty(1.0f),     1.0f, 0.0f  // Top-right
         , satx(-1.0f), saty(-1.0f),   0.0f, 1.0f  // Bottom-left
-        , satx(1.0f), saty(-1.0f),    1.0f, 1.0f   // Bottom-right
-    };
-
+        , satx(1.0f), saty(-1.0f),    1.0f, 1.0f };   // Bottom-right
+        
     if (generate) {
         glGenVertexArrays(1, &mVao);
         glGenBuffers(1, &mVbo);
