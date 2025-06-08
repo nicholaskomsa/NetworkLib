@@ -31,8 +31,7 @@ void Animator::render() {
     glBindTexture(GL_TEXTURE_2D, mTexture);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mTextureWidth, mTextureHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
     glBindVertexArray(mVao);
-    glUseProgram(mShaderProgram);
-
+   
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     SDL_GL_SwapWindow(mWindow);
@@ -67,18 +66,18 @@ void Animator::doEvents() {
             || type == SDL_EVENT_KEY_DOWN && key == SDLK_ESCAPE;
         };
     auto keydown = [&]() {
-		return type == SDL_EVENT_KEY_DOWN;
-		};
+        return type == SDL_EVENT_KEY_DOWN;
+        };
 
     auto doUpdateQuad = [&]() {
 
         return key == SDLK_LEFT
-			|| key == SDLK_RIGHT
-			|| key == SDLK_UP
-			|| key == SDLK_DOWN
-			|| key == SDLK_S
-			|| key == SDLK_A
-			|| key == SDLK_R;
+            || key == SDLK_RIGHT
+            || key == SDLK_UP
+            || key == SDLK_DOWN
+            || key == SDLK_S
+            || key == SDLK_A
+            || key == SDLK_R;
 		};
 
     while (SDL_PollEvent(&event)) {
@@ -195,6 +194,7 @@ void Animator::updateQuad(bool generate) {
     }else{
         glBindBuffer(GL_ARRAY_BUFFER, mVbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * vertices.size(), vertices.data());
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 }
 void Animator::setup(FloatsView floats) {
@@ -296,18 +296,16 @@ void Animator::setup(FloatsView floats) {
             mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
             glUseProgram(mShaderProgram);
 
-            auto setOrthoProjection = [&]() {
-
-                const float left = -1, right = 1
-                    , top = 1, bottom = -1
-                    , n = -1.0f, f = 1.0f;
+            auto setOrthoProjection = [&](float left=-1, float right=1
+                , float top=1, float bottom=-1
+                , float n=-1, float f=1) {
 
                 std::array<float, 16> ortho = {
                     2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
                     0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
                     0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
                     -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
-                };
+                    };
 
                 GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
 
@@ -345,7 +343,6 @@ void Animator::setup(FloatsView floats) {
     initGL();
 
     mSelectedStripes = mStripes.begin();
-
 }
 void Animator::shutdown() {
 
@@ -373,12 +370,14 @@ void Animator::run(StepFunction&& step) {
 
     mRunning = true;
 
+    using clock = high_resolution_clock;
+
     nanoseconds lag(0), elapsedTime(0);
-    steady_clock::time_point nowTime, oldTime = steady_clock::now() - mLengthOfStep;
+    clock::time_point nowTime, oldTime = clock::now() - mLengthOfStep;
     std::uint32_t tickCount = 0;
 
     do {
-        nowTime = high_resolution_clock::now();
+        nowTime = clock::now();
         elapsedTime = nowTime - oldTime;
         oldTime = nowTime;
 
