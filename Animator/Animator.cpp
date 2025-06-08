@@ -192,8 +192,7 @@ void Animator::updateQuad(bool generate) {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
-    }
-    else {
+    }else{
         glBindBuffer(GL_ARRAY_BUFFER, mVbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * vertices.size(), vertices.data());
     }
@@ -381,7 +380,7 @@ void Animator::run(StepFunction&& step) {
 
             step(mFloats);
 
-            FloatSpaceConvert::floatSpaceConvert(mFloats, mPixels, mColorizeMode);
+            FloatSpaceConvert::floatSpaceConvert(mFloats, mPixels, mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
 
             render();
 
