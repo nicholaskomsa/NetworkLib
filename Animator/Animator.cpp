@@ -296,18 +296,25 @@ void Animator::setup(FloatsView floats) {
             mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
             glUseProgram(mShaderProgram);
 
-            GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
+            auto setOrthoProjection = [&]() {
 
-            auto getOrtho = [&](float left = -1, float right = 1, float top = 1, float bottom = -1, float n = -1.0f, float f = 1.0f) ->std::vector<float> {
-                return {
+                const float left = -1, right = 1
+                    , top = 1, bottom = -1
+                    , n = -1.0f, f = 1.0f;
+
+                std::array<float, 16> ortho = {
                     2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
                     0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
-                    0.0f,                   0.0f,                   -2.0f / (f - n), 0.0f,
+                    0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
                     -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
                 };
+
+                GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
+
+                glUniformMatrix4fv(projLoc, 1, GL_FALSE, ortho.data());
                 };
 
-            glUniformMatrix4fv(projLoc, 1, GL_FALSE, getOrtho().data());
+            setOrthoProjection();
             };
 
         auto createTexture = [&]() {
