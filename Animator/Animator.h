@@ -49,7 +49,7 @@ private:
     SDL_Window* mWindow = nullptr;
     GLuint mTexture = 0, mShaderProgram = 0, mVao = 0, mVbo = 0;
 
-    bool mRunning = false;
+    bool mRunning = false, mPaused = false;
 
     void render();
     void doEvents();
@@ -64,7 +64,7 @@ public:
     void setup(FloatsView floats);
     void shutdown();
 
-    using StepFunction = std::function<bool(FloatsView)>;
+    using StepFunction = std::function<void(FloatsView)>;
     void run(StepFunction&& step);
 
     void animateStatic(std::size_t floatCount=100000);

@@ -25,7 +25,8 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
     throw Error(std::errc::operation_canceled, std::format("GL Shader Compilation Error: {}", infoLog));
 }
 void Animator::Error::msgbox() const {
-   // MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
+
+    //MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
 }
    
 void Animator::render() {
@@ -63,7 +64,7 @@ void Animator::doEvents() {
 
         };
 
-    auto doQuit = [&]() {
+    auto quit = [&]() {
         return type == SDL_EVENT_QUIT
             || type == SDL_EVENT_KEY_DOWN && key == SDLK_ESCAPE;
         };
@@ -73,7 +74,7 @@ void Animator::doEvents() {
 
     while (SDL_PollEvent(&event)) {
 
-        if (doQuit()) {
+        if (quit()) {
 
             mRunning = false;
             return;
@@ -141,9 +142,13 @@ void Animator::doEvents() {
                     mY = 0.0f;
                     mScale = 1.0f;
                     break;
+
+                case SDLK_SPACE:
+                    mPaused = !mPaused;
+                    break;
                 }
 
-                if( doConvert )
+                if( mPaused && doConvert )
                     floatSpaceConvert();
                 if (doUpdateCamera)
                     updateCamera();
@@ -163,7 +168,7 @@ Animator::~Animator() {
 void Animator::updateCamera() {
 
     auto sat = [&](float f, float t) {
-        return (f + t) / mScale;
+        return f / mScale + t;
         };
     auto satx = [&](float x) {
         return sat(x, mX);
@@ -172,14 +177,11 @@ void Animator::updateCamera() {
         return sat(y, mY);
         };
 
-    auto setOrthoProjection = [&](float left = -1, float right = 1
-        , float top = 1, float bottom = -1
-        , float n = -1, float f = 1) {
+    auto setOrthoProjection = [&]() {
                 
-            top = saty(top);
-            bottom = saty(bottom);
-            left = satx(left);
-            right = satx(right);
+        float left = satx(-1), right = satx(1)
+            , top = saty(1), bottom = saty(-1)
+            , n = -1, f = 1;
 
             std::array<float, 16> ortho = {
                 2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
@@ -294,8 +296,6 @@ void Animator::setup(FloatsView floats) {
             mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
             glUseProgram(mShaderProgram);
 
-
-
             updateCamera();
             };
 
@@ -353,6 +353,8 @@ void Animator::setup(FloatsView floats) {
     initGL();
 
     mSelectedStripes = mStripes.begin();
+
+    floatSpaceConvert();
 }
 void Animator::shutdown() {
 
@@ -394,10 +396,11 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            bool doConvert = step(mFloats);
+            if (!mPaused) {
 
-            if (doConvert)
+                step(mFloats);
                 floatSpaceConvert();
+            }
 
             render();
 
@@ -427,8 +430,6 @@ void Animator::animateStatic(std::size_t floatCount) {
         std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
             return range(random);
             });
-
-        return true;
         };
 
     setup(floats);
@@ -449,15 +450,12 @@ void Animator::viewChatGPT2() {
 
     mTextureWidth = width;
     mTextureHeight = height;
+    mPaused = true;
 
     auto step = [&](auto floats) {
 
-        return false;
         };
 
     setup(tensorSpace);
-
-    floatSpaceConvert();
-
     run(step);
 }
