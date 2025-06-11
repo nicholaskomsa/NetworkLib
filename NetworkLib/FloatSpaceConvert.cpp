@@ -80,48 +80,24 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 
 	floatSpaceConvert(data, converted, nullptr, colorMode, vMin, vMax, stripeNum);
 }
-void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, std::size_t x, std::size_t y, std::size_t w, std::size_t h, ColorizeMode colorMode, double vMin, double, double) {
+void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, std::size_t x, std::size_t y, std::size_t w, std::size_t h, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 	
+	SpaceFunction forSubPixels = [&](ConvertFunction&& convertFunction) {
+
+		auto wIota = std::views::iota(x, x + w);
 	
-	
-	
-	
-	/*
-	auto subspaceTransform = [&](ConvertFunction&& colorize) {
+		std::for_each(std::execution::seq, wIota.begin(), wIota.end(), [&](auto ix) {
 
-		for(auto fx : std::views::iota(x, x+w ) | std::views::take(w) ) //x is the start of the subspace, w is the width of the subspace
-			for(auto fy : std::views::iota(y, y+h) | std::views::take(h) ) { //y is the start of the subspace, h is the height of the subspace
+			for (auto iy : std::views::iota(y, y + h)) {
 
-				auto index = fy * w + fx; //calculate index in data
+				auto index = iy * w + ix; //calculate index in data
 
-				if (index < data.size()) {
-
-					auto percent = convertToGreyScale(data[index]);
-
-					auto rgba = colorize(percent);
-
-					//we want these pixels to be defined as completly non-transparent
-					setOpaque(rgba);
-
-					converted[index] = rgba;
-				}
+				convertFunction(index);
 			}
-			
-		std::transform(std::execution::par_unseq, data.begin(), data.end(), converted.begin(), [&](auto& f) {
-
-			auto percent = convertToGreyScale(f);
-
-			auto rgba = colorize(percent);
-
-			//we want these pixels to be defined as completly non-transparent
-			setOpaque(rgba);
-
-			return rgba;
-
 			});
 		};
-		*/
-	//oatSpaceConvert(data, converted, subspaceTransform, colorMode, vMin, vMax, stripeNum);
+
+	floatSpaceConvert(data, converted, forSubPixels, colorMode, vMin, vMax, stripeNum);
 }
 std::pair<std::size_t, std::size_t> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
@@ -281,7 +257,9 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 
 	auto convertFunction = [&](std::size_t i) {
 
-		converted[i] = convertMethod(data[i]);
+		if( i < data.size() )
+			//converted may be larger than data and has unused pixels
+			converted[i] = convertMethod(data[i]);
 
 		};
 

@@ -53,7 +53,6 @@ private:
 
     void render();
     void doEvents();
-    void updateQuad(bool generate = false);
     void updateCamera();
 
 public:
@@ -65,7 +64,7 @@ public:
     void setup(FloatsView floats);
     void shutdown();
 
-    using StepFunction = std::function<void(FloatsView)>;
+    using StepFunction = std::function<bool(FloatsView)>;
     void run(StepFunction&& step);
 
     void animateStatic(std::size_t floatCount=100000);

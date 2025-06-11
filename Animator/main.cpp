@@ -11,8 +11,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         Animator animator;
 
-        animator.animateStatic();
-        //animator.viewChatGPT2();
+        //animator.animateStatic();
+        animator.viewChatGPT2();
     }
     catch (const Animator::Error& e) {
         e.msgbox();

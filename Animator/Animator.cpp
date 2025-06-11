@@ -384,9 +384,12 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            step(mFloats);
+            bool doConvert = step(mFloats);
 
-            FloatSpaceConvert::floatSpaceConvert(mFloats, mPixels, mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+            if( doConvert )
+                FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
+                , 0,0, mTextureWidth, mTextureHeight
+                , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
 
             render();
 
@@ -416,6 +419,8 @@ void Animator::animateStatic(std::size_t floatCount) {
         std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
             return range(random);
             });
+
+        return true;
         };
 
     setup(floats);
@@ -438,7 +443,12 @@ void Animator::viewChatGPT2() {
     mTextureHeight = height;
 
     auto step = [&](auto floats) {
-
+        static bool drawOnce = true;
+        if (drawOnce) {
+            drawOnce = false;
+            return true;
+        }
+        return false;
         };
 
     setup(tensorSpace);
