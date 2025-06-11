@@ -82,60 +82,70 @@ void Animator::doEvents() {
 
             keyRepeatGuard([&]() {
 
-                bool doUpdateQuad = false;
+                bool doUpdateCamera = false
+                    , doConvert = false;
 
                 switch (key) {
-                case SDLK_1: mColorizeMode = ColorizeMode::NICKRGB; break;
-                case SDLK_2: mColorizeMode = ColorizeMode::SHORTNRGB; break;
-                case SDLK_3: mColorizeMode = ColorizeMode::ROYGBIV; break;
-                case SDLK_4: mColorizeMode = ColorizeMode::GREYSCALE; break;
-                case SDLK_5: mColorizeMode = ColorizeMode::BINARY; break;
+                case SDLK_1: 
+                    doConvert = true;  mColorizeMode = ColorizeMode::NICKRGB; break;
+                case SDLK_2: 
+                    doConvert = true; mColorizeMode = ColorizeMode::SHORTNRGB; break;
+                case SDLK_3: 
+                    doConvert = true; mColorizeMode = ColorizeMode::ROYGBIV; break;
+                case SDLK_4: 
+                    doConvert = true; mColorizeMode = ColorizeMode::GREYSCALE; break;
+                case SDLK_5: 
+                    doConvert = true; mColorizeMode = ColorizeMode::BINARY; break;
 
                 case SDLK_Q:
+                    doConvert = true;
                     if (mSelectedStripes == mStripes.begin())
                         mSelectedStripes = std::prev(mStripes.end(), 1);
                     else
                         mSelectedStripes = std::prev(mSelectedStripes, 1);
                     break;
                 case SDLK_W:
+                    doConvert = true;
                     std::advance(mSelectedStripes, 1);
                     if (mSelectedStripes == mStripes.end())
                         mSelectedStripes = mStripes.begin();
                     break;
 
                 case SDLK_LEFT:
-                    doUpdateQuad = true;
-                    mX += mTranslateSpeed;
-                    break;
-                case SDLK_RIGHT:
-                    doUpdateQuad = true;
+                    doUpdateCamera = true;
                     mX -= mTranslateSpeed;
                     break;
-                case SDLK_UP:
-                    doUpdateQuad = true;
-                    mY -= mTranslateSpeed;
+                case SDLK_RIGHT:
+                    doUpdateCamera = true;
+                    mX += mTranslateSpeed;
                     break;
-                case SDLK_DOWN:
-                    doUpdateQuad = true;
+                case SDLK_UP:
+                    doUpdateCamera = true;
                     mY += mTranslateSpeed;
                     break;
+                case SDLK_DOWN:
+                    doUpdateCamera = true;
+                    mY -= mTranslateSpeed;
+                    break;
                 case SDLK_A:
-                    doUpdateQuad = true;
+                    doUpdateCamera = true;
                     mScale /= 2.0f;
                     break;
                 case SDLK_S:
-                    doUpdateQuad = true;
+                    doUpdateCamera = true;
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
-                    doUpdateQuad = true;
+                    doUpdateCamera = true;
                     mX = 0.0f;
                     mY = 0.0f;
                     mScale = 1.0f;
                     break;
                 }
 
-                if (doUpdateQuad)
+                if( doConvert )
+                    floatSpaceConvert();
+                if (doUpdateCamera)
                     updateCamera();
 
                 });
@@ -386,10 +396,8 @@ void Animator::run(StepFunction&& step) {
 
             bool doConvert = step(mFloats);
 
-            if( doConvert )
-                FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-                , 0,0, mTextureWidth, mTextureHeight
-                , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+            if (doConvert)
+                floatSpaceConvert();
 
             render();
 
@@ -443,14 +451,13 @@ void Animator::viewChatGPT2() {
     mTextureHeight = height;
 
     auto step = [&](auto floats) {
-        static bool drawOnce = true;
-        if (drawOnce) {
-            drawOnce = false;
-            return true;
-        }
+
         return false;
         };
 
     setup(tensorSpace);
+
+    floatSpaceConvert();
+
     run(step);
 }

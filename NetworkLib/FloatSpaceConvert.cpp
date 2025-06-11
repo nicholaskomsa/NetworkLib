@@ -86,7 +86,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 		auto wIota = std::views::iota(x, x + w);
 	
-		std::for_each(std::execution::seq, wIota.begin(), wIota.end(), [&](auto ix) {
+		std::for_each(std::execution::par, wIota.begin(), wIota.end(), [&](auto ix) {
 
 			for (auto iy : std::views::iota(y, y + h)) {
 
@@ -265,9 +265,12 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 
 	auto forEachPixel = [&](ConvertFunction&& convertFunction) {
 
-		for (auto i : std::views::iota(0ULL, data.size())) {
+		auto iota = std::views::iota(0ULL, data.size());
+
+		std::for_each(std::execution::par_unseq, iota.begin(), iota.end(), [&](auto i) {
+
 			convertFunction(i);
-		}
+			});
 
 		};
 

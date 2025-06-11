@@ -69,5 +69,11 @@ public:
 
     void animateStatic(std::size_t floatCount=100000);
     void viewChatGPT2();
+
+    void floatSpaceConvert() {
+        FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
+            , 0, 0, mTextureWidth, mTextureHeight
+            , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+    }
     std::size_t getSize();
 };
