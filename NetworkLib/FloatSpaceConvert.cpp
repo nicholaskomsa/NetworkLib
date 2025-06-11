@@ -7,6 +7,9 @@
 #include <execution>
 #include <algorithm>
 
+void FloatSpaceConvert::setOpaque(std::uint32_t& p) {
+	reinterpret_cast<uint8_t*>(&p)[3] = 255;
+}
 std::uint32_t FloatSpaceConvert::rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
 
 	std::uint32_t rgba = 0;
@@ -75,48 +78,35 @@ std::uint32_t FloatSpaceConvert::binary(double percent) {
 
 void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
-	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
+	floatSpaceConvert(data, converted, nullptr, colorMode, vMin, vMax, stripeNum);
+}
+void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, std::size_t x, std::size_t y, std::size_t w, std::size_t h, ColorizeMode colorMode, double vMin, double, double) {
+	
+	
+	
+	
+	
+	/*
+	auto subspaceTransform = [&](ConvertFunction&& colorize) {
 
-		auto minmax = std::minmax_element(data.begin(), data.end());
-		auto min = *minmax.first, max = *minmax.second;
+		for(auto fx : std::views::iota(x, x+w ) | std::views::take(w) ) //x is the start of the subspace, w is the width of the subspace
+			for(auto fy : std::views::iota(y, y+h) | std::views::take(h) ) { //y is the start of the subspace, h is the height of the subspace
 
-		double distance = max - min;
+				auto index = fy * w + fx; //calculate index in data
 
-		double viewMin = min + distance * startPercent;
-		double viewMax = min + distance * endPercent;
-		double viewDistance = viewMax - viewMin;
+				if (index < data.size()) {
 
-		if (viewDistance == 0) viewDistance = 1;
+					auto percent = convertToGreyScale(data[index]);
 
-		return { viewMin, viewMax, viewDistance };
-		};
+					auto rgba = colorize(percent);
 
-	auto [viewMin, viewMax, viewDistance] = getViewWindow(vMin, vMax);	//0,1 is full view window of data
+					//we want these pixels to be defined as completly non-transparent
+					setOpaque(rgba);
 
-	double stripeDistance = viewDistance / stripeNum;
-
-	auto convertToGreyScale = [&](double f)->double {
-
-		double percent = 1.0;
-
-		f -= viewMin;
-
-		if (f < viewDistance) {
-			f -= stripeDistance * std::floor(f / stripeDistance);
-
-			percent = f / stripeDistance;
-		}
-
-		//percent is between 0 and 1
-		return percent;
-		};
-
-	auto setOpaque = [&](std::uint32_t& p) {
-		reinterpret_cast<uint8_t*>(&p)[3] = 255;
-		};
-
-	auto forEachPixel = [&](ConvertFunction&& colorize) {
-
+					converted[index] = rgba;
+				}
+			}
+			
 		std::transform(std::execution::par_unseq, data.begin(), data.end(), converted.begin(), [&](auto& f) {
 
 			auto percent = convertToGreyScale(f);
@@ -130,40 +120,9 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 
 			});
 		};
-
-	switch (colorMode) {
-	case ColorizeMode::NICKRGB: {
-
-		forEachPixel(nrgb);
-
-	}break;
-
-	case ColorizeMode::ROYGBIV: {
-
-		forEachPixel(roygbiv);
-
-	} break;
-
-	case ColorizeMode::GREYSCALE: {
-
-		forEachPixel(grayScale);
-
-	} break;
-
-	case ColorizeMode::BINARY: {
-
-		forEachPixel(binary);
-
-	} break;
-
-	case ColorizeMode::SHORTNRGB: {
-
-		forEachPixel(snrgb);
-
-	} break;
-	}
+		*/
+	//oatSpaceConvert(data, converted, subspaceTransform, colorMode, vMin, vMax, stripeNum);
 }
-
 std::pair<std::size_t, std::size_t> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
 	int width = 0, height = 0;
@@ -255,4 +214,86 @@ FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
 		,{ ColorizeMode::GREYSCALE, "greyscale" }
 		,{ ColorizeMode::BINARY, "binary" }
 	};
+}
+
+void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, SpaceFunction spaceFunction, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
+
+	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
+
+		auto minmax = std::minmax_element(data.begin(), data.end());
+		auto min = *minmax.first, max = *minmax.second;
+
+		double distance = max - min;
+
+		double viewMin = min + distance * startPercent;
+		double viewMax = min + distance * endPercent;
+		double viewDistance = viewMax - viewMin;
+
+		if (viewDistance == 0) viewDistance = 1;
+
+		return { viewMin, viewMax, viewDistance };
+		};
+
+	auto [viewMin, viewMax, viewDistance] = getViewWindow(vMin, vMax);	//0,1 is full view window of data
+
+	double stripeDistance = viewDistance / stripeNum;
+
+	auto convertToGreyScale = [&](double f)->double {
+
+		double percent = 1.0;
+
+		f -= viewMin;
+
+		if (f < viewDistance) {
+			f -= stripeDistance * std::floor(f / stripeDistance);
+
+			percent = f / stripeDistance;
+		}
+
+		//percent is between 0 and 1
+		return percent;
+		};
+
+	auto getColorizeMethod = [&]() ->ColorizeMethod {
+
+		switch (colorMode) {
+		case ColorizeMode::NICKRGB: return &nrgb;
+		case ColorizeMode::SHORTNRGB: return &snrgb;
+		case ColorizeMode::ROYGBIV: return &roygbiv;
+		case ColorizeMode::GREYSCALE: return &grayScale;
+		case ColorizeMode::BINARY: return &binary;
+		}
+		};
+	ColorizeMethod colorizeMethod = getColorizeMethod();
+
+	auto convertMethod = [&](float f) {
+
+		auto percent = convertToGreyScale(f);
+
+		auto rgba = colorizeMethod(percent);
+
+		//we want these pixels to be defined as completly non-transparent
+		setOpaque(rgba);
+
+		return rgba;
+
+		};
+
+	auto convertFunction = [&](std::size_t i) {
+
+		converted[i] = convertMethod(data[i]);
+
+		};
+
+	auto forEachPixel = [&](ConvertFunction&& convertFunction) {
+
+		for (auto i : std::views::iota(0ULL, data.size())) {
+			convertFunction(i);
+		}
+
+		};
+
+	if (!spaceFunction) spaceFunction = forEachPixel;
+
+	spaceFunction(convertFunction);
 }

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <print>
 #include <numbers>
+#include <numeric>
 
 #include <boost/bimap.hpp>
 
@@ -69,12 +70,18 @@ namespace NetworkLib {
 
 		} mTestData;
 
+		class Forward;
+		class Backward;
+
 		GPT2() = default;
+
 
 		void setup();
 		void chat();
 		void slide(Tokens& tokens, std::size_t distance = 50);
-
+		Forward& getForward() {
+			return mForward;
+		}
 		class Diagnostics {
 
 			using TestFunction = std::function<void(GPT2& gpt2)>;
@@ -269,6 +276,12 @@ namespace NetworkLib {
 					mUnembedTime.getString(), mLayersTime.getString()
 					, mForwardTime.getString(), AttnLayer::mForwardAttnTime.getString() );
 			}
+			Tensor::View getTensorSpace() {
+				return mTensorSpace;
+			}
+			Tensor::View getActivationSpace() {
+				return mActivationSpace;
+			}
 		} mForward;
 
 		class Backward {
@@ -305,5 +318,7 @@ namespace NetworkLib {
 			}
 
 		} mBackward;
+
+
 	};
 }

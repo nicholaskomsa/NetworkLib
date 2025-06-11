@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <execution>
 
+#include <Gpt2.h>
+
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}
 
@@ -23,7 +25,7 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
     throw Error(std::errc::operation_canceled, std::format("GL Shader Compilation Error: {}", infoLog));
 }
 void Animator::Error::msgbox() const {
-    MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
+   // MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
 }
    
 void Animator::render() {
@@ -134,7 +136,7 @@ void Animator::doEvents() {
                 }
 
                 if (doUpdateQuad)
-                    updateQuad();
+                    updateCamera();
 
                 });
 
@@ -148,12 +150,10 @@ Animator::Animator(std::size_t width, std::size_t height) {
 Animator::~Animator() {
     shutdown();
 }
+void Animator::updateCamera() {
 
-void Animator::updateQuad(bool generate) {
-
-    //scale and translate == sat
     auto sat = [&](float f, float t) {
-        return (f + t) * mScale;
+        return (f + t) / mScale;
         };
     auto satx = [&](float x) {
         return sat(x, mX);
@@ -162,37 +162,28 @@ void Animator::updateQuad(bool generate) {
         return sat(y, mY);
         };
 
-    std::array<float, 16> vertices = {
-        //vertex = X, Y, U, V
-        satx(-1.0f), saty(1.0f),    0.0f, 0.0f  // Top-left
-        , satx(1.0f), saty(1.0f),     1.0f, 0.0f  // Top-right
-        , satx(-1.0f), saty(-1.0f),   0.0f, 1.0f  // Bottom-left
-        , satx(1.0f), saty(-1.0f),    1.0f, 1.0f };   // Bottom-right
-        
-    if (generate) {
-        glGenVertexArrays(1, &mVao);
-        glGenBuffers(1, &mVbo);
+    auto setOrthoProjection = [&](float left = -1, float right = 1
+        , float top = 1, float bottom = -1
+        , float n = -1, float f = 1) {
+                
+            top = saty(top);
+            bottom = saty(bottom);
+            left = satx(left);
+            right = satx(right);
 
-        glBindVertexArray(mVao);
-        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertices.size(), vertices.data(), GL_DYNAMIC_DRAW);
+            std::array<float, 16> ortho = {
+                2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
+                0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
+                0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
+                -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
+            };
 
-        // Position Attribute
-        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
-        glEnableVertexAttribArray(0);
+            GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
 
-        // Texture Coordinate Attribute
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-        glEnableVertexAttribArray(1);
+            glUniformMatrix4fv(projLoc, 1, GL_FALSE, ortho.data());
+        };
 
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-    }else{
-        glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * vertices.size(), vertices.data());
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-    }
+    setOrthoProjection();
 }
 void Animator::setup(FloatsView floats) {
 
@@ -293,25 +284,38 @@ void Animator::setup(FloatsView floats) {
             mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
             glUseProgram(mShaderProgram);
 
-            auto setOrthoProjection = [&](float left=-1, float right=1
-                , float top=1, float bottom=-1
-                , float n=-1, float f=1) {
 
-                std::array<float, 16> ortho = {
-                    2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
-                    0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
-                    0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
-                    -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
-                    };
 
-                GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
-
-                glUniformMatrix4fv(projLoc, 1, GL_FALSE, ortho.data());
-                };
-
-            setOrthoProjection();
+            updateCamera();
             };
 
+            auto createQuad = [&]() {
+
+                std::array<float, 16> vertices = {
+                    //vertex = X, Y, U, V
+                    -1.0f, 1.0f,    0.0f, 0.0f  // Top-left
+                    , 1.0f, 1.0f,     1.0f, 0.0f  // Top-right
+                    , -1.0f, -1.0f,   0.0f, 1.0f  // Bottom-left
+                    , 1.0f, -1.0f,    1.0f, 1.0f };   // Bottom-right
+
+                glGenVertexArrays(1, &mVao);
+                glGenBuffers(1, &mVbo);
+
+                glBindVertexArray(mVao);
+                glBindBuffer(GL_ARRAY_BUFFER, mVbo);
+                glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+
+                // Position Attribute
+                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
+                glEnableVertexAttribArray(0);
+
+                // Texture Coordinate Attribute
+                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+                glEnableVertexAttribArray(1);
+
+                glBindBuffer(GL_ARRAY_BUFFER, 0);
+                glBindVertexArray(0);
+                };
         auto createTexture = [&]() {
 
             glGenTextures(1, &mTexture);
@@ -329,9 +333,8 @@ void Animator::setup(FloatsView floats) {
             };
 
         setupModernGL();
+        createQuad();
         createTexture();
-
-        updateQuad(true);
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -421,3 +424,23 @@ void Animator::animateStatic(std::size_t floatCount) {
 
 std::size_t Animator::getSize() { return mTextureWidth * mTextureHeight; }
 
+void Animator::viewChatGPT2() {
+
+    auto gpt2 = std::make_unique<NetworkLib::GPT2>(); //gpt2 is large and offsourced to heap
+
+    gpt2->setup();
+
+    auto tensorSpace = gpt2->getForward().getTensorSpace();
+
+    auto [width, height] = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
+
+    mTextureWidth = width;
+    mTextureHeight = height;
+
+    auto step = [&](auto floats) {
+
+        };
+
+    setup(tensorSpace);
+    run(step);
+}

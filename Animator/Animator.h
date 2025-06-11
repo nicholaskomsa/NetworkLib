@@ -2,7 +2,6 @@
 
 #include <SDL3/SDL.h>
 #include <GL/glew.h>
-#include <GL/wglew.h>
 
 #include <FloatSpaceConvert.h>
 
@@ -55,6 +54,7 @@ private:
     void render();
     void doEvents();
     void updateQuad(bool generate = false);
+    void updateCamera();
 
 public:
     Animator() = default;
@@ -69,6 +69,6 @@ public:
     void run(StepFunction&& step);
 
     void animateStatic(std::size_t floatCount=100000);
-
+    void viewChatGPT2();
     std::size_t getSize();
 };
