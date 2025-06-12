@@ -71,8 +71,9 @@ public:
     void viewChatGPT2();
 
     void floatSpaceConvert() {
+
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            , 0, 0, mTextureWidth, mTextureHeight
+            ,0, 0, mTextureWidth, mTextureHeight, mTextureWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     std::size_t getSize();

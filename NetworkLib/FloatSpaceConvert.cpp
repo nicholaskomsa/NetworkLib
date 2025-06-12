@@ -78,26 +78,10 @@ std::uint32_t FloatSpaceConvert::binary(double percent) {
 
 void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
-	floatSpaceConvert(data, converted, nullptr, colorMode, vMin, vMax, stripeNum);
-}
-void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, std::size_t x, std::size_t y, std::size_t w, std::size_t h, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
-	
-	SpaceFunction forSubPixels = [&](ConvertFunction&& convertFunction) {
-
-		auto wIota = std::views::iota(x, x + w);
-	
-		std::for_each(std::execution::par, wIota.begin(), wIota.end(), [&](auto ix) {
-
-			for (auto iy : std::views::iota(y, y + h)) {
-
-				auto index = iy * w + ix; //calculate index in data
-
-				convertFunction(index);
-			}
-			});
-		};
-
-	floatSpaceConvert(data, converted, forSubPixels, colorMode, vMin, vMax, stripeNum);
+	//floatSpaceConvert(data, converted, nullptr, colorMode, vMin, vMax, stripeNum);
+	auto [width, height] = getDimensions(data.size(), 1.0f);
+	floatSubSpaceConvert(data, converted, 0, 0, width, height, width
+		, colorMode, vMin, vMax, stripeNum);
 }
 std::pair<std::size_t, std::size_t> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
@@ -174,8 +158,6 @@ void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std:
 
 		};
 
-
-
 	auto [width, height] = getDimensions(floats.size());
 
 	writeColorizedImages(floats, width, height);
@@ -192,7 +174,10 @@ FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
 	};
 }
 
-void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, SpaceFunction spaceFunction, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
+void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted
+	, std::size_t x, std::size_t y, std::size_t w, std::size_t h
+	, std::size_t textureWidth
+	, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
 	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
 
@@ -255,26 +240,27 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 
 		};
 
-	auto convertFunction = [&](std::size_t i) {
+	//x y w h are received in texture-space ( 0, textureWidth ) and ( 0, textureHeight )
+	//converted may be larger than data and has unused pixels
 
-		if( i < data.size() )
-			//converted may be larger than data and has unused pixels
-			converted[i] = convertMethod(data[i]);
+	auto forSubPixels = [&]() {
 
-		};
+		auto hIota = std::views::iota(y, y + h);
 
-	auto forEachPixel = [&](ConvertFunction&& convertFunction) {
+		std::for_each(std::execution::par, hIota.begin(), hIota.end(), [&](auto iy) {
 
-		auto iota = std::views::iota(0ULL, data.size());
+			auto offset = iy * textureWidth;
 
-		std::for_each(std::execution::par_unseq, iota.begin(), iota.end(), [&](auto i) {
+			for (auto ix : std::views::iota(x, x + w)) {
 
-			convertFunction(i);
+				auto index = offset + ix;
+
+				if (index < data.size())
+					converted[index] = convertMethod(data[index]);
+			}
+
 			});
-
 		};
-
-	if (!spaceFunction) spaceFunction = forEachPixel;
-
-	spaceFunction(convertFunction);
+	
+	forSubPixels();
 }
