@@ -78,7 +78,6 @@ std::uint32_t FloatSpaceConvert::binary(double percent) {
 
 void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
-	//floatSpaceConvert(data, converted, nullptr, colorMode, vMin, vMax, stripeNum);
 	auto [width, height] = getDimensions(data.size(), 1.0f);
 	floatSubSpaceConvert(data, converted, 0, 0, width, height, width
 		, colorMode, vMin, vMax, stripeNum);

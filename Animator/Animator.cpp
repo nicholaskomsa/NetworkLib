@@ -85,6 +85,7 @@ void Animator::doEvents() {
 
                 bool doUpdateCamera = false
                     , doConvert = false;
+                float translateSpeed = mTranslateSpeed / mScale;
 
                 switch (key) {
                 case SDLK_1: 
@@ -114,19 +115,19 @@ void Animator::doEvents() {
 
                 case SDLK_LEFT:
                     doUpdateCamera = true;
-                    mX -= mTranslateSpeed;
+                    mX -= translateSpeed;
                     break;
                 case SDLK_RIGHT:
                     doUpdateCamera = true;
-                    mX += mTranslateSpeed;
+                    mX += translateSpeed;
                     break;
                 case SDLK_UP:
                     doUpdateCamera = true;
-                    mY += mTranslateSpeed;
+                    mY += translateSpeed;
                     break;
                 case SDLK_DOWN:
                     doUpdateCamera = true;
-                    mY -= mTranslateSpeed;
+                    mY -= translateSpeed;
                     break;
                 case SDLK_A:
                     doUpdateCamera = true;
@@ -168,7 +169,7 @@ Animator::~Animator() {
 void Animator::updateCamera() {
 
     auto sat = [&](float f, float t) {
-        return f / mScale + t;
+        return f / mScale+t;
         };
     auto satx = [&](float x) {
         return sat(x, mX);
