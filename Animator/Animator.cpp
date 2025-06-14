@@ -149,7 +149,7 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if( mPaused && doConvert )
+                if( doConvert )
                     floatSpaceConvert();
                 if (doUpdateCamera)
                     updateCamera();
@@ -414,8 +414,10 @@ void Animator::run(StepFunction&& step) {
 
     } while (mRunning);
 }
+std::size_t Animator::getSize() { return mTextureWidth * mTextureHeight; }
 
-void Animator::animateStatic(std::size_t floatCount) {
+
+void Animator::animateMT19937(std::size_t floatCount) {
 
     auto [width, height] = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
 
@@ -436,8 +438,6 @@ void Animator::animateStatic(std::size_t floatCount) {
     setup(floats);
     run(step);
 }
-
-std::size_t Animator::getSize() { return mTextureWidth * mTextureHeight; }
 
 void Animator::viewChatGPT2() {
 

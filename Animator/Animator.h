@@ -67,7 +67,7 @@ public:
     using StepFunction = std::function<void(FloatsView)>;
     void run(StepFunction&& step);
 
-    void animateStatic(std::size_t floatCount=100000);
+    void animateMT19937(std::size_t floatCount=100000);
     void viewChatGPT2();
 
     void floatSpaceConvert() {
