@@ -111,14 +111,17 @@ void Animator::doEvents() {
 
                 case SDLK_LEFT:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mX -= translateSpeed;
                     break;
                 case SDLK_RIGHT:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mX += translateSpeed;
                     break;
                 case SDLK_UP:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mY += translateSpeed;
                     break;
                 case SDLK_DOWN:
@@ -127,14 +130,17 @@ void Animator::doEvents() {
                     break;
                 case SDLK_A:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mScale /= 2.0f;
                     break;
                 case SDLK_S:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mX = 0.0f;
                     mY = 0.0f;
                     mScale = 1.0f;
