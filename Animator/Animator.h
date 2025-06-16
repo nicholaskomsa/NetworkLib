@@ -89,13 +89,20 @@ public:
         y1 = std::clamp(y1, 0.0f, 1.0f);
         y2 = std::clamp(y2, 0.0f, 1.0f);
 
-        float px1 = std::floor(x1 * mTextureWidth)
+        //could be out of bounds will be clamped
+        std::size_t px1 = std::floor(x1 * mTextureWidth)
             , px2 = std::floor(x2 * mTextureWidth)
             , py1 = std::ceil(y1 * mTextureHeight)
             , py2 = std::ceil(y2 * mTextureHeight);
 
         std::size_t pw = px2 - px1
 			, ph = py2 - py1;
+
+        //border
+        if (px1 > 0) --px1;
+        if (py1 > 0) --py1;
+        if (pw < mTextureWidth) ++pw;
+        if (ph < mTextureHeight) ++ph;
 
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
             , px1, py1, pw, ph, mTextureWidth

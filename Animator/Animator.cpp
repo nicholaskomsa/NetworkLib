@@ -126,6 +126,7 @@ void Animator::doEvents() {
                     break;
                 case SDLK_DOWN:
                     doUpdateCamera = true;
+                    doConvert = true;
                     mY -= translateSpeed;
                     break;
                 case SDLK_A:
@@ -151,10 +152,12 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if( doConvert )
-                    floatSpaceConvert();
                 if (doUpdateCamera)
                     updateCamera();
+
+                if( doConvert )
+                    floatSpaceConvert();
+
 
                 });
 
