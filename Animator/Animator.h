@@ -95,12 +95,13 @@ public:
             , py1 = std::ceil(y1 * mTextureHeight)
             , py2 = std::ceil(y2 * mTextureHeight);
 
-        std::size_t pw = px2 - px1
-			, ph = py2 - py1;
-
-        //border
+        //border to ensure coverage
         if (px1 > 0) --px1;
         if (py1 > 0) --py1;
+
+        std::size_t pw = px2 - px1
+            , ph = py2 - py1;
+
         if (pw < mTextureWidth) ++pw;
         if (ph < mTextureHeight) ++ph;
 
