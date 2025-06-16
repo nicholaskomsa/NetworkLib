@@ -9,6 +9,7 @@
 #include <system_error>
 #include <chrono>
 #include <functional>
+#include <algorithm>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -21,7 +22,7 @@ public:
         static void sdlError();
         static void glewError(auto error);
         static void glCompilationError(auto shaderProgram);
-        void msgbox() const;
+
     };
 
     constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
@@ -72,8 +73,32 @@ public:
 
     void floatSpaceConvert() {
 
+        float rScale = 1.0f / mScale;
+
+        float x1 = mX - rScale, x2 = mX + rScale
+            , y1 = mY + rScale, y2 = mY - rScale;
+
+        x1 = (x1 + 1.0f) / 2.0f;
+        x2 = (x2 + 1.0f) / 2.0f;
+
+        y1 = (-y1 + 1.0f) / 2.0f;
+        y2 = (-y2 + 1.0f) / 2.0f;
+
+        x1 = std::clamp(x1, 0.0f, 1.0f);
+        x2 = std::clamp(x2, 0.0f, 1.0f);
+        y1 = std::clamp(y1, 0.0f, 1.0f);
+        y2 = std::clamp(y2, 0.0f, 1.0f);
+
+        float px1 = std::floor(x1 * mTextureWidth)
+            , px2 = std::floor(x2 * mTextureWidth)
+            , py1 = std::ceil(y1 * mTextureHeight)
+            , py2 = std::ceil(y2 * mTextureHeight);
+
+        std::size_t pw = px2 - px1
+			, ph = py2 - py1;
+
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            ,0, 0, mTextureWidth, mTextureHeight, mTextureWidth
+            , px1, py1, pw, ph, mTextureWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     std::size_t getSize();

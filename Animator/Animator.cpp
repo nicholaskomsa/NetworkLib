@@ -24,11 +24,7 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
     glGetProgramInfoLog(shaderProgram, 512, nullptr, infoLog);
     throw Error(std::errc::operation_canceled, std::format("GL Shader Compilation Error: {}", infoLog));
 }
-void Animator::Error::msgbox() const {
 
-    //MessageBoxA(nullptr, what(), "Animator Error", MB_OK | MB_ICONERROR);
-}
-   
 void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);

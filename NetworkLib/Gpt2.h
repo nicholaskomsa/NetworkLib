@@ -18,7 +18,7 @@ namespace NetworkLib {
 	public:
 		
 		//configuration chat gpt2 model here
-		static constexpr auto mFilePath = "F:/software dev/programming2025/downloads/";
+		static constexpr auto mFilePath = "./";
 		static constexpr std::size_t mDVocab = 50257
 			, mDModel = 768
 			, mDSeq = 1024
