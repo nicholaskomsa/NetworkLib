@@ -28,7 +28,14 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
 void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mTextureWidth, mTextureHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+    auto [coord,dims] = mFloatSubSpaceDimensions;
+    auto& [px, py] = coord;
+    auto& [width, height] = dims;
+    for (auto y : std::views::iota(0ULL,height)) {
+        
+        std::span<std::uint32_t> rowSpan(mPixels.data() + (y+py) * mTextureWidth + px, width);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, width, 1, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, rowSpan.data());
+    }
     glBindVertexArray(mVao);
    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -79,8 +86,7 @@ void Animator::doEvents() {
 
             keyRepeatGuard([&]() {
 
-                bool doUpdateCamera = false
-                    , doConvert = false;
+                bool doConvert = false;
                 float translateSpeed = mTranslateSpeed / mScale;
 
                 switch (key) {
@@ -110,37 +116,30 @@ void Animator::doEvents() {
                     break;
 
                 case SDLK_LEFT:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mX -= translateSpeed;
                     break;
                 case SDLK_RIGHT:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mX += translateSpeed;
                     break;
                 case SDLK_UP:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mY += translateSpeed;
                     break;
                 case SDLK_DOWN:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mY -= translateSpeed;
                     break;
                 case SDLK_A:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mScale /= 2.0f;
                     break;
                 case SDLK_S:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
-                    doUpdateCamera = true;
                     doConvert = true;
                     mX = 0.0f;
                     mY = 0.0f;
@@ -152,12 +151,10 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if (doUpdateCamera)
-                    updateCamera();
-
-                if( doConvert )
+                if (doConvert) {
+                    createTexture();
                     floatSpaceConvert();
-
+                }
 
                 });
 
@@ -173,20 +170,10 @@ Animator::~Animator() {
 }
 void Animator::updateCamera() {
 
-    auto sat = [&](float f, float t) {
-        return f / mScale+t;
-        };
-    auto satx = [&](float x) {
-        return sat(x, mX);
-        };
-    auto saty = [&](float y) {
-        return sat(y, mY);
-        };
-
     auto setOrthoProjection = [&]() {
                 
-        float left = satx(-1), right = satx(1)
-            , top = saty(1), bottom = saty(-1)
+        float left = -1, right = 1
+            , top = 1, bottom = -1
             , n = -1, f = 1;
 
             std::array<float, 16> ortho = {
@@ -332,21 +319,7 @@ void Animator::setup(FloatsView floats) {
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
                 glBindVertexArray(0);
                 };
-        auto createTexture = [&]() {
 
-            glGenTextures(1, &mTexture);
-
-            glEnable(GL_TEXTURE_2D);
-            glBindTexture(GL_TEXTURE_2D, mTexture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTextureWidth, mTextureHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
-
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-            glBindTexture(GL_TEXTURE_2D, 0);
-            };
 
         setupModernGL();
         createQuad();

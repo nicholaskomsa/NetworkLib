@@ -240,7 +240,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 		};
 
 	//x y w h are received in texture-space ( 0, textureWidth ) and ( 0, textureHeight )
-	//converted may be larger than data and has unused pixels
+	//converted may be larger than data and would have unwritten pixels
 
 	auto forSubPixels = [&]() {
 

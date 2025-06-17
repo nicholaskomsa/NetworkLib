@@ -56,6 +56,34 @@ private:
     void doEvents();
     void updateCamera();
 
+
+    using FloatSpaceCoord = std::pair<std::size_t,std::size_t>;
+    using FloatSpaceDimensions = std::pair<FloatSpaceCoord, FloatSpaceCoord>;
+
+    FloatSpaceDimensions mFloatSubSpaceDimensions;
+
+    void createTexture(){
+        if( mTexture)
+            glDeleteTextures(1, &mTexture);
+
+        glGenTextures(1, &mTexture);
+
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, mTexture);
+
+        setFloatSpaceDimensions();
+        auto& [coord, dims] = mFloatSubSpaceDimensions;
+        auto& [width, height] = dims;
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+        glBindTexture(GL_TEXTURE_2D, 0);
+        };
 public:
     Animator() = default;
 
@@ -71,9 +99,14 @@ public:
     void animateMT19937(std::size_t floatCount=100000);
     void viewChatGPT2();
 
-    void floatSpaceConvert() {
+    void setFloatSpaceDimensions() {
+
+        if( mScale < 1.0f ) mScale = 1.0f;
 
         float rScale = 1.0f / mScale;
+
+        mX = std::clamp(mX, -1.0f + rScale, 1.0f - rScale);
+        mY = std::clamp(mY, -1.0f + rScale, 1.0f - rScale);
 
         float x1 = mX - rScale, x2 = mX + rScale
             , y1 = mY + rScale, y2 = mY - rScale;
@@ -89,24 +122,23 @@ public:
         y1 = std::clamp(y1, 0.0f, 1.0f);
         y2 = std::clamp(y2, 0.0f, 1.0f);
 
-        //could be out of bounds will be clamped
         std::size_t px1 = std::floor(x1 * mTextureWidth)
             , px2 = std::floor(x2 * mTextureWidth)
             , py1 = std::ceil(y1 * mTextureHeight)
             , py2 = std::ceil(y2 * mTextureHeight);
 
-        //border to ensure coverage
-        if (px1 > 0) --px1;
-        if (py1 > 0) --py1;
-
         std::size_t pw = px2 - px1
             , ph = py2 - py1;
 
-        if (pw < mTextureWidth) ++pw;
-        if (ph < mTextureHeight) ++ph;
+        mFloatSubSpaceDimensions = { {px1, py1}, {pw, ph} };
+    }
+    
+    void floatSpaceConvert() {
 
+        auto [coord, dims] = mFloatSubSpaceDimensions;
+  
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            , px1, py1, pw, ph, mTextureWidth
+            , coord.first, coord.second, dims.first, dims.second, mTextureWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     std::size_t getSize();
