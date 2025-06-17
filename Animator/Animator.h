@@ -62,7 +62,7 @@ private:
 
     FloatSpaceDimensions mFloatSubSpaceDimensions;
 
-    void createTexture(){
+    void resizeTexture(){
         if( mTexture)
             glDeleteTextures(1, &mTexture);
 
@@ -71,7 +71,6 @@ private:
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, mTexture);
 
-        setFloatSpaceDimensions();
         auto& [coord, dims] = mFloatSubSpaceDimensions;
         auto& [width, height] = dims;
 
@@ -127,10 +126,18 @@ public:
             , py1 = std::ceil(y1 * mTextureHeight)
             , py2 = std::ceil(y2 * mTextureHeight);
 
+        static std::size_t oldW=0, oldH = 0;
+
         std::size_t pw = px2 - px1
             , ph = py2 - py1;
 
         mFloatSubSpaceDimensions = { {px1, py1}, {pw, ph} };
+
+        if (oldW != pw || oldH != ph) {
+            resizeTexture();
+            oldW = pw;
+            oldH = ph;
+        }
     }
     
     void floatSpaceConvert() {

@@ -28,9 +28,10 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
 void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);
-    auto [coord,dims] = mFloatSubSpaceDimensions;
+    const auto& [coord,dims] = mFloatSubSpaceDimensions;
     auto& [px, py] = coord;
     auto& [width, height] = dims;
+
     for (auto y : std::views::iota(0ULL,height)) {
         
         std::span<std::uint32_t> rowSpan(mPixels.data() + (y+py) * mTextureWidth + px, width);
@@ -86,6 +87,7 @@ void Animator::doEvents() {
 
             keyRepeatGuard([&]() {
 
+                bool doChangeDimensions = false;
                 bool doConvert = false;
                 float translateSpeed = mTranslateSpeed / mScale;
 
@@ -117,29 +119,36 @@ void Animator::doEvents() {
 
                 case SDLK_LEFT:
                     doConvert = true;
+                    doChangeDimensions = true;
                     mX -= translateSpeed;
                     break;
                 case SDLK_RIGHT:
                     doConvert = true;
+                    doChangeDimensions = true;
                     mX += translateSpeed;
                     break;
                 case SDLK_UP:
                     doConvert = true;
+                    doChangeDimensions = true;
                     mY += translateSpeed;
                     break;
                 case SDLK_DOWN:
                     doConvert = true;
+                    doChangeDimensions = true;
                     mY -= translateSpeed;
                     break;
                 case SDLK_A:
                     doConvert = true;
+                    doChangeDimensions = true;
                     mScale /= 2.0f;
                     break;
                 case SDLK_S:
+                    doChangeDimensions = true;
                     doConvert = true;
                     mScale *= 2.0f;
                     break;
                 case SDLK_R:
+                    doChangeDimensions = true;
                     doConvert = true;
                     mX = 0.0f;
                     mY = 0.0f;
@@ -151,10 +160,11 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if (doConvert) {
-                    createTexture();
+                if(doChangeDimensions)
+                    setFloatSpaceDimensions();
+                if (doConvert) 
                     floatSpaceConvert();
-                }
+                
 
                 });
 
@@ -320,10 +330,9 @@ void Animator::setup(FloatsView floats) {
                 glBindVertexArray(0);
                 };
 
-
         setupModernGL();
         createQuad();
-        createTexture();
+        setFloatSpaceDimensions();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
