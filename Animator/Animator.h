@@ -135,6 +135,8 @@ public:
 
         if (oldW != pw || oldH != ph) {
             resizeTexture();
+
+            mPixels.resize(pw * ph);
             oldW = pw;
             oldH = ph;
         }

@@ -245,17 +245,18 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 	auto forSubPixels = [&]() {
 
 		auto hIota = std::views::iota(y, y + h);
+		auto wIota = std::views::iota(x, x + w);
+		std::fill(converted.begin(), converted.end(), 0); //clear the converted pixels to zero (black, transparent
+		
+		std::for_each(std::execution::seq, hIota.begin(), hIota.end(), [&](auto iy) {
 
-		std::for_each(std::execution::par, hIota.begin(), hIota.end(), [&](auto iy) {
+			for (auto ix : wIota) {
 
-			auto offset = iy * textureWidth;
-
-			for (auto ix : std::views::iota(x, x + w)) {
-
-				auto index = offset + ix;
+				std::size_t index = iy * textureWidth + ix;
+				std::size_t pxIndex = (iy - y) * w + (ix - x);
 
 				if (index < data.size())
-					converted[index] = convertMethod(data[index]);
+					converted[pxIndex] = convertMethod(data[index]);
 			}
 
 			});
