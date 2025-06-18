@@ -332,7 +332,7 @@ void Animator::setup(FloatsView floats) {
 
         setupModernGL();
         createQuad();
-        setFloatSpaceDimensions();
+        setFloatSubSpaceDimensions();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
