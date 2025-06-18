@@ -246,9 +246,8 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 		auto hIota = std::views::iota(y, y + h);
 		auto wIota = std::views::iota(x, x + w);
-		std::fill(converted.begin(), converted.end(), 0); //clear the converted pixels to zero (black, transparent
-		
-		std::for_each(std::execution::seq, hIota.begin(), hIota.end(), [&](auto iy) {
+
+		std::for_each(std::execution::par, hIota.begin(), hIota.end(), [&](auto iy) {
 
 			for (auto ix : wIota) {
 
