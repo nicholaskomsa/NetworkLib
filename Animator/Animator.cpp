@@ -161,7 +161,7 @@ void Animator::doEvents() {
                 }
 
                 if(doChangeDimensions)
-                    setFloatSpaceDimensions();
+                    setFloatSubSpaceDimensions();
                 if (doConvert) 
                     floatSpaceConvert();
                 

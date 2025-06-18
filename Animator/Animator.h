@@ -98,7 +98,7 @@ public:
     void animateMT19937(std::size_t floatCount=100000);
     void viewChatGPT2();
 
-    void setFloatSpaceDimensions() {
+    void setFloatSubSpaceDimensions() {
 
         if( mScale < 1.0f ) mScale = 1.0f;
 

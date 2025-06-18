@@ -175,7 +175,7 @@ FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
 
 void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted
 	, std::size_t x, std::size_t y, std::size_t w, std::size_t h
-	, std::size_t textureWidth
+	, std::size_t dataWidth
 	, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
 	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
@@ -239,7 +239,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 		};
 
-	//x y w h are received in texture-space ( 0, textureWidth ) and ( 0, textureHeight )
+	//x y w h are received in float space ( 0, dataWidth ) and ( 0, dataHeight )
 	//converted may be larger than data and would have unwritten pixels
 
 	auto forSubPixels = [&]() {
@@ -251,7 +251,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 			for (auto ix : wIota) {
 
-				std::size_t index = iy * textureWidth + ix;
+				std::size_t index = iy * dataWidth + ix;
 				std::size_t pxIndex = (iy - y) * w + (ix - x);
 
 				if (index < data.size())
