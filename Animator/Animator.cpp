@@ -32,11 +32,12 @@ void Animator::render() {
 
     auto& [width, height] = dims;
 
-    for (auto y : std::views::iota(0ULL,height)) {
+   // for (auto y : std::views::iota(0ULL,height)) {
         
-        std::span<std::uint32_t> rowSpan(mPixels.data() + y * width, width);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, width, 1, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, rowSpan.data());
-    }
+     //   std::span<std::uint32_t> rowSpan(mPixels.data() + y * width, width);
+     //   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, width, 1, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, rowSpan.data());
+    //}
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
     glBindVertexArray(mVao);
    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
