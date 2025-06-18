@@ -137,6 +137,7 @@ public:
             resizeTexture();
 
             mPixels.resize(pw * ph);
+            mPixels.shrink_to_fit();
             oldW = pw;
             oldH = ph;
         }
