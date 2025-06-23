@@ -29,14 +29,7 @@ void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);
     const auto& [coord,dims] = mFloatSubSpaceDimensions;
-
     auto& [width, height] = dims;
-
-   // for (auto y : std::views::iota(0ULL,height)) {
-        
-     //   std::span<std::uint32_t> rowSpan(mPixels.data() + y * width, width);
-     //   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, y, width, 1, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, rowSpan.data());
-    //}
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
     glBindVertexArray(mVao);
    
@@ -166,7 +159,6 @@ void Animator::doEvents() {
                 if (doConvert) 
                     floatSpaceConvert();
                 
-
                 });
 
         }

@@ -11,8 +11,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         Animator animator;
 
-        animator.animateMT19937();
-       // animator.viewChatGPT2();
+       // animator.animateMT19937();
+        animator.viewChatGPT2();
     }
     catch (const Animator::Error& e) {
         MessageBoxA(nullptr, e.what(), "Animator Error", MB_OK | MB_ICONERROR);

@@ -254,7 +254,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 				std::size_t index = iy * dataWidth + ix;
 				std::size_t pxIndex = (iy - y) * w + (ix - x);
 
-				if (index < data.size())
+				if (pxIndex < converted.size() && index < data.size())
 					converted[pxIndex] = convertMethod(data[index]);
 			}
 

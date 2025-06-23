@@ -145,7 +145,7 @@ public:
     
     void floatSpaceConvert() {
 
-        auto [coord, dims] = mFloatSubSpaceDimensions;
+        const auto& [coord, dims] = mFloatSubSpaceDimensions;
   
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
             , coord.first, coord.second, dims.first, dims.second, mTextureWidth
