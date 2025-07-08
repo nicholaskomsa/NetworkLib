@@ -40,8 +40,8 @@ private:
 
     using ColorizeMode = FloatSpaceConvert::ColorizeMode;
     ColorizeMode mColorizeMode = ColorizeMode::ROYGBIV;
-    using Stripes = std::array<const std::size_t, 5>;
-    Stripes mStripes = { 1,2,10,50,100 };
+    using Stripes = std::array<const std::size_t, 6>;
+    Stripes mStripes = { 1,2,10,50,100,1000 };
     Stripes::iterator mSelectedStripes;
     float mX = 0.0f, mY = 0.0f, mTranslateSpeed = 0.1f, mScale = 1.0f;
     static constexpr milliseconds mKeyRepeatTime = 1000ms / 3;

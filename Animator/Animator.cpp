@@ -410,17 +410,12 @@ void Animator::animateMT19937(std::size_t floatCount) {
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
     std::vector<float> floats(getSize());
 
-
-   NetworkLib::Serializer serializer;
-   serializer.createOutputStream(floats, mFloatSubSpaceDimensions, mTextureWidth);
-
     auto step = [&](auto floats) {
 
         std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
             return range(random);
             });
 
-        serializer.writeToFile();
         return true;
         };
 
@@ -460,7 +455,7 @@ void Animator::animateChatGPT2() {
 
     mTextureWidth = width;
     mTextureHeight = height;
-    mPaused = true;
+   // mPaused = true;
 
     FloatSpaceConvert::FloatSpaceDimensions oldDimensions;
 
@@ -482,6 +477,7 @@ void Animator::animateChatGPT2() {
         return false;
         };
 
+    mScale = 2.0f;
     setup();
 
     serializer.startReadingWindow(mFloatSubSpaceDimensions, mTextureWidth );
