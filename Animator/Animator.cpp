@@ -455,7 +455,6 @@ void Animator::animateChatGPT2() {
 
     mTextureWidth = width;
     mTextureHeight = height;
-   // mPaused = true;
 
     FloatSpaceConvert::FloatSpaceDimensions oldDimensions;
 
@@ -473,11 +472,13 @@ void Animator::animateChatGPT2() {
             mFloats = frame.value();
             return true;
         }
+        else
+            mPaused = true;
 
         return false;
         };
 
-    mScale = 2.0f;
+    mScale = 4.0f;
     setup();
 
     serializer.startReadingWindow(mFloatSubSpaceDimensions, mTextureWidth );
