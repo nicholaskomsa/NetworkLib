@@ -468,10 +468,10 @@ void Animator::animateChatGPT2() {
 
         if( oldDimensions != mFloatSubSpaceDimensions ) {
 
-			oldDimensions = mFloatSubSpaceDimensions;
+            oldDimensions = mFloatSubSpaceDimensions;
 
             serializer.mFrameRect = mFloatSubSpaceDimensions;
-		}
+        }
 
         auto frame = serializer.getCurrentFrame();
         if (frame.has_value()) {
