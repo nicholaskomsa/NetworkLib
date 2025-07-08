@@ -13,7 +13,8 @@ int main() {
 	//diag.feedForwardSpeed1024();
 	//diag.backwardTest64();
 
-	diag.SGDTest();
+	//diag.SGDTest();
+	diag.serializeTest();
 	//diag.simpleChat();
 
 	std::puts("\nProgram Finished press enter to exit");

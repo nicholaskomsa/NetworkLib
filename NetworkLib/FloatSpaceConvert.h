@@ -38,4 +38,9 @@ namespace FloatSpaceConvert {
 
 	ColorNames getColorNames();
 
+	using FloatSpaceCoord = std::pair<std::size_t, std::size_t>;
+	using FloatSpaceDimensions = std::pair<FloatSpaceCoord, FloatSpaceCoord>;
+
+	FloatSpaceDimensions getFloatSubSpaceDimensions(float& x, float& y, float& scale, std::size_t txWidth, std::size_t txHeight);
+
 };	

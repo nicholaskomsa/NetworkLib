@@ -1,6 +1,7 @@
 #include "Gpt2.h"
 
-
+#include <Serializer.h>
+#include <random>
 
 using namespace NetworkLib;
 using Diagnostics = GPT2::Diagnostics;
@@ -336,6 +337,89 @@ void Diagnostics::SGDTest() {
 			++generation;
 
 		} while (true);
+
+		});
+}
+
+void Diagnostics::serializeTest() {
+	run([&](auto& gpt2) {
+
+		auto& translator = gpt2.mTranslator;
+		auto& data = gpt2.mTestData;
+		data.load();
+		auto& allTokens = data.mTokens;
+		auto& forward = gpt2.mForward;
+		auto& backward = gpt2.mBackward;
+		backward.setup(&gpt2.mForward);
+
+		Serializer serializer;
+	
+		Tensor::View tensorView = forward.getTensorSpace();
+
+		const auto [w, h]  = FloatSpaceConvert::getDimensions(tensorView.size());
+
+		float x = 0, y = 0, scale = std::pow(2, 4);
+		auto frameRect = FloatSpaceConvert::getFloatSubSpaceDimensions(x, y, scale, w, h);
+
+		serializer.createOutputStream(tensorView, frameRect, w);
+
+		TokensView completeTrainTokens(allTokens);
+		Token predicted, expected;
+		float crossEntropyLoss;
+		std::size_t generation = 0;
+
+		auto print = [&]() {
+
+			auto predictedWord = translator.decode(predicted);
+			auto expectedWord = translator.decode(expected);
+			auto equality = (predicted == expected ? "==" : "!=");
+
+			std::println("{}; ce: {}, {}{}{}; {}; {}"
+				, generation, crossEntropyLoss, predictedWord, equality, expectedWord
+				, forward.getTimeAverages()
+				, backward.getTimeAverages());
+			};
+
+		
+		auto setTrainingData = [&]() {
+
+			static std::mt19937 random;
+
+			std::uniform_int_distribution<std::size_t> slideDistance(1ULL, 
+				GPT2::mTestInputSize * .33f);
+
+			static std::size_t currentOffset = 0;
+			
+			currentOffset += slideDistance(random);
+
+			if( currentOffset + GPT2::mTestInputSize >= completeTrainTokens.size() )
+				currentOffset = 0;
+			
+			auto viewBegin = std::next(completeTrainTokens.begin(), currentOffset);
+			TokensView trainingTokens(viewBegin, GPT2::mTestInputSize);
+
+			return trainingTokens;
+			};
+
+		for(auto i : std::views::iota(0, 1000)){
+
+			const auto trainTokens = setTrainingData();
+			const TokensView nextTokens(trainTokens.data(), GPT2::mTestInputSize);
+
+			expected = nextTokens.back();
+			predicted = forward.feedForward(trainTokens);
+
+			crossEntropyLoss = forward.crossEntropyLoss(nextTokens);
+
+			backward.backward(trainTokens, nextTokens);
+
+			backward.sgd();
+			serializer.writeToFile();
+
+			print();
+
+			++generation;
+		}
 
 		});
 }

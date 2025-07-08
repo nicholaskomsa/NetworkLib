@@ -180,7 +180,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
 
-		auto minmax = std::minmax_element(data.begin(), data.end());
+		auto minmax = std::minmax_element(std::execution::par_unseq, data.begin(), data.end());
 		auto min = *minmax.first, max = *minmax.second;
 
 		double distance = max - min;
@@ -262,4 +262,36 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 		};
 	
 	forSubPixels();
+}
+
+
+FloatSpaceConvert::FloatSpaceDimensions FloatSpaceConvert::getFloatSubSpaceDimensions(float& x, float& y, float& scale, std::size_t txWidth, std::size_t txHeight) {
+
+	if (scale < 1.0f) scale = 1.0f;
+
+	float rScale = 1.0f / scale;
+
+	x = std::clamp(x, -1.0f + rScale, 1.0f - rScale);
+	y = std::clamp(y, -1.0f + rScale, 1.0f - rScale);
+
+	float x1 = x - rScale, x2 = x + rScale
+		, y1 = y + rScale, y2 = y - rScale;
+
+	x1 = (x1 + 1.0f) / 2.0f;
+	x2 = (x2 + 1.0f) / 2.0f;
+
+	y1 = (-y1 + 1.0f) / 2.0f;
+	y2 = (-y2 + 1.0f) / 2.0f;
+
+	std::size_t px1 = std::floor(x1 * txWidth)
+		, px2 = std::floor(x2 * txWidth)
+		, py1 = std::ceil(y1 * txHeight)
+		, py2 = std::ceil(y2 * txHeight);
+
+	static std::size_t oldW = 0, oldH = 0;
+
+	std::size_t pw = px2 - px1
+		, ph = py2 - py1;
+
+	return { {px1, py1}, {pw, ph} };
 }

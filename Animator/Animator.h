@@ -56,11 +56,7 @@ private:
     void doEvents();
     void updateCamera();
 
-
-    using FloatSpaceCoord = std::pair<std::size_t,std::size_t>;
-    using FloatSpaceDimensions = std::pair<FloatSpaceCoord, FloatSpaceCoord>;
-
-    FloatSpaceDimensions mFloatSubSpaceDimensions;
+    FloatSpaceConvert::FloatSpaceDimensions mFloatSubSpaceDimensions;
 
     void resizeTexture(){
         if( mTexture)
@@ -92,47 +88,32 @@ public:
     void setup(FloatsView floats);
     void shutdown();
 
-    using StepFunction = std::function<void(FloatsView)>;
+    using StepFunction = std::function<bool(FloatsView)>;
     void run(StepFunction&& step);
 
     void animateMT19937(std::size_t floatCount=100000);
     void viewChatGPT2();
+    void animateChatGPT2();
 
-    void setFloatSubSpaceDimensions() {
 
-        if( mScale < 1.0f ) mScale = 1.0f;
+    void floatSpaceConvert() {
 
-        float rScale = 1.0f / mScale;
+        if (mFloats.empty()) return;
 
-        mX = std::clamp(mX, -1.0f + rScale, 1.0f - rScale);
-        mY = std::clamp(mY, -1.0f + rScale, 1.0f - rScale);
+        const auto& [coord, dims] = mFloatSubSpaceDimensions;
+  
+        FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
+            , coord.first, coord.second, dims.first, dims.second, mTextureWidth
+            , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+    }
+    void setDimensions() {
 
-        float x1 = mX - rScale, x2 = mX + rScale
-            , y1 = mY + rScale, y2 = mY - rScale;
+        mFloatSubSpaceDimensions = FloatSpaceConvert::getFloatSubSpaceDimensions(mX, mY, mScale, mTextureWidth, mTextureHeight);
+        
+        static std::size_t oldW = 0, oldH = 0;
 
-        x1 = (x1 + 1.0f) / 2.0f;
-        x2 = (x2 + 1.0f) / 2.0f;
-
-        y1 = (-y1 + 1.0f) / 2.0f;
-        y2 = (-y2 + 1.0f) / 2.0f;
-
-        x1 = std::clamp(x1, 0.0f, 1.0f);
-        x2 = std::clamp(x2, 0.0f, 1.0f);
-        y1 = std::clamp(y1, 0.0f, 1.0f);
-        y2 = std::clamp(y2, 0.0f, 1.0f);
-
-        std::size_t px1 = std::floor(x1 * mTextureWidth)
-            , px2 = std::floor(x2 * mTextureWidth)
-            , py1 = std::ceil(y1 * mTextureHeight)
-            , py2 = std::ceil(y2 * mTextureHeight);
-
-        static std::size_t oldW=0, oldH = 0;
-
-        std::size_t pw = px2 - px1
-            , ph = py2 - py1;
-
-        mFloatSubSpaceDimensions = { {px1, py1}, {pw, ph} };
-
+        const auto& [pw, ph] = mFloatSubSpaceDimensions.second;
+     
         if (oldW != pw || oldH != ph) {
             resizeTexture();
 
@@ -141,15 +122,6 @@ public:
             oldW = pw;
             oldH = ph;
         }
-    }
-    
-    void floatSpaceConvert() {
-
-        const auto& [coord, dims] = mFloatSubSpaceDimensions;
-  
-        FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            , coord.first, coord.second, dims.first, dims.second, mTextureWidth
-            , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     std::size_t getSize();
 };

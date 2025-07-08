@@ -8,6 +8,7 @@
 #include <execution>
 
 #include <Gpt2.h>
+#include <Serializer.h>
 
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}
@@ -154,9 +155,10 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if(doChangeDimensions)
-                    setFloatSubSpaceDimensions();
-                if (doConvert) 
+                if (doChangeDimensions)
+                    setDimensions();
+                
+                if (doConvert)
                     floatSpaceConvert();
                 
                 });
@@ -193,7 +195,7 @@ void Animator::updateCamera() {
 
     setOrthoProjection();
 }
-void Animator::setup(FloatsView floats) {
+void Animator::setup(FloatsView floats = {}) {
 
     mFloats = floats;
 
@@ -325,7 +327,6 @@ void Animator::setup(FloatsView floats) {
 
         setupModernGL();
         createQuad();
-        setFloatSubSpaceDimensions();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -335,6 +336,7 @@ void Animator::setup(FloatsView floats) {
 
     mSelectedStripes = mStripes.begin();
 
+    setDimensions();
     floatSpaceConvert();
 }
 void Animator::shutdown() {
@@ -379,8 +381,8 @@ void Animator::run(StepFunction&& step) {
 
             if (!mPaused) {
 
-                step(mFloats);
-                floatSpaceConvert();
+                if( step(mFloats) )
+                    floatSpaceConvert();
             }
 
             render();
@@ -408,11 +410,18 @@ void Animator::animateMT19937(std::size_t floatCount) {
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
     std::vector<float> floats(getSize());
 
+
+   NetworkLib::Serializer serializer;
+   serializer.createOutputStream(floats, mFloatSubSpaceDimensions, mTextureWidth);
+
     auto step = [&](auto floats) {
 
         std::generate(std::execution::seq, floats.begin(), floats.end(), [&]() {
             return range(random);
             });
+
+        serializer.writeToFile();
+        return true;
         };
 
     setup(floats);
@@ -434,9 +443,48 @@ void Animator::viewChatGPT2() {
     mPaused = true;
 
     auto step = [&](auto floats) {
-
+        return false;
         };
 
     setup(tensorSpace);
+    run(step);
+}
+
+void Animator::animateChatGPT2() {
+
+    NetworkLib::Serializer serializer;
+
+    serializer.createInputStream();
+
+    auto [width, height] = FloatSpaceConvert::getDimensions(serializer.getStreamFrameSize(), Animator::mAspectRatio);
+
+    mTextureWidth = width;
+    mTextureHeight = height;
+    mPaused = true;
+
+    FloatSpaceConvert::FloatSpaceDimensions oldDimensions;
+
+    auto step = [&](auto floats) {
+
+        if( oldDimensions != mFloatSubSpaceDimensions ) {
+
+			oldDimensions = mFloatSubSpaceDimensions;
+
+            serializer.mFrameRect = mFloatSubSpaceDimensions;
+		}
+
+        auto frame = serializer.getCurrentFrame();
+        if (frame.has_value()) {
+            mFloats = frame.value();
+            return true;
+        }
+
+        return false;
+        };
+
+    setup();
+
+    serializer.startReadingWindow(mFloatSubSpaceDimensions, mTextureWidth );
+
     run(step);
 }

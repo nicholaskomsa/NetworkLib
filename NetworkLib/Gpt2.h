@@ -101,6 +101,8 @@ namespace NetworkLib {
 			void crossEntropyTest64();
 			void backwardTest64();
 			void SGDTest();
+			void serializeTest();
+
 		};
 		friend class Diagnostics;
 
@@ -298,7 +300,7 @@ namespace NetworkLib {
 
 			std::array<AttnLayer, mAttnLayersNum> mAttnLayers;
 
-			Forward* mForward;
+			Forward* mForward = nullptr;
 
 			static TimeAverage<milliseconds> mUnembedTime, mLayersTime;
 
