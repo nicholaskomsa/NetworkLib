@@ -347,7 +347,7 @@ void Diagnostics::serializeTest() {
 		auto& translator = gpt2.mTranslator;
 		auto& data = gpt2.mTestData;
 		data.load();
-		auto& allTokens = data.mTokens;
+		TokensView completeTrainTokens = data.mTokens;
 		auto& forward = gpt2.mForward;
 		auto& backward = gpt2.mBackward;
 		backward.setup(&gpt2.mForward);
@@ -355,15 +355,12 @@ void Diagnostics::serializeTest() {
 		Serializer serializer;
 	
 		Tensor::View tensorView = forward.getTensorSpace();
-
 		const auto [w, h]  = FloatSpaceConvert::getDimensions(tensorView.size());
-
 		float x = 0, y = 0, scale = std::pow(2, 4);
 		auto frameRect = FloatSpaceConvert::getFloatSubSpaceDimensions(x, y, scale, w, h);
-
 		serializer.createOutputStream(tensorView, frameRect, w);
 
-		TokensView completeTrainTokens(allTokens);
+
 		Token predicted, expected;
 		float crossEntropyLoss;
 		std::size_t generation = 0;
@@ -381,30 +378,35 @@ void Diagnostics::serializeTest() {
 			};
 
 		
-		auto setTrainingData = [&]() {
+		auto setTrainingTokens = [&]() {
 
 			static std::mt19937 random;
+			static std::size_t currentOffset = 0;
+
+			auto begin = std::next(completeTrainTokens.begin(), currentOffset);
+			TokensView trainingTokens(begin, GPT2::mTestInputSize);
 
 			std::uniform_int_distribution<std::size_t> slideDistance(1ULL, 
 				GPT2::mTestInputSize * .33f);
 
-			static std::size_t currentOffset = 0;
-			
 			currentOffset += slideDistance(random);
 
 			if( currentOffset + GPT2::mTestInputSize >= completeTrainTokens.size() )
 				currentOffset = 0;
 			
-			auto viewBegin = std::next(completeTrainTokens.begin(), currentOffset);
-			TokensView trainingTokens(viewBegin, GPT2::mTestInputSize);
 
 			return trainingTokens;
 			};
 
-		for(auto i : std::views::iota(0, 1000)){
 
-			const auto trainTokens = setTrainingData();
-			const TokensView nextTokens(trainTokens.data(), GPT2::mTestInputSize);
+		auto getNextTokens = [&](auto trainTokens)->TokensView {
+			return { trainTokens.begin() + 1, GPT2::mTestInputSize};
+			};
+
+		for(auto generation : std::views::iota(1, 1 + 1000)){
+
+			const auto trainTokens = setTrainingTokens();
+			const auto nextTokens = getNextTokens(trainTokens);
 
 			expected = nextTokens.back();
 			predicted = forward.feedForward(trainTokens);
@@ -417,8 +419,6 @@ void Diagnostics::serializeTest() {
 			serializer.writeToFile();
 
 			print();
-
-			++generation;
 		}
 
 		});
