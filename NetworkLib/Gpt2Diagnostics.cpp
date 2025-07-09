@@ -393,7 +393,7 @@ void Diagnostics::serializeTest() {
 
 			if ( nextOffset >= completeTrainTokens.size()) {
 				
-				std::size_t remaining = completeTrainTokens.size() - currentOffset;
+				std::size_t remaining = completeTrainTokens.size() - (currentOffset+1);
 				
 				trainingTokens = TokensView(begin, remaining);
 
