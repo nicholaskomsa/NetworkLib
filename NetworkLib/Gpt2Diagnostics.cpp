@@ -416,7 +416,9 @@ void Diagnostics::serializeTest() {
 			return { trainTokens.begin() + 1, GPT2::mTestInputSize};
 			};
 
-		for(auto generation : std::views::iota(1, 1 + 1000)){
+
+		for( auto i : std::views::iota(0, 1000)){
+			++generation;
 
 			const auto trainTokens = setTrainingTokens();
 			const auto nextTokens = getNextTokens(trainTokens);
@@ -430,6 +432,7 @@ void Diagnostics::serializeTest() {
 
 			backward.sgd();
 			serializer.writeToFile();
+
 
 			print();
 		}
