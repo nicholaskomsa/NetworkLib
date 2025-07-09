@@ -353,16 +353,13 @@ void Diagnostics::serializeTest() {
 		backward.setup(&gpt2.mForward);
 
 		Serializer serializer;
-		auto setupSerializer = [&]() {
-			//only record a frameRect vs full chatgpt2
-			Tensor::View tensorView = forward.getTensorSpace();
-			const auto [w, h] = FloatSpaceConvert::getDimensions(tensorView.size());
-			float x = 0, y = 0, scale = std::pow(2, 4);
-			auto frameRect = FloatSpaceConvert::getFloatSubSpaceDimensions(x, y, scale, w, h);
-			serializer.createOutputStream(tensorView, frameRect, w);
-			};
+	
+		Tensor::View tensorView = forward.getTensorSpace();
+		const auto [w, h]  = FloatSpaceConvert::getDimensions(tensorView.size());
+		float x = 0, y = 0, scale = std::pow(2, 4);
+		auto frameRect = FloatSpaceConvert::getFloatSubSpaceDimensions(x, y, scale, w, h);
+		serializer.createOutputStream(tensorView, frameRect, w);
 
-		setupSerializer();
 
 		Token predicted, expected;
 		float crossEntropyLoss;
