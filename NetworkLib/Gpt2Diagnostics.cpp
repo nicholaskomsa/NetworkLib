@@ -386,15 +386,28 @@ void Diagnostics::serializeTest() {
 			auto begin = std::next(completeTrainTokens.begin(), currentOffset);
 			TokensView trainingTokens(begin, GPT2::mTestInputSize);
 
-			std::uniform_int_distribution<std::size_t> slideDistance(1ULL, 
-				GPT2::mTestInputSize * .33f);
 
-			currentOffset += slideDistance(random);
+			//if we are near the end of the training then there may only be a partial tokensView
+			// + 1 = nextToken
+			auto nextOffset = 1 + currentOffset + GPT2::mTestInputSize;
 
-			if( currentOffset + GPT2::mTestInputSize >= completeTrainTokens.size() )
+			if ( nextOffset >= completeTrainTokens.size()) {
+				
+				std::size_t remaining = completeTrainTokens.size() - currentOffset;
+				
+				trainingTokens = TokensView(begin, remaining);
+
 				currentOffset = 0;
-			
+			}
+			else {
+				//slide random amount
+				auto min = 1ULL;
+				auto max = GPT2::mTestInputSize * .33f;
 
+				std::uniform_int_distribution<std::size_t> slideDistance(min, max);
+
+				currentOffset += slideDistance(random);
+			}
 			return trainingTokens;
 			};
 
