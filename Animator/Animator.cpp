@@ -451,10 +451,7 @@ void Animator::animateChatGPT2() {
 
     serializer.createInputStream();
 
-    auto [width, height] = FloatSpaceConvert::getDimensions(serializer.getStreamFrameSize(), Animator::mAspectRatio);
-
-    mTextureWidth = width;
-    mTextureHeight = height;
+    std::tie(mTextureWidth, mTextureHeight) = serializer.mFrameRect.second;
 
     auto step = [&](auto floats) {
 
