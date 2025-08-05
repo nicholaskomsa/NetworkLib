@@ -57,13 +57,10 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::out | std::ios::binary);
 
 			//write header
-			auto& [w, h] = mFrameRect.second;
-
-			mFile.write(reinterpret_cast<const char*>(&w), sizeof(w));
-			mFile.write(reinterpret_cast<const char*>(&h), sizeof(h));
+			auto& dimensions = mFrameRect.second;
+			mFile.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
 
 			mFile.close();
-			mStreamFrameSize = w * h;
 		}
 
 		std::size_t getFramePosition(std::size_t y) const {
@@ -165,7 +162,7 @@ namespace NetworkLib {
 			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth) {
 
 				constexpr auto floatSize = sizeof(float);
-				constexpr auto headerSize = sizeof(std::size_t) * 2; // width and height
+				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
 
 				auto gotoFramePosition = [&](std::size_t offset) {
 					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
@@ -203,16 +200,16 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::in | std::ios::binary);
 
 			//read header
-			auto& [w, h] = mFrameRect.second;
 
-			mFile.read(reinterpret_cast<char*>(&w), sizeof(w));
-			mFile.read(reinterpret_cast<char*>(&h), sizeof(h));
+			auto& dimensions = mFrameRect.first;
+			mFile.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
 
+			auto& [w, h] = dimensions;
 			mStreamFrameSize = w * h;
 
 			mFile.seekg(0, std::ios::end);
 			auto animationBytesSize = mFile.tellg();
-			animationBytesSize -= sizeof(w) * 2;
+			animationBytesSize -= sizeof(dimensions);
 
 			mFile.seekg(0, std::ios::beg);
 
