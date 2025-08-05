@@ -25,7 +25,8 @@ namespace NetworkLib {
 
 		std::fstream mFile;
 		std::string mFileName;
-		std::size_t mFileFrameCount = 0, mFileCurrentFrame = 0, mStreamFrameSize = 0;
+		std::size_t mFileFrameCount = 0, mFileCurrentFrame = 0
+			, mStreamFrameSize = 0;
 
 		std::future<void> mReadFuture;
 
@@ -71,19 +72,13 @@ namespace NetworkLib {
 
 			auto begin = &mSourceFloatSpaceView.front();
 
-			auto getFramePosition = [&](std::size_t y) {
-
-				const auto& [frameX, frameY] = mFrameRect.first;
-				return (y + frameY) * mSourceWidth + frameX;
-				};
-
 			auto writeFrameLine = [&](auto y) {
 				//the floatspace may not be able to complete the last line if its too small
 				//while the frameSize is framew * frameh, the float space is not necessarily that large,
 				//if this is the case, complete the rest of the frame line with 0s
 				constexpr auto floatSize = sizeof(float);
 
-				auto framePos = getFramePosition(y);
+				auto framePos = getFrameLinePosition(y);
 				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
 
 				auto lineSize = frameW;
@@ -128,6 +123,13 @@ namespace NetworkLib {
 			else
 				return frontBuffer;
 		}
+		
+		std::size_t getFrameLinePosition(std::size_t y) {
+
+			const auto& [frameX, frameY] = mFrameRect.first;
+			return (y + frameY) * mSourceWidth + frameX;
+		}
+		
 		void readBackBuffer() {
 
 			if (mFileFrameCount == mFileCurrentFrame)
@@ -137,21 +139,16 @@ namespace NetworkLib {
 
 				constexpr auto floatSize = sizeof(float);
 				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
+				const auto& [frameW, frameH] = mFrameRect.second;
 
-				auto gotoFrameLinePosition = [&](std::size_t offset) {
+				auto gotoFrameLinePosition = [&](std::size_t linePos) {
 					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
-					mFile.seekg(frameStart + offset * floatSize, std::ios::beg);
+					mFile.seekg(frameStart + linePos * floatSize, std::ios::beg);
 					};
 
-				const auto& [frameW, frameH] = frameRect.second;
-				auto getLinePosition = [&](std::size_t y) {
-
-					const auto& [frameX, frameY] = mFrameRect.first;
-					return (y + frameY) * frameW + frameX;
-					};
 				auto readFrameLine = [&](auto y) {
 
-					auto linePos = getLinePosition(y);
+					auto linePos = getFrameLinePosition(y);
 
 					gotoFrameLinePosition(linePos);
 
@@ -199,6 +196,7 @@ namespace NetworkLib {
 
 			auto& [w, h] = dimensions;
 			mStreamFrameSize = w * h;
+			mSourceWidth = w;
 
 			mFile.seekg(0, std::ios::end);
 			auto animationBytesSize = mFile.tellg();
