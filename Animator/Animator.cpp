@@ -456,17 +456,11 @@ void Animator::animateChatGPT2() {
     mTextureWidth = width;
     mTextureHeight = height;
 
-    FloatSpaceConvert::FloatSpaceDimensions oldDimensions;
-
     auto step = [&](auto floats) {
 
-        if( oldDimensions != mFloatSubSpaceDimensions ) {
-
-            oldDimensions = mFloatSubSpaceDimensions;
-
+        if(mFloatSubSpaceDimensions != serializer.mFrameRect) 
             serializer.mFrameRect = mFloatSubSpaceDimensions;
-        }
-
+        
         auto frame = serializer.getCurrentFrame();
         if (frame.has_value()) {
             mFloats = frame.value();

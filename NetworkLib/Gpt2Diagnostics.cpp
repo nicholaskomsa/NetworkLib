@@ -318,6 +318,7 @@ void Diagnostics::SGDTest() {
 			};
 
 		do{
+			++generation;
 
 			predicted = forward.feedForward(tokens);
 
@@ -333,8 +334,6 @@ void Diagnostics::SGDTest() {
 			backward.sgd();
 			
 			print();
-
-			++generation;
 
 		} while (true);
 
