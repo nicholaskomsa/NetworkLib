@@ -386,19 +386,17 @@ void Diagnostics::serializeTest() {
 			static std::mt19937 random;
 			static std::size_t currentOffset = 0;
 
-			auto begin = std::next(completeTrainTokens.begin(), currentOffset);
-			TokensView trainingTokens(begin, GPT2::mTestInputSize);
+			TokensView trainTokens, nextTokens;
+			auto begin = completeTrainTokens.begin();
 
+			auto prediction = GPT2::mTestInputSize + 1;
 
-			//if we are near the end of the training then there may only be a partial tokensView
-			// + 1 = nextToken
-			auto nextOffset = 1 + currentOffset + GPT2::mTestInputSize;
+			if (currentOffset + prediction >= completeTrainTokens.size()) {
 
-			if ( nextOffset >= completeTrainTokens.size()) {
-				
-				std::size_t remaining = completeTrainTokens.size() - (currentOffset+1);
-				
-				trainingTokens = TokensView(begin, remaining);
+				//adjust to allow training of last prediction which may overlap with earlier	
+				currentOffset = completeTrainTokens.size() - prediction;
+
+				std::advance(begin, currentOffset);
 
 				currentOffset = 0;
 			}
@@ -409,22 +407,22 @@ void Diagnostics::serializeTest() {
 
 				std::uniform_int_distribution<std::size_t> slideDistance(min, max);
 
+				std::advance(begin, currentOffset);
+
 				currentOffset += slideDistance(random);
 			}
-			return trainingTokens;
+
+			trainTokens = { begin, GPT2::mTestInputSize };
+			nextTokens = { begin + 1, GPT2::mTestInputSize };
+
+
+			return std::make_pair( trainTokens, nextTokens );
 			};
-
-
-		auto getNextTokens = [&](auto trainTokens)->TokensView {
-			return { trainTokens.begin() + 1, GPT2::mTestInputSize};
-			};
-
 
 		for( auto i : std::views::iota(0, 1000)){
 			++generation;
 
-			const auto trainTokens = setTrainingTokens();
-			const auto nextTokens = getNextTokens(trainTokens);
+			const auto [ trainTokens, nextTokens]  = setTrainingTokens();
 
 			expected = nextTokens.back();
 			predicted = forward.feedForward(trainTokens);
