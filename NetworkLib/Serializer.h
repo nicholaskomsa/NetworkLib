@@ -26,13 +26,9 @@ namespace NetworkLib {
 
 		std::fstream mFile;
 		std::string mFileName;
-		std::size_t mFileFrameCount = 0, mFileCurrentFrame = 0;
+		std::size_t mFileFrameCount = 0, mFileCurrentFrame = 0, mStreamFrameSize = 0;
 
 		std::future<void> mReadFuture;
-		bool mStopReading = false;
-		std::size_t mFramesAvailable = 0;
-
-		std::size_t mStreamFrameSize = 0, mTensorFrameSize = 0;
 
 	public:
 
@@ -46,8 +42,6 @@ namespace NetworkLib {
 			return mStreamFrameSize;
 		}
 		void closeStream() {
-
-			mStopReading = true;
 
 			if (mFile.is_open())
 				mFile.close();
@@ -72,40 +66,60 @@ namespace NetworkLib {
 			mStreamFrameSize = floatCount;
 		}
 
-		void writeToFile() {
+		std::size_t getFramePosition(std::size_t y) const {
 
 			const auto& [frameX, frameY] = mFrameRect.first;
+			return (y + frameY) * mFrameWidth + frameX;
+		}
+
+		void writeToFile() {
+
 			const auto& [frameW, frameH] = mFrameRect.second;
 
 			mFile.open(mFileName, std::ios::app | std::ios::binary);
 
 			auto begin = &mSourceFloatSpaceView.front();
 
-			auto getFramePosition = [&](auto y) {
-				return (y + frameY) * mFrameWidth + frameX;
-				};
-
-			std::size_t lineSize = frameW
-				, completeLineSize = mFrameWidth;
-
 			auto writeFrameLine = [&](auto y) {
 
-				auto offset = getFramePosition(y);
+				auto framePos = getFramePosition(y);
+		
+				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
+				auto lineSize = frameW;
 
-				//no not read past eoframe
-				//if (offset + lineSize > mStreamFrameSize)
-				//	lineSize = mStreamFrameSize - (offset + lineSize);
-
-				const float* frameBegin = &mSourceFloatSpaceView.front() + getFramePosition(y);
 				mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * sizeof(float));
 
 				};
 
-			std::size_t y;
-			for (y = 0; y < frameH - 1; ++y) {
+			auto writeLastFrameLine = [&](auto y) {
+
+				auto framePos = getFramePosition(y);
+
+				auto lineSize = frameW;
+				//the floatspace may not be able to complete the last line if its too small
+				if (framePos + lineSize >= mSourceFloatSpaceView.size())
+					lineSize = mSourceFloatSpaceView.size() - framePos;
+
+				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
+
+				mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * sizeof(float));
+
+				//while the frameSize is framew *
+				// frameh, the float space is not necessarily that large,
+				//if this is the case, complete the rest of the frame line with 0s
+				if (lineSize < frameW) {
+
+					char zero = 0;
+					for (auto z : std::views::iota(lineSize, frameW))
+						mFile.put(zero);
+				}
+
+				};
+
+			for (auto y : std::views::iota(0ULL, frameH-1 ))
 				writeFrameLine(y);
-			}
-			writeFrameLine(y);
+
+			writeLastFrameLine(frameH-1);
 
 			mFile.close();
 		}
@@ -159,42 +173,30 @@ namespace NetworkLib {
 
 			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth) {
 
-				const auto& [frameX, frameY] = frameRect.first;
 				const auto& [frameW, frameH] = frameRect.second;
 
 				constexpr auto floatSize = sizeof(float);
 
-				auto gotoFrameOffset = [&](std::size_t offset) {
+				auto gotoFramePosition = [&](std::size_t offset) {
 					auto frameStart = floatSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
 					mFile.seekg(frameStart + offset * floatSize, std::ios::beg);
 					};
 
-				auto getFramePosition = [&](auto y) {
-					return (y + frameY) * frameWidth + frameX;
-						};
-
-				std::size_t lineSize = frameW;
-
 				auto readFrameLine = [&](auto y) {
 
-					auto offset = getFramePosition(y);
+					auto framePos = getFramePosition(y);
 
-					gotoFrameOffset(offset);
+					gotoFramePosition(framePos);
 
-					//no not read past eoframe
-					if (offset + lineSize > mStreamFrameSize)
-						lineSize = mStreamFrameSize - (offset + lineSize);
-
-					float* frameBegin = &mBuffers.second.front() + getFramePosition(y);
+					auto& backBuffer = mBuffers.second;
+					float* frameBegin = &backBuffer.front() + framePos;
+					std::size_t lineSize = frameW;
 					mFile.read(reinterpret_cast<char*>(frameBegin), lineSize * floatSize);
 
 					};
 
-				std::size_t y;
-				for (y = 0; y < frameH - 1; ++y) {
+				for (auto y : std::views::iota(0ULL, frameH))
 					readFrameLine(y);
-				}
-				readFrameLine(y);
 
 				++mFileCurrentFrame;
 
@@ -206,7 +208,6 @@ namespace NetworkLib {
 			closeStream();
 
 			mFile.open(mFileName, std::ios::in | std::ios::binary);
-			mStopReading = false;
 
 			//write header
 			std::size_t floatCount = 0;
