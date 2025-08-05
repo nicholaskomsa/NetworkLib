@@ -15,7 +15,7 @@ namespace NetworkLib {
 	public:
 
 		FloatSpaceConvert::FloatSpaceDimensions mFrameRect;
-		std::size_t mFrameWidth = 0;
+		std::size_t mSourceWidth = 0;
 
 		using Frame = Tensor::Floats;
 		using FrontAndBackFrame = std::pair<Frame, Frame>;
@@ -46,13 +46,13 @@ namespace NetworkLib {
 				mFile.close();
 		}
 
-		void createOutputStream(NetworkLib::Tensor::ConstView floatSpaceView, FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth, const std::string_view fileName = "gpt2.animation") {
+		void createOutputStream(NetworkLib::Tensor::ConstView floatSpaceView, FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t sourceWidth, const std::string_view fileName = "gpt2.animation") {
 
 			mFileName = fileName;
 
 			mSourceFloatSpaceView = floatSpaceView;
 			mFrameRect = frameRect;
-			mFrameWidth = frameWidth;
+			mSourceWidth = sourceWidth;
 
 			mFile.open(mFileName, std::ios::out | std::ios::binary);
 
@@ -63,12 +63,6 @@ namespace NetworkLib {
 			mFile.close();
 		}
 
-		std::size_t getFramePosition(std::size_t y) const {
-
-			const auto& [frameX, frameY] = mFrameRect.first;
-			return (y + frameY) * mFrameWidth + frameX;
-		}
-
 		void writeToFile() {
 
 			const auto& [frameW, frameH] = mFrameRect.second;
@@ -76,6 +70,12 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::app | std::ios::binary);
 
 			auto begin = &mSourceFloatSpaceView.front();
+
+			auto getFramePosition = [&](std::size_t y) {
+
+				const auto& [frameX, frameY] = mFrameRect.first;
+				return (y + frameY) * mSourceWidth + frameX;
+				};
 
 			auto writeFrameLine = [&](auto y) {
 				//the floatspace may not be able to complete the last line if its too small
@@ -115,10 +115,9 @@ namespace NetworkLib {
 
 			restartReading();
 		}
-		void startReadingWindow(FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth) {
+		void startReadingWindow(FloatSpaceConvert::FloatSpaceDimensions frameRect) {
 
 			mFrameRect = frameRect;
-			mFrameWidth = frameWidth;
 
 			//images are of entire file float space
 			mBuffers.first.resize(mStreamFrameSize);
@@ -159,7 +158,7 @@ namespace NetworkLib {
 			if (mFileFrameCount == mFileCurrentFrame)
 				restartReading();
 
-			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth) {
+			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect) {
 
 				constexpr auto floatSize = sizeof(float);
 				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
@@ -170,7 +169,12 @@ namespace NetworkLib {
 					};
 
 				const auto& [frameW, frameH] = frameRect.second;
+				auto getFramePosition = [&](std::size_t y) {
 
+					const auto& [w, h] = mFrameRect.second;
+					const auto& [frameX, frameY] = mFrameRect.first;
+					return (y + frameY) * w + frameX;
+					};
 				auto readFrameLine = [&](auto y) {
 
 					auto framePos = getFramePosition(y);
@@ -190,7 +194,7 @@ namespace NetworkLib {
 
 				++mFileCurrentFrame;
 
-				}, mFrameRect, mFrameWidth);
+				}, mFrameRect);
 		}
 
 		void restartReading() {

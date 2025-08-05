@@ -472,7 +472,7 @@ void Animator::animateChatGPT2() {
     mScale = 4.0f;
     setup();
 
-    serializer.startReadingWindow(mFloatSubSpaceDimensions, mTextureWidth );
+    serializer.startReadingWindow(mFloatSubSpaceDimensions );
 
     run(step);
 }
