@@ -92,27 +92,28 @@ namespace NetworkLib {
 				};
 
 			auto writeLastFrameLine = [&](auto y) {
+				//the floatspace may not be able to complete the last line if its too small
+				//while the frameSize is framew * frameh, the float space is not necessarily that large,
+				//if this is the case, complete the rest of the frame line with 0s
+				constexpr auto floatSize = sizeof(float);
 
 				auto framePos = getFramePosition(y);
-
-				auto lineSize = frameW;
-				//the floatspace may not be able to complete the last line if its too small
-				if (framePos + lineSize >= mSourceFloatSpaceView.size())
-					lineSize = mSourceFloatSpaceView.size() - framePos;
-
 				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
 
-				mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * sizeof(float));
+				auto lineSize = frameW;
 
-				//while the frameSize is framew *
-				// frameh, the float space is not necessarily that large,
-				//if this is the case, complete the rest of the frame line with 0s
-				if (lineSize < frameW) {
+				if (framePos + lineSize >= mSourceFloatSpaceView.size()) {
+
+					lineSize = mSourceFloatSpaceView.size() - framePos;
+
+					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize;
 
 					char zero = 0;
 					for (auto z : std::views::iota(lineSize, frameW))
 						mFile.put(zero);
 				}
+				else
+					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize);
 
 				};
 
