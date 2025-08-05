@@ -81,17 +81,6 @@ namespace NetworkLib {
 			auto begin = &mSourceFloatSpaceView.front();
 
 			auto writeFrameLine = [&](auto y) {
-
-				auto framePos = getFramePosition(y);
-		
-				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
-				auto lineSize = frameW;
-
-				mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * sizeof(float));
-
-				};
-
-			auto writeLastFrameLine = [&](auto y) {
 				//the floatspace may not be able to complete the last line if its too small
 				//while the frameSize is framew * frameh, the float space is not necessarily that large,
 				//if this is the case, complete the rest of the frame line with 0s
@@ -117,10 +106,8 @@ namespace NetworkLib {
 
 				};
 
-			for (auto y : std::views::iota(0ULL, frameH-1 ))
+			for (auto y : std::views::iota(0ULL, frameH ))
 				writeFrameLine(y);
-
-			writeLastFrameLine(frameH-1);
 
 			mFile.close();
 		}
@@ -147,10 +134,11 @@ namespace NetworkLib {
 
 			swapBuffers();
 
-			if (mFileCurrentFrame > 0)
-				return mBuffers.first;
-			else
+			if (mFileCurrentFrame == 0)
+				//the frame is loading still
 				return std::nullopt;
+			else
+				return mBuffers.first;		
 		}
 
 	private:
