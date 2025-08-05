@@ -127,13 +127,7 @@ void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std:
 			FreeImage_Unload(convertedImage);
 			};
 
-		ColorNames colorNames = {
-			{ ColorizeMode::NICKRGB, "nickrgb"}
-			,{ ColorizeMode::SHORTNRGB, "shortnrgb" }
-			,{ ColorizeMode::ROYGBIV, "roygbiv" }
-			,{ ColorizeMode::GREYSCALE, "greyscale" }
-			,{ ColorizeMode::BINARY, "binary" }
-		};
+		ColorNames colorNames = getColorNames();
 
 		auto stripes = { 1,2,10,100 };
 
@@ -284,11 +278,9 @@ FloatSpaceConvert::FloatSpaceDimensions FloatSpaceConvert::getFloatSubSpaceDimen
 	y2 = (-y2 + 1.0f) / 2.0f;
 
 	std::size_t px1 = std::floor(x1 * txWidth)
-		, px2 = std::floor(x2 * txWidth)
-		, py1 = std::ceil(y1 * txHeight)
+		, px2 = std::ceil(x2 * txWidth)
+		, py1 = std::floor(y1 * txHeight)
 		, py2 = std::ceil(y2 * txHeight);
-
-	static std::size_t oldW = 0, oldH = 0;
 
 	std::size_t pw = px2 - px1
 		, ph = py2 - py1;

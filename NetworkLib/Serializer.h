@@ -3,8 +3,6 @@
 #include <Gpt2.h>
 
 #include <fstream>
-#include <deque>
-#include <mutex>
 #include <vector>
 #include <future>
 #include <optional>
@@ -12,17 +10,18 @@
 #include "FloatSpaceConvert.h"
 
 namespace NetworkLib {
+
 	class Serializer {
 	public:
 
 		FloatSpaceConvert::FloatSpaceDimensions mFrameRect;
 		std::size_t mFrameWidth = 0;
 
-		using Frame = NetworkLib::Tensor::Floats;
+		using Frame = Tensor::Floats;
 		using FrontAndBackFrame = std::pair<Frame, Frame>;
 		FrontAndBackFrame mBuffers;
 
-		NetworkLib::Tensor::ConstView mSourceFloatSpaceView;
+		Tensor::ConstView mSourceFloatSpaceView;
 
 		std::fstream mFile;
 		std::string mFileName;
@@ -58,12 +57,13 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::out | std::ios::binary);
 
 			//write header
-			auto [w, h] = mFrameRect.second;
-			std::size_t floatCount = w * h;
+			auto& [w, h] = mFrameRect.second;
 
-			mFile.write(reinterpret_cast<const char*>(&floatCount), sizeof(floatCount));
+			mFile.write(reinterpret_cast<const char*>(&w), sizeof(w));
+			mFile.write(reinterpret_cast<const char*>(&h), sizeof(h));
+
 			mFile.close();
-			mStreamFrameSize = floatCount;
+			mStreamFrameSize = w * h;
 		}
 
 		std::size_t getFramePosition(std::size_t y) const {
@@ -95,7 +95,7 @@ namespace NetworkLib {
 
 					lineSize = mSourceFloatSpaceView.size() - framePos;
 
-					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize;
+					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize);
 
 					char zero = 0;
 					for (auto z : std::views::iota(lineSize, frameW))
@@ -134,17 +134,19 @@ namespace NetworkLib {
 
 			swapBuffers();
 
+			auto& frontBuffer = mBuffers.first;
+
 			if (mFileCurrentFrame == 0)
 				//the frame is loading still
 				return std::nullopt;
 			else
-				return mBuffers.first;		
+				return frontBuffer;
 		}
 
 	private:
 
 		bool bufferReady() {
-			return mReadFuture.valid() && mReadFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+			return mReadFuture.valid() && mReadFuture.wait_for(0s) == std::future_status::ready;
 		}
 		void swapBuffers() {
 
@@ -162,14 +164,15 @@ namespace NetworkLib {
 
 			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t frameWidth) {
 
-				const auto& [frameW, frameH] = frameRect.second;
-
 				constexpr auto floatSize = sizeof(float);
+				constexpr auto headerSize = sizeof(std::size_t) * 2; // width and height
 
 				auto gotoFramePosition = [&](std::size_t offset) {
-					auto frameStart = floatSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
+					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
 					mFile.seekg(frameStart + offset * floatSize, std::ios::beg);
 					};
+
+				const auto& [frameW, frameH] = frameRect.second;
 
 				auto readFrameLine = [&](auto y) {
 
@@ -179,6 +182,7 @@ namespace NetworkLib {
 
 					auto& backBuffer = mBuffers.second;
 					float* frameBegin = &backBuffer.front() + framePos;
+					
 					std::size_t lineSize = frameW;
 					mFile.read(reinterpret_cast<char*>(frameBegin), lineSize * floatSize);
 
@@ -198,14 +202,17 @@ namespace NetworkLib {
 
 			mFile.open(mFileName, std::ios::in | std::ios::binary);
 
-			//write header
-			std::size_t floatCount = 0;
-			mFile.read(reinterpret_cast<char*>(&floatCount), sizeof(floatCount));
-			mStreamFrameSize = floatCount;
+			//read header
+			auto& [w, h] = mFrameRect.second;
+
+			mFile.read(reinterpret_cast<char*>(&w), sizeof(w));
+			mFile.read(reinterpret_cast<char*>(&h), sizeof(h));
+
+			mStreamFrameSize = w * h;
 
 			mFile.seekg(0, std::ios::end);
 			auto animationBytesSize = mFile.tellg();
-			animationBytesSize -= sizeof(floatCount);
+			animationBytesSize -= sizeof(w) * 2;
 
 			mFile.seekg(0, std::ios::beg);
 
