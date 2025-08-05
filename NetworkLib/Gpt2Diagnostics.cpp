@@ -380,18 +380,27 @@ void Diagnostics::serializeTest() {
 				, backward.getTimeAverages());
 			};
 
-		
 		auto setTrainingTokens = [&]() {
 
 			static std::mt19937 random;
 			static std::size_t currentOffset = 0;
 
-			TokensView trainTokens, nextTokens;
 			auto begin = completeTrainTokens.begin();
 
 			auto prediction = GPT2::mTestInputSize + 1;
 
-			if (currentOffset + prediction >= completeTrainTokens.size()) {
+			if (currentOffset + prediction < completeTrainTokens.size()){ 
+
+				std::advance(begin, currentOffset);
+
+				//slide random amount
+				auto min = 1ULL;
+				auto max = GPT2::mTestInputSize * .33f;
+				std::uniform_int_distribution<std::size_t> slideDistance(min, max);
+
+				currentOffset += slideDistance(random);
+
+			}else {
 
 				//adjust to allow training of last prediction which may overlap with earlier	
 				currentOffset = completeTrainTokens.size() - prediction;
@@ -400,21 +409,9 @@ void Diagnostics::serializeTest() {
 
 				currentOffset = 0;
 			}
-			else {
-				//slide random amount
-				auto min = 1ULL;
-				auto max = GPT2::mTestInputSize * .33f;
 
-				std::uniform_int_distribution<std::size_t> slideDistance(min, max);
-
-				std::advance(begin, currentOffset);
-
-				currentOffset += slideDistance(random);
-			}
-
-			trainTokens = { begin, GPT2::mTestInputSize };
-			nextTokens = { begin + 1, GPT2::mTestInputSize };
-
+			TokensView trainTokens( begin, GPT2::mTestInputSize)
+				, nextTokens( begin + 1, GPT2::mTestInputSize );
 
 			return std::make_pair( trainTokens, nextTokens );
 			};
