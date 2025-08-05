@@ -115,16 +115,6 @@ namespace NetworkLib {
 
 			restartReading();
 		}
-		void startReadingWindow(FloatSpaceConvert::FloatSpaceDimensions frameRect) {
-
-			mFrameRect = frameRect;
-
-			//images are of entire file float space
-			mBuffers.first.resize(mStreamFrameSize);
-			mBuffers.second.resize(mStreamFrameSize);
-
-			readBackBuffer();
-		}
 
 		std::optional<NetworkLib::Tensor::View> getCurrentFrame() {
 
@@ -137,6 +127,48 @@ namespace NetworkLib {
 				return std::nullopt;
 			else
 				return frontBuffer;
+		}
+		void readBackBuffer() {
+
+			if (mFileFrameCount == mFileCurrentFrame)
+				restartReading();
+
+			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect) {
+
+				constexpr auto floatSize = sizeof(float);
+				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
+
+				auto gotoFrameLinePosition = [&](std::size_t offset) {
+					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
+					mFile.seekg(frameStart + offset * floatSize, std::ios::beg);
+					};
+
+				const auto& [frameW, frameH] = frameRect.second;
+				auto getLinePosition = [&](std::size_t y) {
+
+					const auto& [frameX, frameY] = mFrameRect.first;
+					return (y + frameY) * frameW + frameX;
+					};
+				auto readFrameLine = [&](auto y) {
+
+					auto linePos = getLinePosition(y);
+
+					gotoFrameLinePosition(linePos);
+
+					auto& backBuffer = mBuffers.second;
+					float* lineBegin = &backBuffer.front() + linePos;
+
+					std::size_t lineSize = frameW;
+					mFile.read(reinterpret_cast<char*>(lineBegin), lineSize * floatSize);
+
+					};
+
+				for (auto y : std::views::iota(0ULL, frameH))
+					readFrameLine(y);
+
+				++mFileCurrentFrame;
+
+				}, mFrameRect);
 		}
 
 	private:
@@ -152,49 +184,6 @@ namespace NetworkLib {
 
 				readBackBuffer();
 			}
-		}
-		void readBackBuffer() {
-
-			if (mFileFrameCount == mFileCurrentFrame)
-				restartReading();
-
-			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect) {
-
-				constexpr auto floatSize = sizeof(float);
-				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
-
-				auto gotoFramePosition = [&](std::size_t offset) {
-					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
-					mFile.seekg(frameStart + offset * floatSize, std::ios::beg);
-					};
-
-				const auto& [frameW, frameH] = frameRect.second;
-				auto getFramePosition = [&](std::size_t y) {
-
-					const auto& [w, h] = mFrameRect.second;
-					const auto& [frameX, frameY] = mFrameRect.first;
-					return (y + frameY) * w + frameX;
-					};
-				auto readFrameLine = [&](auto y) {
-
-					auto framePos = getFramePosition(y);
-
-					gotoFramePosition(framePos);
-
-					auto& backBuffer = mBuffers.second;
-					float* frameBegin = &backBuffer.front() + framePos;
-					
-					std::size_t lineSize = frameW;
-					mFile.read(reinterpret_cast<char*>(frameBegin), lineSize * floatSize);
-
-					};
-
-				for (auto y : std::views::iota(0ULL, frameH))
-					readFrameLine(y);
-
-				++mFileCurrentFrame;
-
-				}, mFrameRect);
 		}
 
 		void restartReading() {
@@ -219,6 +208,10 @@ namespace NetworkLib {
 
 			mFileCurrentFrame = 0;
 			mFileFrameCount = animationBytesSize / sizeof(float) / mStreamFrameSize;
+
+			//images are of entire file float space
+			mBuffers.first.resize(mStreamFrameSize);
+			mBuffers.second.resize(mStreamFrameSize);
 
 		}
 	};
