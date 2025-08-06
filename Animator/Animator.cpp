@@ -462,8 +462,8 @@ void Animator::animateChatGPT2() {
         return false;
         };
 
-    serializer.createInputStream();
-    std::tie(mTextureWidth, mTextureHeight) = serializer.mFrameRect.second;
+
+    std::tie(mTextureWidth, mTextureHeight) = serializer.createInputStream();
     mScale = 4.0f;
     setup();
 

@@ -113,7 +113,7 @@ namespace NetworkLib {
 			mFile.close();
 		}
 
-		void createInputStream(const std::string_view fileName = "gpt2.animation") {
+		FloatSpaceConvert::FloatSpaceCoord createInputStream(const std::string_view fileName = "gpt2.animation") {
 
 			mFileName = fileName;
 
@@ -122,6 +122,8 @@ namespace NetworkLib {
 			//images are of entire file float space
 			mBuffers.first.resize(mStreamFrameSize);
 			mBuffers.second.resize(mStreamFrameSize);
+
+			return mFrameRect.second;
 		}
 
 		std::optional<NetworkLib::Tensor::View> getCurrentFrame(const FloatSpaceConvert::FloatSpaceDimensions frameRect) {
@@ -143,31 +145,32 @@ namespace NetworkLib {
 			return (y + frameY) * mSourceWidth + frameX;
 		}
 		
-		void readBackBuffer(const FloatSpaceConvert::FloatSpaceDimensions& frameRect) {
+		void readBackBuffer(const FloatSpaceConvert::FloatSpaceDimensions& frameSubRect) {
 
 			if (mFileFrameCount == mFileCurrentFrame)
 				restartReading();
 
-			mReadFuture = std::async(std::launch::async, [&](const FloatSpaceConvert::FloatSpaceDimensions frameRect) {
+			mReadFuture = std::async(std::launch::async, [&](const auto frameSubRect) {
 
 				constexpr auto floatSize = sizeof(float);
-				const auto& orgin = frameRect.first;
-				const auto& dimensions = frameRect.second;
-				constexpr auto headerSize = sizeof(dimensions); // dimensions
-				const auto& [frameW, frameH] = dimensions;
+				const auto& [ origin, dimensions ] = frameSubRect;
 
 				auto gotoFrameLinePosition = [&](std::size_t frameLinePos) {
+					constexpr auto headerSize = sizeof(dimensions); // dimensions
 					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
 					mFile.seekg(frameStart + frameLinePos * floatSize, std::ios::beg);
 					};
 
+				const auto& [frameW, frameH] = dimensions;
+
 				auto readFrameLine = [&](auto y) {
 
-					auto frameLinePos = getFrameLinePosition(y, orgin);
+					auto frameLinePos = getFrameLinePosition(y, origin);
 					gotoFrameLinePosition(frameLinePos);
 
 					auto& backBuffer = mBuffers.second;
 					float* lineBegin = &backBuffer.front() + frameLinePos;
+
 					auto lineSize = frameW;
 
 					mFile.read(reinterpret_cast<char*>(lineBegin), lineSize * floatSize);
@@ -179,7 +182,7 @@ namespace NetworkLib {
 
 				++mFileCurrentFrame;
 
-				}, frameRect);
+				}, frameSubRect);
 		}
 
 	private:
@@ -203,9 +206,9 @@ namespace NetworkLib {
 
 			mFile.open(mFileName, std::ios::in | std::ios::binary);
 
+			mFrameRect = { {0,0}, {0,0} };
+			auto& dimensions = mFrameRect.second;
 			//read header
-
-			FloatSpaceConvert::FloatSpaceCoord dimensions;
 			mFile.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
 
 			auto& [w, h] = dimensions;
