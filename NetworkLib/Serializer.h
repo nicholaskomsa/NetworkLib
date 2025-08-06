@@ -83,9 +83,13 @@ namespace NetworkLib {
 
 				if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
 
-					lineSize = mSourceFloatSpaceView.size() - frameLinePos;
+					if (frameLinePos < mSourceFloatSpaceView.size()) {
+						lineSize = mSourceFloatSpaceView.size() - frameLinePos;
 
-					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
+						mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
+					}
+					else
+						lineSize = 0;
 
 					char zero = 0;
 					for (auto z : std::views::iota(lineSize, frameW))
