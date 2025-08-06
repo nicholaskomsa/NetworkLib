@@ -83,23 +83,20 @@ namespace NetworkLib {
 				if (frameLinePos >= mSourceFloatSpaceView.size()) {
 					lineSize = 0;
 					fillSize = lineSize;
-
-				}
-				else if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
-
-					lineSize = mSourceFloatSpaceView.size() - frameLinePos;
-					fillSize = frameW - lineSize;
-
+				} else {
 					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
-				}
-				else {
-					lineSize = frameW;
-					fillSize = 0;
-					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
-				}
 
-				if (lineSize)
+					if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
+
+						lineSize = mSourceFloatSpaceView.size() - frameLinePos;
+						fillSize = frameW - lineSize;
+					} else {
+						lineSize = frameW;
+						fillSize = 0;
+					}
+
 					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
+				}
 
 				if (fillSize) {
 
