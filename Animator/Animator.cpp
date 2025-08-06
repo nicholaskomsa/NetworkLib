@@ -449,16 +449,9 @@ void Animator::animateChatGPT2() {
 
     NetworkLib::Serializer serializer;
 
-    serializer.createInputStream();
-    //get the full stream size
-    std::tie(mTextureWidth, mTextureHeight) = serializer.mFrameRect.second;
-
     auto step = [&](auto floats) {
 
-        if(mFloatSubSpaceDimensions != serializer.mFrameRect) 
-            serializer.mFrameRect = mFloatSubSpaceDimensions;
-        
-        auto frame = serializer.getCurrentFrame();
+        auto frame = serializer.getCurrentFrame(mFloatSubSpaceDimensions);
         if (frame.has_value()) {
             mFloats = frame.value();
             return true;
@@ -469,12 +462,12 @@ void Animator::animateChatGPT2() {
         return false;
         };
 
+    serializer.createInputStream();
+    std::tie(mTextureWidth, mTextureHeight) = serializer.mFrameRect.second;
     mScale = 4.0f;
     setup();
 
-    //alter default rect after mScale application
-    serializer.mFrameRect = mFloatSubSpaceDimensions;
-    serializer.readBackBuffer();
+    serializer.readBackBuffer(mFloatSubSpaceDimensions);
 
     run(step);
 }

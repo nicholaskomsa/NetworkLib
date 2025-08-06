@@ -66,6 +66,7 @@ namespace NetworkLib {
 
 		void writeToFile() {
 
+			const auto& origin = mFrameRect.first;
 			const auto& [frameW, frameH] = mFrameRect.second;
 
 			mFile.open(mFileName, std::ios::app | std::ios::binary);
@@ -76,7 +77,7 @@ namespace NetworkLib {
 				//if this is the case, complete the rest of the frame line with 0s
 				constexpr auto floatSize = sizeof(float);
 
-				auto frameLinePos = getFrameLinePosition(y);
+				auto frameLinePos = getFrameLinePosition(y, origin );
 				std::size_t lineSize = 0, fillSize = 0;
 				const float* lineBegin = nullptr;
 				const auto& sourceSize = mSourceFloatSpaceView.size();
@@ -123,9 +124,9 @@ namespace NetworkLib {
 			mBuffers.second.resize(mStreamFrameSize);
 		}
 
-		std::optional<NetworkLib::Tensor::View> getCurrentFrame() {
+		std::optional<NetworkLib::Tensor::View> getCurrentFrame(const FloatSpaceConvert::FloatSpaceDimensions frameRect) {
 
-			swapBuffers();
+			swapBuffers(frameRect);
 
 			auto& frontBuffer = mBuffers.first;
 
@@ -136,21 +137,22 @@ namespace NetworkLib {
 				return frontBuffer;
 		}
 		
-		std::size_t getFrameLinePosition(std::size_t y) {
+		std::size_t getFrameLinePosition(std::size_t y, const FloatSpaceConvert::FloatSpaceCoord& origin) {
 
-			const auto& [frameX, frameY] = mFrameRect.first;
+			const auto& [frameX, frameY] = origin;
 			return (y + frameY) * mSourceWidth + frameX;
 		}
 		
-		void readBackBuffer() {
+		void readBackBuffer(const FloatSpaceConvert::FloatSpaceDimensions& frameRect) {
 
 			if (mFileFrameCount == mFileCurrentFrame)
 				restartReading();
 
-			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect) {
+			mReadFuture = std::async(std::launch::async, [&](const FloatSpaceConvert::FloatSpaceDimensions frameRect) {
 
 				constexpr auto floatSize = sizeof(float);
-				const auto& dimensions = mFrameRect.second;
+				const auto& orgin = frameRect.first;
+				const auto& dimensions = frameRect.second;
 				constexpr auto headerSize = sizeof(dimensions); // dimensions
 				const auto& [frameW, frameH] = dimensions;
 
@@ -161,7 +163,7 @@ namespace NetworkLib {
 
 				auto readFrameLine = [&](auto y) {
 
-					auto frameLinePos = getFrameLinePosition(y);
+					auto frameLinePos = getFrameLinePosition(y, orgin);
 					gotoFrameLinePosition(frameLinePos);
 
 					auto& backBuffer = mBuffers.second;
@@ -177,7 +179,7 @@ namespace NetworkLib {
 
 				++mFileCurrentFrame;
 
-				}, mFrameRect);
+				}, frameRect);
 		}
 
 	private:
@@ -185,13 +187,13 @@ namespace NetworkLib {
 		bool bufferReady() {
 			return mReadFuture.valid() && mReadFuture.wait_for(0s) == std::future_status::ready;
 		}
-		void swapBuffers() {
+		void swapBuffers(const FloatSpaceConvert::FloatSpaceDimensions& frameRect) {
 
 			if (bufferReady()) {
 
 				std::swap(mBuffers.first, mBuffers.second);
 
-				readBackBuffer();
+				readBackBuffer(frameRect);
 			}
 		}
 
@@ -209,11 +211,6 @@ namespace NetworkLib {
 			auto& [w, h] = dimensions;
 			mStreamFrameSize = w * h;
 			mSourceWidth = w;
-
-			//if mFrameRect has not been set, then set otherwise keep viewer option
-			constexpr auto empty = std::make_pair(0ULL, 0ULL);
-			if (mFrameRect.second == empty);
-				mFrameRect.second = dimensions;
 
 			mFile.seekg(0, std::ios::end);
 			auto animationBytesSize = mFile.tellg();
