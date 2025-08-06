@@ -82,7 +82,7 @@ namespace NetworkLib {
 
 				if (frameLinePos >= mSourceFloatSpaceView.size()) {
 					lineSize = 0;
-					fillSize = lineSize;
+					fillSize = frameW;
 				} else {
 					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
 
