@@ -82,74 +82,66 @@ void Animator::doEvents() {
 
             keyRepeatGuard([&]() {
 
-                bool doChangeDimensions = false;
-                bool doConvert = false;
+                bool doChangeDimensions = true;
+                bool doConvert = true;
                 float translateSpeed = mTranslateSpeed / mScale;
 
                 switch (key) {
+                case SDLK_LEFT:
+                    mX -= translateSpeed;
+                    break;
+                case SDLK_RIGHT:
+                    mX += translateSpeed;
+                    break;
+                case SDLK_UP:
+                    mY += translateSpeed;
+                    break;
+                case SDLK_DOWN:
+                    mY -= translateSpeed;
+                    break;
+                case SDLK_A:
+                    mScale /= 2.0f;
+                    break;
+                case SDLK_S:
+                    mScale *= 2.0f;
+                    break;
+                case SDLK_R:
+                    mX = 0.0f;
+                    mY = 0.0f;
+                    mScale = 1.0f;
+                    break;
+                default:
+                    doChangeDimensions = false;
+                }
+
+                switch (key) {
                 case SDLK_1: 
-                    doConvert = true;  mColorizeMode = ColorizeMode::NICKRGB; break;
+                    mColorizeMode = ColorizeMode::NICKRGB; break;
                 case SDLK_2: 
-                    doConvert = true; mColorizeMode = ColorizeMode::SHORTNRGB; break;
+                    mColorizeMode = ColorizeMode::SHORTNRGB; break;
                 case SDLK_3: 
-                    doConvert = true; mColorizeMode = ColorizeMode::ROYGBIV; break;
+                    mColorizeMode = ColorizeMode::ROYGBIV; break;
                 case SDLK_4: 
-                    doConvert = true; mColorizeMode = ColorizeMode::GREYSCALE; break;
+                    mColorizeMode = ColorizeMode::GREYSCALE; break;
                 case SDLK_5: 
-                    doConvert = true; mColorizeMode = ColorizeMode::BINARY; break;
+                    mColorizeMode = ColorizeMode::BINARY; break;
 
                 case SDLK_Q:
-                    doConvert = true;
                     if (mSelectedStripes == mStripes.begin())
                         mSelectedStripes = std::prev(mStripes.end(), 1);
                     else
                         mSelectedStripes = std::prev(mSelectedStripes, 1);
                     break;
                 case SDLK_W:
-                    doConvert = true;
                     std::advance(mSelectedStripes, 1);
                     if (mSelectedStripes == mStripes.end())
                         mSelectedStripes = mStripes.begin();
                     break;
+                default:
+                    doConvert = false;
+				}
 
-                case SDLK_LEFT:
-                    doConvert = true;
-                    doChangeDimensions = true;
-                    mX -= translateSpeed;
-                    break;
-                case SDLK_RIGHT:
-                    doConvert = true;
-                    doChangeDimensions = true;
-                    mX += translateSpeed;
-                    break;
-                case SDLK_UP:
-                    doConvert = true;
-                    doChangeDimensions = true;
-                    mY += translateSpeed;
-                    break;
-                case SDLK_DOWN:
-                    doConvert = true;
-                    doChangeDimensions = true;
-                    mY -= translateSpeed;
-                    break;
-                case SDLK_A:
-                    doConvert = true;
-                    doChangeDimensions = true;
-                    mScale /= 2.0f;
-                    break;
-                case SDLK_S:
-                    doChangeDimensions = true;
-                    doConvert = true;
-                    mScale *= 2.0f;
-                    break;
-                case SDLK_R:
-                    doChangeDimensions = true;
-                    doConvert = true;
-                    mX = 0.0f;
-                    mY = 0.0f;
-                    mScale = 1.0f;
-                    break;
-
+                switch(key){
                 case SDLK_SPACE:
                     mPaused = !mPaused;
                     break;
