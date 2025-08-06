@@ -70,31 +70,29 @@ namespace NetworkLib {
 
 			mFile.open(mFileName, std::ios::app | std::ios::binary);
 
-			auto begin = &mSourceFloatSpaceView.front();
-
 			auto writeFrameLine = [&](auto y) {
 				//the floatspace may not be able to complete the last line if its too small
 				//while the frameSize is framew * frameh, the float space is not necessarily that large,
 				//if this is the case, complete the rest of the frame line with 0s
 				constexpr auto floatSize = sizeof(float);
 
-				auto framePos = getFrameLinePosition(y);
-				const float* frameBegin = &mSourceFloatSpaceView.front() + framePos;
+				auto frameLinePos = getFrameLinePosition(y);
+				const float* lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
 
 				auto lineSize = frameW;
 
-				if (framePos + lineSize >= mSourceFloatSpaceView.size()) {
+				if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
 
-					lineSize = mSourceFloatSpaceView.size() - framePos;
+					lineSize = mSourceFloatSpaceView.size() - frameLinePos;
 
-					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize);
+					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
 
 					char zero = 0;
 					for (auto z : std::views::iota(lineSize, frameW))
 						mFile.put(zero);
 				}
 				else
-					mFile.write(reinterpret_cast<const char*>(frameBegin), lineSize * floatSize);
+					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
 
 				};
 
@@ -109,6 +107,10 @@ namespace NetworkLib {
 			mFileName = fileName;
 
 			restartReading();
+
+			//images are of entire file float space
+			mBuffers.first.resize(mStreamFrameSize);
+			mBuffers.second.resize(mStreamFrameSize);
 		}
 
 		std::optional<NetworkLib::Tensor::View> getCurrentFrame() {
@@ -138,24 +140,24 @@ namespace NetworkLib {
 			mReadFuture = std::async(std::launch::async, [&](FloatSpaceConvert::FloatSpaceDimensions frameRect) {
 
 				constexpr auto floatSize = sizeof(float);
-				constexpr auto headerSize = sizeof(mFrameRect.second); // dimensions
-				const auto& [frameW, frameH] = mFrameRect.second;
+				const auto& dimensions = mFrameRect.second;
+				constexpr auto headerSize = sizeof(dimensions); // dimensions
+				const auto& [frameW, frameH] = dimensions;
 
-				auto gotoFrameLinePosition = [&](std::size_t linePos) {
+				auto gotoFrameLinePosition = [&](std::size_t frameLinePos) {
 					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
-					mFile.seekg(frameStart + linePos * floatSize, std::ios::beg);
+					mFile.seekg(frameStart + frameLinePos * floatSize, std::ios::beg);
 					};
 
 				auto readFrameLine = [&](auto y) {
 
-					auto linePos = getFrameLinePosition(y);
-
-					gotoFrameLinePosition(linePos);
+					auto frameLinePos = getFrameLinePosition(y);
+					gotoFrameLinePosition(frameLinePos);
 
 					auto& backBuffer = mBuffers.second;
-					float* lineBegin = &backBuffer.front() + linePos;
+					float* lineBegin = &backBuffer.front() + frameLinePos;
+					auto lineSize = frameW;
 
-					std::size_t lineSize = frameW;
 					mFile.read(reinterpret_cast<char*>(lineBegin), lineSize * floatSize);
 
 					};
@@ -191,12 +193,17 @@ namespace NetworkLib {
 
 			//read header
 
-			auto& dimensions = mFrameRect.first;
+			FloatSpaceConvert::FloatSpaceCoord dimensions;
 			mFile.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
 
 			auto& [w, h] = dimensions;
 			mStreamFrameSize = w * h;
 			mSourceWidth = w;
+
+			//if mFrameRect has not been set, then set otherwise keep viewer option
+			constexpr auto empty = std::make_pair(0ULL, 0ULL);
+			if (mFrameRect.second == empty);
+				mFrameRect.second = dimensions;
 
 			mFile.seekg(0, std::ios::end);
 			auto animationBytesSize = mFile.tellg();
@@ -206,11 +213,6 @@ namespace NetworkLib {
 
 			mFileCurrentFrame = 0;
 			mFileFrameCount = animationBytesSize / sizeof(float) / mStreamFrameSize;
-
-			//images are of entire file float space
-			mBuffers.first.resize(mStreamFrameSize);
-			mBuffers.second.resize(mStreamFrameSize);
-
 		}
 	};
 };

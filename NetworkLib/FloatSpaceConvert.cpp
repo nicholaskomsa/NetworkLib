@@ -82,7 +82,7 @@ void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span
 	floatSubSpaceConvert(data, converted, 0, 0, width, height, width
 		, colorMode, vMin, vMax, stripeNum);
 }
-std::pair<std::size_t, std::size_t> FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
+FloatSpaceConvert::FloatSpaceCoord FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
 	int width = 0, height = 0;
 

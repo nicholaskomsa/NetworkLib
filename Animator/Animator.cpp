@@ -472,6 +472,7 @@ void Animator::animateChatGPT2() {
     mScale = 4.0f;
     setup();
 
+    //alter default rect after mScale application
     serializer.mFrameRect = mFloatSubSpaceDimensions;
     serializer.readBackBuffer();
 
