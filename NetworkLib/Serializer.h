@@ -100,7 +100,7 @@ namespace NetworkLib {
 				if (fillSize) {
 
 					char zero = 0;
-					for (auto z : std::views::iota(lineSize, frameW))
+					for (auto z : std::views::iota(0ULL, fillSize))
 						mFile.put(zero);
 				}
 
