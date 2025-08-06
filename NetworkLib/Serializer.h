@@ -79,16 +79,17 @@ namespace NetworkLib {
 				auto frameLinePos = getFrameLinePosition(y);
 				std::size_t lineSize = 0, fillSize = 0;
 				const float* lineBegin = nullptr;
+				const auto& sourceSize = mSourceFloatSpaceView.size();
 
-				if (frameLinePos >= mSourceFloatSpaceView.size()) {
+				if (frameLinePos >= sourceSize) {
 					fillSize = frameW;
 				} else {
 
 					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
 
-					if (frameLinePos + frameW >= mSourceFloatSpaceView.size()) {
+					if (frameLinePos + frameW >= sourceSize) {
 
-						lineSize = mSourceFloatSpaceView.size() - frameLinePos;
+						lineSize = sourceSize - frameLinePos;
 						fillSize = frameW - lineSize;
 					}else
 						lineSize = frameW;
