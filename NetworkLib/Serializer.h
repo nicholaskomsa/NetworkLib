@@ -77,26 +77,36 @@ namespace NetworkLib {
 				constexpr auto floatSize = sizeof(float);
 
 				auto frameLinePos = getFrameLinePosition(y);
-				const float* lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
+				std::size_t lineSize = 0, fillSize = 0;
+				const float* lineBegin = nullptr;
 
-				auto lineSize = frameW;
+				if (frameLinePos >= mSourceFloatSpaceView.size()) {
+					lineSize = 0;
+					fillSize = lineSize;
 
-				if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
+				}
+				else if (frameLinePos + lineSize >= mSourceFloatSpaceView.size()) {
 
-					if (frameLinePos < mSourceFloatSpaceView.size()) {
-						lineSize = mSourceFloatSpaceView.size() - frameLinePos;
+					lineSize = mSourceFloatSpaceView.size() - frameLinePos;
+					fillSize = frameW - lineSize;
 
-						mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
-					}
-					else
-						lineSize = 0;
+					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
+				}
+				else {
+					lineSize = frameW;
+					fillSize = 0;
+					lineBegin = &mSourceFloatSpaceView.front() + frameLinePos;
+				}
+
+				if (lineSize)
+					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
+
+				if (fillSize) {
 
 					char zero = 0;
 					for (auto z : std::views::iota(lineSize, frameW))
 						mFile.put(zero);
 				}
-				else
-					mFile.write(reinterpret_cast<const char*>(lineBegin), lineSize * floatSize);
 
 				};
 
