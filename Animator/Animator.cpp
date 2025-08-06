@@ -167,8 +167,8 @@ void Animator::doEvents() {
     }
 }
 Animator::Animator(std::size_t width, std::size_t height) {
-    mTextureWidth = width;
-    mTextureHeight = height;
+    mFrameWidth = width;
+    mFrameHeight = height;
 }
 Animator::~Animator() {
     shutdown();
@@ -396,15 +396,15 @@ void Animator::run(StepFunction&& step) {
 
     } while (mRunning);
 }
-std::size_t Animator::getSize() { return mTextureWidth * mTextureHeight; }
+std::size_t Animator::getSize() { return mFrameWidth * mFrameHeight; }
 
 
 void Animator::animateMT19937(std::size_t floatCount) {
 
     auto [width, height] = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
 
-    mTextureWidth = width;
-    mTextureHeight = height;
+    mFrameWidth = width;
+    mFrameHeight = height;
 
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
@@ -433,8 +433,8 @@ void Animator::viewChatGPT2() {
 
     auto [width, height] = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
 
-    mTextureWidth = width;
-    mTextureHeight = height;
+    mFrameWidth = width;
+    mFrameHeight = height;
     mPaused = true;
 
     auto step = [&](auto floats) {
@@ -463,7 +463,7 @@ void Animator::animateChatGPT2() {
         };
 
 
-    std::tie(mTextureWidth, mTextureHeight) = serializer.createInputStream();
+    std::tie(mFrameWidth, mFrameHeight) = serializer.createInputStream();
     mScale = 4.0f;
     setup();
 

@@ -31,7 +31,7 @@ public:
 
 private:
 
-    std::size_t mTextureWidth = 0, mTextureHeight = 0;
+    std::size_t mFrameWidth = 0, mFrameHeight = 0;
 
     using PixelsView = std::span<std::uint32_t>;
     std::vector<std::uint32_t> mPixels;
@@ -103,12 +103,12 @@ public:
         const auto& [coord, dims] = mFloatSubSpaceDimensions;
   
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            , coord.first, coord.second, dims.first, dims.second, mTextureWidth
+            , coord.first, coord.second, dims.first, dims.second, mFrameWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     void setDimensions() {
 
-        mFloatSubSpaceDimensions = FloatSpaceConvert::getFloatSubSpaceDimensions(mX, mY, mScale, mTextureWidth, mTextureHeight);
+        mFloatSubSpaceDimensions = FloatSpaceConvert::getFloatSubSpaceDimensions(mX, mY, mScale, mFrameWidth, mFrameHeight);
         
         static std::size_t oldW = 0, oldH = 0;
 
