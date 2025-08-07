@@ -55,7 +55,7 @@ private:
     void render();
     void doEvents();
 
-    FloatSpaceConvert::FloatSpaceDimensions mFloatSubSpaceDimensions;
+    FloatSpaceConvert::Rect mFloatRect;
 
     void resizeTexture(){
         if( mTexture)
@@ -66,7 +66,7 @@ private:
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, mTexture);
 
-        auto& [coord, dims] = mFloatSubSpaceDimensions;
+        auto& [coord, dims] = mFloatRect;
         auto& [width, height] = dims;
 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
@@ -94,24 +94,21 @@ public:
     void viewChatGPT2();
     void animateChatGPT2();
 
-
     void floatSpaceConvert() {
 
         if (mFloats.empty()) return;
 
-        const auto& [coord, dims] = mFloatSubSpaceDimensions;
-  
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
-            , coord.first, coord.second, dims.first, dims.second, mFrameWidth
+            , mFloatRect, mFrameWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
     }
     void setDimensions() {
 
-        mFloatSubSpaceDimensions = FloatSpaceConvert::getFloatSubSpaceDimensions(mX, mY, mScale, mFrameWidth, mFrameHeight);
+        mFloatRect = FloatSpaceConvert::getFloatSpaceRect(mX, mY, mScale, mFrameWidth, mFrameHeight);
         
         static std::size_t oldW = 0, oldH = 0;
 
-        const auto& [pw, ph] = mFloatSubSpaceDimensions.second;
+        const auto& [pw, ph] = mFloatRect.second;
      
         if (oldW != pw || oldH != ph) {
             resizeTexture();

@@ -29,7 +29,7 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
 void Animator::render() {
 
     glBindTexture(GL_TEXTURE_2D, mTexture);
-    const auto& [coord,dims] = mFloatSubSpaceDimensions;
+    const auto& [coord,dims] = mFloatRect;
     auto& [width, height] = dims;
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
     glBindVertexArray(mVao);
@@ -435,11 +435,11 @@ void Animator::animateChatGPT2() {
     mScale = 4.0f;
     setup();
 
-    serializer.readBackBuffer(mFloatSubSpaceDimensions);
+    serializer.readBackBuffer(mFloatRect);
 
     auto step = [&](auto floats) {
 
-        auto frame = serializer.getCurrentFrame(mFloatSubSpaceDimensions);
+        auto frame = serializer.getCurrentFrame(mFloatRect);
         if (frame.has_value()) {
             mFloats = frame.value();
             return true;

@@ -12,9 +12,8 @@
 namespace NetworkLib {
 
 	class Serializer {
-	public:
-
-		FloatSpaceConvert::FloatSpaceDimensions mFrameRect;
+	
+		FloatSpaceConvert::Rect mFrameRect;
 		std::size_t mSourceWidth = 0;
 
 		using Frame = Tensor::Floats;
@@ -47,13 +46,14 @@ namespace NetworkLib {
 				mFile.close();
 		}
 
-		void createOutputStream(NetworkLib::Tensor::ConstView floatSpaceView, FloatSpaceConvert::FloatSpaceDimensions frameRect, std::size_t sourceWidth, const std::string_view fileName = "gpt2.animation") {
+		void createOutputStream(NetworkLib::Tensor::ConstView floatSpaceView, const FloatSpaceConvert::Rect& subFrameRect
+			, std::size_t frameWidth, const std::string_view fileName = "gpt2.animation") {
 
 			mFileName = fileName;
 
 			mSourceFloatSpaceView = floatSpaceView;
-			mFrameRect = frameRect;
-			mSourceWidth = sourceWidth;
+			mFrameRect = subFrameRect;
+			mSourceWidth = frameWidth;
 
 			mFile.open(mFileName, std::ios::out | std::ios::binary);
 
@@ -113,7 +113,7 @@ namespace NetworkLib {
 			mFile.close();
 		}
 
-		FloatSpaceConvert::FloatSpaceCoord createInputStream(const std::string_view fileName = "gpt2.animation") {
+		FloatSpaceConvert::Coord createInputStream(const std::string_view fileName = "gpt2.animation") {
 
 			mFileName = fileName;
 
@@ -126,7 +126,7 @@ namespace NetworkLib {
 			return mFrameRect.second;
 		}
 
-		std::optional<NetworkLib::Tensor::View> getCurrentFrame(const FloatSpaceConvert::FloatSpaceDimensions frameRect) {
+		std::optional<NetworkLib::Tensor::View> getCurrentFrame(const FloatSpaceConvert::Rect& frameRect) {
 
 			swapBuffers(frameRect);
 
@@ -139,13 +139,13 @@ namespace NetworkLib {
 				return frontBuffer;
 		}
 		
-		std::size_t getFrameLinePosition(std::size_t y, const FloatSpaceConvert::FloatSpaceCoord& origin) {
+		std::size_t getFrameLinePosition(std::size_t y, const FloatSpaceConvert::Coord& origin) {
 
 			const auto& [frameX, frameY] = origin;
 			return (y + frameY) * mSourceWidth + frameX;
 		}
 		
-		void readBackBuffer(const FloatSpaceConvert::FloatSpaceDimensions& frameSubRect) {
+		void readBackBuffer(const FloatSpaceConvert::Rect& frameSubRect) {
 
 			if (mFileFrameCount == mFileCurrentFrame)
 				restartReading();
@@ -156,7 +156,7 @@ namespace NetworkLib {
 				const auto& [ origin, dimensions ] = frameSubRect;
 
 				auto gotoFrameLinePosition = [&](std::size_t frameLinePos) {
-					constexpr auto headerSize = sizeof(dimensions); // dimensions
+					constexpr auto headerSize = sizeof(dimensions);
 					auto frameStart = headerSize + mFileCurrentFrame * mStreamFrameSize * floatSize;
 					mFile.seekg(frameStart + frameLinePos * floatSize, std::ios::beg);
 					};
@@ -190,7 +190,7 @@ namespace NetworkLib {
 		bool bufferReady() {
 			return mReadFuture.valid() && mReadFuture.wait_for(0s) == std::future_status::ready;
 		}
-		void swapBuffers(const FloatSpaceConvert::FloatSpaceDimensions& frameRect) {
+		void swapBuffers(const FloatSpaceConvert::Rect& frameRect) {
 
 			if (bufferReady()) {
 

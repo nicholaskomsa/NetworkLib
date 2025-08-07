@@ -27,20 +27,25 @@ namespace FloatSpaceConvert {
 	std::uint32_t grayScale(double percent);
 	std::uint32_t binary(double percent);
 
-	void floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1);
-	void floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, std::size_t x, std::size_t y, std::size_t w, std::size_t h, std::size_t texW, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1);
-	
-	using FloatSpaceCoord = std::pair<std::size_t, std::size_t>;
+	using Coord = std::pair<std::size_t, std::size_t>;
+	using Dimensions = Coord;
+	using Rect = std::pair<Coord, Dimensions>;
 
-	FloatSpaceCoord getDimensions(std::size_t size, float aspectRatio = 3840.0f / 2160.0f);
+	using DataView = std::span<const float>;
+	using PixelView = std::span<std::uint32_t>;
+
+	void floatSpaceConvert(DataView data, PixelView converted, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1);
+	void floatSubSpaceConvert(DataView data, PixelView converted
+		, const Rect& subFrame
+		, std::size_t frameWidth, ColorizeMode colorMode = ColorizeMode::NICKRGB, double vMin = 0.0, double vMax = 1.0, double stripeNum = 1);
+	
+	Dimensions getDimensions(std::size_t size, float aspectRatio = 3840.0f / 2160.0f);
 
 	void colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats);
 
 	ColorNames getColorNames();
 
 
-	using FloatSpaceDimensions = std::pair<FloatSpaceCoord, FloatSpaceCoord>;
-
-	FloatSpaceDimensions getFloatSubSpaceDimensions(float& x, float& y, float& scale, std::size_t txWidth, std::size_t txHeight);
+	Rect getFloatSpaceRect(float& x, float& y, float& scale, std::size_t frameWidth, std::size_t frameHeight);
 
 };	

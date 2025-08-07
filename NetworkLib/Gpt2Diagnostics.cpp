@@ -357,7 +357,7 @@ void Diagnostics::serializeTest() {
 			Tensor::View tensorView = forward.getTensorSpace();
 			const auto [w, h] = FloatSpaceConvert::getDimensions(tensorView.size());
 			float x = 0, y = 0, scale = std::pow(2, 4);
-			auto frameRect = FloatSpaceConvert::getFloatSubSpaceDimensions(x, y, scale, w, h);
+			auto frameRect = FloatSpaceConvert::getFloatSpaceRect(x, y, scale, w, h);
 			serializer.createOutputStream(tensorView, frameRect, w);
 			};
 
@@ -386,9 +386,9 @@ void Diagnostics::serializeTest() {
 
 			auto begin = completeTrainTokens.begin();
 
-			auto prediction = GPT2::mTestInputSize + 1;
+			auto expected = GPT2::mTestInputSize + 1;
 
-			if (currentOffset + prediction < completeTrainTokens.size()){ 
+			if (currentOffset + expected < completeTrainTokens.size()){
 
 				std::advance(begin, currentOffset);
 
@@ -402,7 +402,7 @@ void Diagnostics::serializeTest() {
 			}else {
 
 				//adjust to allow training of last prediction which may overlap with earlier	
-				currentOffset = completeTrainTokens.size() - prediction;
+				currentOffset = completeTrainTokens.size() - expected;
 
 				std::advance(begin, currentOffset);
 

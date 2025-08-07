@@ -77,20 +77,22 @@ std::uint32_t FloatSpaceConvert::binary(double percent) {
 
 }
 
-void FloatSpaceConvert::floatSpaceConvert(std::span<const float> data, std::span<uint32_t> converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
+void FloatSpaceConvert::floatSpaceConvert(DataView data, PixelView converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
-	auto [width, height] = getDimensions(data.size(), 1.0f);
-	floatSubSpaceConvert(data, converted, 0, 0, width, height, width
+	auto dimensions = getDimensions(data.size(), 1.0f);
+
+	floatSubSpaceConvert(data, converted, { {0,0}, dimensions }, dimensions.first
 		, colorMode, vMin, vMax, stripeNum);
 }
-FloatSpaceConvert::FloatSpaceCoord FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
+FloatSpaceConvert::Dimensions FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
-	int width = 0, height = 0;
+	Dimensions dimensions;
+	auto& [width, height] = dimensions;
 
 	width = std::sqrt(size * aspectRatio);
 	height = std::ceil(size / float(width));
 
-	return { width, height };
+	return dimensions;
 }
 
 void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats) {
@@ -168,9 +170,9 @@ FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
 	};
 }
 
-void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::span<uint32_t> converted
-	, std::size_t x, std::size_t y, std::size_t w, std::size_t h
-	, std::size_t dataWidth
+void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
+	, const Rect& subFrame
+	, std::size_t frameWidth
 	, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
 	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
@@ -239,6 +241,10 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 	auto forSubPixels = [&]() {
 
+		const auto& [origin, dimensions] = subFrame;
+		auto& [x, y] = origin;
+		auto& [w, h] = dimensions;
+
 		auto hIota = std::views::iota(y, y + h);
 		auto wIota = std::views::iota(x, x + w);
 
@@ -246,7 +252,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 
 			for (auto ix : wIota) {
 
-				std::size_t index = iy * dataWidth + ix;
+				std::size_t index = iy * frameWidth + ix;
 				std::size_t pxIndex = (iy - y) * w + (ix - x);
 
 				if (pxIndex < converted.size() && index < data.size())
@@ -260,7 +266,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(std::span<const float> data, std::s
 }
 
 
-FloatSpaceConvert::FloatSpaceDimensions FloatSpaceConvert::getFloatSubSpaceDimensions(float& x, float& y, float& scale, std::size_t txWidth, std::size_t txHeight) {
+FloatSpaceConvert::Rect FloatSpaceConvert::getFloatSpaceRect(float& x, float& y, float& scale, std::size_t frameWidth, std::size_t frameHeight) {
 
 	if (scale < 1.0f) scale = 1.0f;
 
@@ -278,10 +284,10 @@ FloatSpaceConvert::FloatSpaceDimensions FloatSpaceConvert::getFloatSubSpaceDimen
 	y1 = (-y1 + 1.0f) / 2.0f;
 	y2 = (-y2 + 1.0f) / 2.0f;
 
-	std::size_t px1 = std::floor(x1 * txWidth)
-		, px2 = std::ceil(x2 * txWidth)
-		, py1 = std::floor(y1 * txHeight)
-		, py2 = std::ceil(y2 * txHeight);
+	std::size_t px1 = std::floor(x1 * frameWidth)
+		, px2 = std::ceil(x2 * frameWidth)
+		, py1 = std::floor(y1 * frameHeight)
+		, py2 = std::ceil(y2 * frameHeight);
 
 	std::size_t pw = px2 - px1
 		, ph = py2 - py1;
