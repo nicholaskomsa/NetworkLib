@@ -106,17 +106,17 @@ public:
 
         mFloatRect = FloatSpaceConvert::getFloatSpaceRect(mX, mY, mScale, mFrameWidth, mFrameHeight);
         
-        static std::size_t oldW = 0, oldH = 0;
+        static FloatSpaceConvert::Dimensions oldDimensions(0,0);
+		const auto& dimensions = mFloatRect.second;
 
         const auto& [pw, ph] = mFloatRect.second;
      
-        if (oldW != pw || oldH != ph) {
+        if (oldDimensions != dimensions) {
             resizeTexture();
 
             mPixels.resize(pw * ph);
             mPixels.shrink_to_fit();
-            oldW = pw;
-            oldH = ph;
+            oldDimensions = dimensions;
         }
     }
     std::size_t getSize();
