@@ -54,7 +54,6 @@ private:
 
     void render();
     void doEvents();
-    void updateCamera();
 
     FloatSpaceConvert::FloatSpaceDimensions mFloatSubSpaceDimensions;
 

@@ -3,6 +3,7 @@
 #define FREEIMAGE_LIB
 #include <FreeImage.h>
 
+#include <ranges>
 #include <print>
 #include <execution>
 #include <algorithm>

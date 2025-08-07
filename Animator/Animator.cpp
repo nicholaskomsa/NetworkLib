@@ -63,12 +63,13 @@ void Animator::doEvents() {
 
         };
 
-    auto quit = [&]() {
-        return type == SDL_EVENT_QUIT
-            || type == SDL_EVENT_KEY_DOWN && key == SDLK_ESCAPE;
-        };
     auto keydown = [&]() {
         return type == SDL_EVENT_KEY_DOWN;
+        };
+
+    auto quit = [&]() {
+        return type == SDL_EVENT_QUIT
+            || keydown() && key == SDLK_ESCAPE;
         };
 
     while (SDL_PollEvent(&event)) {
@@ -165,33 +166,10 @@ Animator::Animator(std::size_t width, std::size_t height) {
 Animator::~Animator() {
     shutdown();
 }
-void Animator::updateCamera() {
 
-    auto setOrthoProjection = [&]() {
-                
-        float left = -1, right = 1
-            , top = 1, bottom = -1
-            , n = -1, f = 1;
-
-            std::array<float, 16> ortho = {
-                2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
-                0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
-                0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
-                -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
-            };
-
-            GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
-
-            glUniformMatrix4fv(projLoc, 1, GL_FALSE, ortho.data());
-        };
-
-    setOrthoProjection();
-}
 void Animator::setup(FloatsView floats = {}) {
 
     mFloats = floats;
-
-    //mPixels.resize(mTextureWidth * mTextureHeight, 0.0f);
 
     auto initGL = [&]() {
         // Initialize SDL3
@@ -286,7 +264,25 @@ void Animator::setup(FloatsView floats = {}) {
             mShaderProgram = createShaderProgram(vertexShader, fragmentShader);
             glUseProgram(mShaderProgram);
 
-            updateCamera();
+            auto setOrthoProjection = [&]() {
+
+                float left = -1, right = 1
+                    , top = 1, bottom = -1
+                    , n = -1, f = 1;
+
+                std::array<float, 16> ortho = {
+                    2.0f / (right - left),  0.0f,                   0.0f,                 0.0f,
+                    0.0f,                   2.0f / (top - bottom),  0.0f,                 0.0f,
+                    0.0f,                   0.0f,                   -2.0f / (f - n),    0.0f,
+                    -(right + left) / (right - left), -(top + bottom) / (top - bottom), -(f + n) / (f - n), 1.0f
+                };
+
+                GLint projLoc = glGetUniformLocation(mShaderProgram, "projection");
+
+                glUniformMatrix4fv(projLoc, 1, GL_FALSE, ortho.data());
+                };
+
+            setOrthoProjection();
             };
 
             auto createQuad = [&]() {
@@ -371,11 +367,8 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            if (!mPaused) {
-
-                if( step(mFloats) )
-                    floatSpaceConvert();
-            }
+            if (!mPaused && step(mFloats) )
+                floatSpaceConvert();
 
             render();
 
@@ -393,14 +386,13 @@ std::size_t Animator::getSize() { return mFrameWidth * mFrameHeight; }
 
 void Animator::animateMT19937(std::size_t floatCount) {
 
-    auto [width, height] = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
-
-    mFrameWidth = width;
-    mFrameHeight = height;
+    std::tie(mFrameWidth,mFrameHeight) = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
 
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
     std::vector<float> floats(getSize());
+
+    setup(floats);
 
     auto step = [&](auto floats) {
 
@@ -411,7 +403,6 @@ void Animator::animateMT19937(std::size_t floatCount) {
         return true;
         };
 
-    setup(floats);
     run(step);
 }
 
@@ -423,23 +414,28 @@ void Animator::viewChatGPT2() {
 
     auto tensorSpace = gpt2->getForward().getTensorSpace();
 
-    auto [width, height] = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
+    std::tie(mFrameWidth, mFrameHeight) = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
 
-    mFrameWidth = width;
-    mFrameHeight = height;
     mPaused = true;
+
+    setup(tensorSpace);
 
     auto step = [&](auto floats) {
         return false;
         };
 
-    setup(tensorSpace);
     run(step);
 }
 
 void Animator::animateChatGPT2() {
 
     NetworkLib::Serializer serializer;
+
+    std::tie(mFrameWidth, mFrameHeight) = serializer.createInputStream();
+    mScale = 4.0f;
+    setup();
+
+    serializer.readBackBuffer(mFloatSubSpaceDimensions);
 
     auto step = [&](auto floats) {
 
@@ -454,12 +450,6 @@ void Animator::animateChatGPT2() {
         return false;
         };
 
-
-    std::tie(mFrameWidth, mFrameHeight) = serializer.createInputStream();
-    mScale = 4.0f;
-    setup();
-
-    serializer.readBackBuffer(mFloatSubSpaceDimensions);
 
     run(step);
 }
