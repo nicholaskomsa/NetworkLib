@@ -386,7 +386,9 @@ std::size_t Animator::getSize() { return mFrameWidth * mFrameHeight; }
 
 void Animator::animateMT19937(std::size_t floatCount) {
 
-    std::tie(mFrameWidth,mFrameHeight) = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
+    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(floatCount, Animator::mAspectRatio);
+    mFrameWidth = frameWidth;
+    mFrameHeight = frameHeight;
 
     std::mt19937 random;
     std::uniform_real_distribution<float> range(-1.0f, 1.0f);
@@ -414,8 +416,10 @@ void Animator::viewChatGPT2() {
 
     auto tensorSpace = gpt2->getForward().getTensorSpace();
 
-    std::tie(mFrameWidth, mFrameHeight) = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
-
+    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(tensorSpace.size(), Animator::mAspectRatio);
+    mFrameWidth = frameWidth;
+    mFrameHeight = frameHeight;
+   
     mPaused = true;
 
     setup(tensorSpace);
@@ -431,7 +435,10 @@ void Animator::animateChatGPT2() {
 
     NetworkLib::Serializer serializer;
 
-    std::tie(mFrameWidth, mFrameHeight) = serializer.createInputStream();
+    auto [frameWidth, frameHeight] = serializer.createInputStream();
+    mFrameWidth = frameWidth;
+    mFrameHeight = frameHeight;
+
     mScale = 4.0f;
     setup();
 

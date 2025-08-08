@@ -58,7 +58,7 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::out | std::ios::binary);
 
 			//write header
-			auto& dimensions = mFrameRect.second;
+			auto& dimensions = mFrameRect.mDimensions;
 			mFile.write(reinterpret_cast<const char*>(&dimensions), sizeof(dimensions));
 
 			mFile.close();
@@ -66,8 +66,8 @@ namespace NetworkLib {
 
 		void writeToFile() {
 
-			const auto& origin = mFrameRect.first;
-			const auto& [frameW, frameH] = mFrameRect.second;
+			auto& origin = mFrameRect.mOrigin;
+			auto& [frameW, frameH] = mFrameRect.mDimensions;
 
 			mFile.open(mFileName, std::ios::app | std::ios::binary);
 
@@ -113,7 +113,7 @@ namespace NetworkLib {
 			mFile.close();
 		}
 
-		FloatSpaceConvert::Coord createInputStream(const std::string_view fileName = "gpt2.animation") {
+		FloatSpaceConvert::Dimensions createInputStream(const std::string_view fileName = "gpt2.animation") {
 
 			mFileName = fileName;
 
@@ -123,7 +123,7 @@ namespace NetworkLib {
 			mBuffers.first.resize(mStreamFrameSize);
 			mBuffers.second.resize(mStreamFrameSize);
 
-			return mFrameRect.second;
+			return mFrameRect.mDimensions;
 		}
 
 		std::optional<NetworkLib::Tensor::View> getCurrentFrame(const FloatSpaceConvert::Rect& frameRect) {
@@ -153,7 +153,7 @@ namespace NetworkLib {
 			mReadFuture = std::async(std::launch::async, [&](const auto frameSubRect) {
 
 				constexpr auto floatSize = sizeof(float);
-				const auto& [ origin, dimensions ] = frameSubRect;
+				auto& [ origin, dimensions ] = frameSubRect;
 
 				auto gotoFrameLinePosition = [&](std::size_t frameLinePos) {
 					constexpr auto headerSize = sizeof(dimensions);
@@ -161,7 +161,7 @@ namespace NetworkLib {
 					mFile.seekg(frameStart + frameLinePos * floatSize, std::ios::beg);
 					};
 
-				const auto& [frameW, frameH] = dimensions;
+				auto& [frameW, frameH] = dimensions;
 
 				auto readFrameLine = [&](auto y) {
 
@@ -207,7 +207,7 @@ namespace NetworkLib {
 			mFile.open(mFileName, std::ios::in | std::ios::binary);
 
 			mFrameRect = { {0,0}, {0,0} };
-			auto& dimensions = mFrameRect.second;
+			auto& dimensions = mFrameRect.mDimensions;
 			//read header
 			mFile.read(reinterpret_cast<char*>(&dimensions), sizeof(dimensions));
 

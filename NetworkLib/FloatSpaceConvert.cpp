@@ -81,21 +81,20 @@ void FloatSpaceConvert::floatSpaceConvert(DataView data, PixelView converted, Co
 
 	auto dimensions = getDimensions(data.size(), 1.0f);
 
-	floatSubSpaceConvert(data, converted, { {0,0}, dimensions }, dimensions.first
+	floatSubSpaceConvert(data, converted, { {0,0}, dimensions }, dimensions.mWidth
 		, colorMode, vMin, vMax, stripeNum);
 }
 FloatSpaceConvert::Dimensions FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
 
 	Dimensions dimensions;
-	auto& [width, height] = dimensions;
 
-	width = std::sqrt(size * aspectRatio);
-	height = std::ceil(size / float(width));
+	dimensions.mWidth = std::sqrt(size * aspectRatio);
+	dimensions.mHeight = std::ceil(size / float(dimensions.mWidth));
 
 	return dimensions;
 }
 
-void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats) {
+void FloatSpaceConvert::colorizeFloatSpace(const std::string_view baseFileName, DataView floats) {
 
 	std::println("Colorizing float space: {}", baseFileName);
 
@@ -103,7 +102,7 @@ void FloatSpaceConvert::colorizeFloatSpace(const std::string& baseFileName, std:
 
 		if (image.size() == 0) return;
 
-		auto saveToBmpFile = [&](std::string fileName, std::span<uint32_t> image) {
+		auto saveToBmpFile = [&](const std::string& fileName, PixelView image) {
 			//image is int32 r g b a
 
 			//freeimage is writing in bgra format depending if you are windows vs apple, check your free image file format
@@ -241,9 +240,8 @@ void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
 
 	auto forSubPixels = [&]() {
 
-		const auto& [origin, dimensions] = subFrame;
-		auto& [x, y] = origin;
-		auto& [w, h] = dimensions;
+		auto& [x, y] = subFrame.mOrigin;
+		auto& [w, h] = subFrame.mDimensions;
 
 		auto hIota = std::views::iota(y, y + h);
 		auto wIota = std::views::iota(x, x + w);

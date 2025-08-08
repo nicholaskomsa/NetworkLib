@@ -105,14 +105,14 @@ public:
     void setDimensions() {
 
         mFloatRect = FloatSpaceConvert::getFloatSpaceRect(mX, mY, mScale, mFrameWidth, mFrameHeight);
-        
-        static FloatSpaceConvert::Dimensions oldDimensions(0,0);
-		const auto& dimensions = mFloatRect.second;
 
-        const auto& [pw, ph] = mFloatRect.second;
-     
-        if (oldDimensions != dimensions) {
+        static FloatSpaceConvert::Dimensions oldDimensions;
+		const auto& dimensions = mFloatRect.mDimensions;
+
+        if (oldDimensions !=  dimensions) {
+
             resizeTexture();
+            const auto& [pw, ph] = dimensions;
 
             mPixels.resize(pw * ph);
             mPixels.shrink_to_fit();

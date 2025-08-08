@@ -26,10 +26,23 @@ namespace FloatSpaceConvert {
 	std::uint32_t roygbiv(double percent);
 	std::uint32_t grayScale(double percent);
 	std::uint32_t binary(double percent);
-
-	using Coord = std::pair<std::size_t, std::size_t>;
-	using Dimensions = Coord;
-	using Rect = std::pair<Coord, Dimensions>;
+	
+	struct Coord {
+		std::size_t mX=0, mY=0;
+		bool operator==(const Coord& d) const = default;
+		auto operator<=>(const Coord& d) const = default;
+	};
+	struct Dimensions {
+		std::size_t mWidth=0, mHeight=0;
+		bool operator==(const Dimensions& d) const = default;
+		auto operator<=>(const Dimensions& d) const = default;
+	};
+	struct Rect {
+		Coord mOrigin;
+		Dimensions mDimensions;
+		bool operator==(const Rect& d) const = default;
+		auto operator<=>(const Rect& d) const = default;
+	};
 
 	using DataView = std::span<const float>;
 	using PixelView = std::span<std::uint32_t>;
@@ -41,7 +54,7 @@ namespace FloatSpaceConvert {
 	
 	Dimensions getDimensions(std::size_t size, float aspectRatio = 3840.0f / 2160.0f);
 
-	void colorizeFloatSpace(const std::string& baseFileName, std::span<const float> floats);
+	void colorizeFloatSpace(const std::string_view baseFileName, DataView floats);
 
 	ColorNames getColorNames();
 
