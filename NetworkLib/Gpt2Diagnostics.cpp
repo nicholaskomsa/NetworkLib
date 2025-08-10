@@ -386,9 +386,10 @@ void Diagnostics::serializeTest() {
 
 			auto begin = completeTrainTokens.begin();
 
-			auto expected = GPT2::mTestInputSize + 1;
+			//expected is the token position of the prediction
+			//this is used to see if there is enough room to evaluate the prediction
 
-			if (currentOffset + expected < completeTrainTokens.size()){
+			if (currentOffset + GPT2::mTestInputSize < completeTrainTokens.size()){
 
 				std::advance(begin, currentOffset);
 
@@ -402,7 +403,7 @@ void Diagnostics::serializeTest() {
 			}else {
 
 				//adjust to allow training of last prediction which may overlap with earlier	
-				currentOffset = completeTrainTokens.size() - expected;
+				currentOffset = completeTrainTokens.size() - GPT2::mTestInputSize;
 
 				std::advance(begin, currentOffset);
 

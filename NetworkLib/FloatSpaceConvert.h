@@ -58,7 +58,6 @@ namespace FloatSpaceConvert {
 
 	ColorNames getColorNames();
 
-
 	Rect getFloatSpaceRect(float& x, float& y, float& scale, std::size_t frameWidth, std::size_t frameHeight);
 
 };	

@@ -190,13 +190,13 @@ namespace NetworkLib {
 		bool bufferReady() {
 			return mReadFuture.valid() && mReadFuture.wait_for(0s) == std::future_status::ready;
 		}
-		void swapBuffers(const FloatSpaceConvert::Rect& frameRect) {
+		void swapBuffers(const FloatSpaceConvert::Rect& subFrameRect) {
 
 			if (bufferReady()) {
 
 				std::swap(mBuffers.first, mBuffers.second);
 
-				readBackBuffer(frameRect);
+				readBackBuffer(subFrameRect);
 			}
 		}
 
