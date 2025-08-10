@@ -386,8 +386,7 @@ void Diagnostics::serializeTest() {
 
 			auto begin = completeTrainTokens.begin();
 
-			//expectedSize is the token position of the prediction/evaluation pair
-			//there must be enough tokens to predict and evaluate
+			//to evaluate a prediction, we need input size + 1 tokens
 			auto expectedSize = GPT2::mTestInputSize + 1;
 
 			if (currentOffset + expectedSize <= completeTrainTokens.size()){
