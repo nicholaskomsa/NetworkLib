@@ -117,8 +117,8 @@ GPT2::Tokens Translator::encode(std::string_view remaining) const {
 		const auto [word, token] = matchVocabWord();
 
 		tokens.push_back(token);
-		remaining = remaining.substr(word.size());
-		//remaining = std::views::drop(remaining, word.size());
+
+		remaining = remaining | std::views::drop(word.size());
 
 		return remaining.size();
 		};

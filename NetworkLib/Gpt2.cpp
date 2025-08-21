@@ -86,8 +86,6 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 
 	std::copy(b.begin(), b.end(), outputs.begin());
 
-	Parallel parallel2(outputs.size(), 64);
-	
 	auto inputIota = std::views::iota(0ULL, parallel.mSize);
 
 	for (auto m : inputIota) {
