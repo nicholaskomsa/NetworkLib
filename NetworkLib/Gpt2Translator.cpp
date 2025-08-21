@@ -118,6 +118,7 @@ GPT2::Tokens Translator::encode(std::string_view remaining) const {
 
 		tokens.push_back(token);
 		remaining = remaining.substr(word.size());
+		//remaining = std::views::drop(remaining, word.size());
 
 		return remaining.size();
 		};

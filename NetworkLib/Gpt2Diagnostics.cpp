@@ -349,7 +349,7 @@ void Diagnostics::serializeTest() {
 		TokensView completeTrainTokens = data.mTokens;
 		auto& forward = gpt2.mForward;
 		auto& backward = gpt2.mBackward;
-		backward.setup(&gpt2.mForward);
+		backward.setup(&forward);
 
 		Serializer serializer;
 		auto setupSerializer = [&]() {

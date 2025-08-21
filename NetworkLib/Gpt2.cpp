@@ -77,7 +77,8 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 	//this is a "matrix * vector + vector" or "fully connected" aka "forward" o += w * i + b
 
 	Tensor::ConstView inputs = inputTensor.constView(i)
-		, b = biasTensor.constView();
+		, b = biasTensor.constView()
+		, weights;
 	Tensor::View outputs = outputTensor.view(i);
 
 	//a fully connected input and output with a bias
@@ -89,15 +90,15 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 	
 	auto inputIota = std::views::iota(0ULL, parallel.mSize);
 
-	auto weights = weightTensor.constView(i);
+	for (auto m : inputIota) {
 
-	parallel2([&](auto& section) {
+		float in = inputs[m];
+		weights = weightTensor.constView(m);
 
-		for (auto m : section.mIotaView)
-			for (auto i : inputIota)
-				outputs[m] += weights[m] * inputs[i];
-		
-		});
+		for (const auto& [o, w] : std::views::zip(outputs, weights))
+			o += w * in;
+	}
+	
 }
 void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	

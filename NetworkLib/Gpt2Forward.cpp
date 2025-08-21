@@ -166,11 +166,12 @@ void GPT2::Forward::unEmbedOutput(std::size_t i) {
 
 	//after forward, generate the probability of a specific token
 
-	Tensor::View input, wte, output;
+	Tensor::ConstView input, wte;
+	Tensor::View output;
 	//weight token embed seen in embedInput
 	//input is the output of earlier forward process
 
-	input = mFinalLayer.getActivations().view(i);
+	input = mFinalLayer.getActivations().constView(i);
 	output = mUnembedActivations.view(i);
 
 	mParallelI.section(mUnembedActivations.mY);
@@ -178,14 +179,14 @@ void GPT2::Forward::unEmbedOutput(std::size_t i) {
 
 		for (auto m : section.mIotaView) {
 
-			wte = mWteWeight.view(m);
+			wte = mWteWeight.constView(m);
 
-			float sum = 0.0f;
+			float dot = 0.0f;
 
 			for (const auto& [in, w] : std::views::zip(input, wte))
-				sum += in * w;
+				dot += in * w;
 
-			output[m] = sum;
+			output[m] = dot;
 		}
 
 		});
@@ -322,9 +323,7 @@ float GPT2::Forward::crossEntropyLoss(TokensView nextTokens) {
 }
 GPT2::Token GPT2::Forward::getPrediction(std::size_t i) const {
 
-	//unembed activations is the entire sequence of all tokens, each a prediction of its probability 
-	//the highest probability is the predicted token here, but other tokens may also have some lower possibility
-
+	//the selected value is the largest value, softmax hasnt been applied yet but is not needed
 	auto unembedActivations = mUnembedActivations.constView(i);
 	auto selected = std::max_element(unembedActivations.begin(), unembedActivations.end());
 	Token predicted = std::distance(unembedActivations.begin(), selected);

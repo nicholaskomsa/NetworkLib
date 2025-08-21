@@ -99,11 +99,11 @@ namespace NetworkLib {
 
 				end = start + sectionSize;
 
-				mSections[s].mIotaView = std::ranges::iota_view(start, end);
+				mSectionsView[s].mIotaView = std::ranges::iota_view(start, end);
 
 				start = end;
 			}
-			mSections.back().mIotaView = std::ranges::iota_view(start, size);
+			mSectionsView.back().mIotaView = std::ranges::iota_view(start, size);
 		}
 
 		void operator()(SectionFunctor&& functor, bool single = false) {
