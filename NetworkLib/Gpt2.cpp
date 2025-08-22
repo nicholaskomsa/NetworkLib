@@ -86,16 +86,42 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 
 	std::copy(b.begin(), b.end(), outputs.begin());
 
-	auto inputIota = std::views::iota(0ULL, parallel.mSize);
+	
+	parallel([&](auto& section) {
 
-	for (auto m : inputIota) {
+		auto& pOutputs = std::any_cast<Floats&>(section.mAny);
+		pOutputs.resize(outputs.size());
+		std::fill(pOutputs.begin(), pOutputs.end(), 0.0f);
 
-		float in = inputs[m];
-		weights = weightTensor.constView(m);
+		for (auto m : section.mIotaView) {
 
-		for (const auto& [o, w] : std::views::zip(outputs, weights))
-			o += w * in;
-	}
+			float in = inputs[m];
+			weights = weightTensor.constView(m);
+
+			for (const auto& [o, w] : std::views::zip(pOutputs, weights))
+				o += w * in;
+		}
+		}, [&](auto& section){
+
+			auto& pOutputs = std::any_cast<Floats&>(section.mAny);
+			for (const auto& [o, po] : std::views::zip(outputs, pOutputs)) {
+				o += po;
+			}
+		});
+		
+		/*
+		 auto inputIota = std::views::iota(0ULL, parallel.mSize);
+
+		for (auto m : inputIota) {
+
+			float in = inputs[m];
+			weights = weightTensor.constView(m);
+
+			for (const auto& [o, w] : std::views::zip(outputs, weights))
+				o += w * in;
+		}
+		*/
+	
 	
 }
 void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
