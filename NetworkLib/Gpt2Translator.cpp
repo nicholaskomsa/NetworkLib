@@ -42,13 +42,15 @@ void Translator::load() {
 		return offsets;
 		};
 
-	auto offsets = readFile();
+	const auto offsets = readFile();
+
+	const std::string_view denseWords(mDenseWords);
 
 	for (Token token : std::views::iota(0ULL, offsets.size())) {
 
 		auto& [offset, size] = offsets[token];
-
-		std::string_view word(mDenseWords.data() + offset, size);
+	
+		std::string_view word = denseWords.substr(offset, size);
 
 		mWordMap.insert({ word, token });
 	}

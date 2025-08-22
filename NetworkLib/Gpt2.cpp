@@ -11,7 +11,7 @@
 #include <Gpt2Forward.cpp>
 using namespace NetworkLib;
 
-Parallel GPT2::AttnLayer::mParallelHeads( mHeadNum, mHeadNum);
+Parallel GPT2::AttnLayer::mParallelHeads(mHeadNum, mHeadNum);
 
 TimeAverage<milliseconds> GPT2::LinearLayer::mBackwardTime
 , GPT2::AttnLayer::mForwardAttnTime, GPT2::AttnLayer::mBackwardAttnTime
@@ -85,7 +85,6 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 	//identical to forward except for paralleled for i sample
 
 	std::copy(b.begin(), b.end(), outputs.begin());
-
 	
 	parallel([&](auto& section) {
 
@@ -121,8 +120,6 @@ void GPT2::forward(std::size_t i, const Tensor& inputTensor, Tensor& outputTenso
 				o += w * in;
 		}
 		*/
-	
-	
 }
 void GPT2::forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel) {
 	
@@ -532,8 +529,8 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 	Tensor::ConstView kh, qh = Tensor::constField( mCAttnActivations.view(i), qOffset, mHeadsPerDModel );
 
 	const auto kOffset = mKOffset + headOffset;
-	float dot;
 
+	float dot;
 	for (auto m : std::views::iota(0ULL, i+1)) {
 
 		kh = Tensor::constField( mCAttnActivations.view(m), kOffset, mHeadsPerDModel );
@@ -543,7 +540,7 @@ void GPT2::AttnLayer::calculateQKAtten(std::size_t headOffset, std::size_t i, Te
 			dot += q * k;
 
 		attnOut[m] = dot * r_sqrtHeadsPerDModel;
-	};
+	}
 }
 void GPT2::AttnLayer::calculateVAtten(std::size_t headOffset, std::size_t i, Tensor::ConstView attnOutSoftmax) {
 
