@@ -50,7 +50,7 @@ void Translator::load() {
 
 		auto& [offset, size] = offsets[token];
 	
-		std::string_view word = denseWords.substr(offset, size);
+		Word word = denseWords.substr(offset, size);
 
 		mWordMap.insert({ word, token });
 	}

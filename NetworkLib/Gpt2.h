@@ -126,7 +126,6 @@ namespace NetworkLib {
 		static void forward(const Tensor& inputTensor, Tensor& outputTensor, const Tensor& weightTensor, const Tensor& biasTensor, Parallel& parallel);
 		static void softmax(std::size_t i, Tensor::ConstView input, Tensor::View output);
 
-		using PartialBiasWeight = std::pair<Floats, Floats>;
 		static void backward(const Tensor& dOutputs, const Tensor& weights, Tensor& dWeights, Tensor& dBias, const Tensor& inActivations, Tensor& outActivations, Parallel& parallel);
 		static void softmaxBack(const IotaView& iotaView, Tensor::ConstView input, Tensor::ConstView output, Tensor::View dSoftmax);
 		static void sgd(Tensor::View weights, Tensor::ConstView gradients, float learnRate = 0.0002);

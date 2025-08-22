@@ -23,8 +23,8 @@ void GPT2::Backward::setup(Forward* forward) {
 	mEmbed = { backwardSpace, mDSeq, mDModel };
 	mWpeWeight = { backwardSpace, mDSeq, mDModel };
 
-	mParallelInput.setup(PartialBiasWeight{}, mTestInputSize, 128);
-	mParallelUnembed.setup({}, mUnembed.mY, 128);
+	mParallelInput.section(mTestInputSize, 128);
+	mParallelUnembed.section(mUnembed.mY, 128);
 }
 void GPT2::Backward::unEmbedOutputs(TokensView nextTokens) {
 
