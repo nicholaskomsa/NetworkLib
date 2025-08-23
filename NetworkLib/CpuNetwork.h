@@ -26,8 +26,8 @@ namespace NetworkLib {
 		View() = default;
 		View(FloatType* data, Extents ext) : mView(data, ext) {}
 
-		template<typename ...Dimensions>
-		auto& operator[](Dimensions&& ...coordinates) const {
+		template<typename ...Coordinates>
+		auto& operator[](Coordinates&& ...coordinates) const {
 			return mView[coordinates...];
 		}
 
