@@ -7,9 +7,11 @@ namespace NetworkLib {
 
 	using FloatType = float;
 	using Floats = std::vector<FloatType>;
-	using Extents1 = std::extents<size_t, std::dynamic_extent>;
-	using Extents2 = std::extents<size_t, std::dynamic_extent, std::dynamic_extent>;
-	using Extents3 = std::extents<size_t, std::dynamic_extent, std::dynamic_extent, std::dynamic_extent>;
+	using Dimension = std::size_t;
+	using Coordinate = std::size_t;
+	using Extents1 = std::extents<Dimension, std::dynamic_extent>;
+	using Extents2 = std::extents<Dimension, std::dynamic_extent, std::dynamic_extent>;
+	using Extents3 = std::extents<Dimension, std::dynamic_extent, std::dynamic_extent, std::dynamic_extent>;
 	
 	template<typename... Dimensions>
 	std::size_t area(Dimensions&& ...dimensions) {
@@ -41,8 +43,8 @@ namespace NetworkLib {
 		}
 
 		void print_shape() const {
-			std::cout << "Shape: " << ( mView.extents().extent(0)
-				<< " x " << mView.extents().extent(1) << "\n";
+			//std::cout << "Shape: " << ( mView.extents().extent(0)
+			//	<< " x " << mView.extents().extent(1) << "\n";
 		}
 	};
 
@@ -61,7 +63,7 @@ namespace NetworkLib {
 		Floats mFloats;
 		ViewType mView;
 
-		template<typename... Dimensions>
+		template<std::unsigned_integral... Dimensions>
 		void resize(Dimensions&& ...dimensions) {
 			mFloats.resize(area(dimensions...));
 			mView = ViewType(mFloats.data(), std::array{ dimensions... });

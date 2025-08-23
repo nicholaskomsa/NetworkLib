@@ -20,18 +20,19 @@ int main() {
 	//diag.simpleChat();
 
 	NetworkLib::FloatSpace1 floatSpace1;
-	floatSpace1.resize(5 + 5 * 5);
+	std::size_t a = 5, b = 5, c = 5;
+	floatSpace1.resize(a + b * c);
 
 	auto begin = floatSpace1.mFloats.begin();
 	NetworkLib::View1 v1;
 	NetworkLib::View2 v2;
 
-	v1.advance(begin, 5);
-	v2.advance(begin, 5, 5);
+	v1.advance(begin, a);
+	v2.advance(begin, b, c);
 
-	v2[2, 3] = 6;
+	v2[b-1, c-1] = 6;
 
-	std::cout << v2[2, 3];
+	std::cout << v2[b - 1, c - 1];
 	std::cout << v1[2];
 
 	std::puts("\nProgram Finished press enter to exit");
