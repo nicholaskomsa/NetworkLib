@@ -16,6 +16,11 @@ namespace NetworkLib {
 
 	using ColView = std::span<FloatType>;
 
+	template<typename... Dimensions>
+	std::size_t area(Dimensions&& ...dimensions) {
+		return (... * dimensions);
+	}
+
 	template<typename T>
 	concept ViewConcept = std::is_same_v<T, View1D>
 		|| std::is_same_v<T, View2D>
@@ -30,9 +35,9 @@ namespace NetworkLib {
 		
 		view = ViewType( &*begin, dimensions... );
 		
-		std::size_t size = (... * dimensions);
-		std::advance(begin, size);
+		std::advance(begin, area( dimensions... ) );
 	}
+
 
 	template<ViewConcept ViewType>
 	class FloatSpace {
@@ -42,9 +47,7 @@ namespace NetworkLib {
 
 		template<typename... Dimensions>
 		void resize(Dimensions&& ...dimensions) {
-
-			std::size_t size = ( ... * dimensions);
-			mFloats.resize(size);
+			mFloats.resize(area(dimensions...));
 			mView = ViewType(mFloats.data(), dimensions...);
 		}
 	};
