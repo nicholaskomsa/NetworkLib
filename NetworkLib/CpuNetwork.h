@@ -26,8 +26,7 @@ namespace NetworkLib {
 		template<typename... Dimensions>
 		void create(Dimensions&& ...dimensions) {
 
-			std::size_t size = 1;
-			size = ( ... * dimensions);
+			std::size_t size = ( ... * dimensions);
 			mFloats.resize(size);
 
 			mView =  ViewT(mFloats.data(), dimensions...);
