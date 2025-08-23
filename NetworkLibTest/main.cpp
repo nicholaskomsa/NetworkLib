@@ -18,26 +18,21 @@ int main() {
 	//diag.SGDTest();
 	//diag.serializeTest();
 	//diag.simpleChat();
-	
-	NetworkLib::FloatSpace1 floatSpace;
-	floatSpace.resize(5 + 5 * 5);
 
-	auto begin = floatSpace.mFloats.begin();
-	NetworkLib::View1D tv1;
-	NetworkLib::View2D tv2;
+	NetworkLib::FloatSpace1 floatSpace1;
+	floatSpace1.resize(5 + 5 * 5);
 
-	NetworkLib::advance(tv1, begin, 5);
-	NetworkLib::advance(tv2, begin, 5, 5);
+	auto begin = floatSpace1.mFloats.begin();
+	NetworkLib::View1 v1;
+	NetworkLib::View2 v2;
 
-	NetworkLib::at(tv2, 2, 3) = 5;
+	v1.advance(begin, 5);
+	v2.advance(begin, 5, 5);
 
-	std::cout << NetworkLib::at(tv1, 2);
-	std::cout << NetworkLib::at(tv2, 2, 3);
-	//tv1.advance(begin, 5);
-	//tv2.advance(begin, 5, 5);
+	v2[2, 3] = 6;
 
-
-	//std::cout << tv2.at(1,4);
+	std::cout << v2[2, 3];
+	std::cout << v1[2];
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
