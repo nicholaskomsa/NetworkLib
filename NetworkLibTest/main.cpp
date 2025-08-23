@@ -20,21 +20,22 @@ int main() {
 	//diag.simpleChat();
 	
 	NetworkLib::Tensor1 t1;
-	t1.create(5);
+	t1.resize(5);
 	t1.at(1) = 7;
 //
 	std::cout << t1.at(1);
 
-	NetworkLib::Floats floats(10);
+	NetworkLib::Floats floats(5 + 5*5);
 	auto begin = floats.begin();
-	NetworkLib::TensorView1 tv1, tv2;
+	NetworkLib::View1D tv1; 
+	NetworkLib::View2D tv2;
 	tv1.advance(begin, 5);
-	tv2.advance(begin, 5);
+	tv2.advance(begin, 5, 5);
 
 	tv1.at(1) = 5;
-	tv2.at(1) = 10;
+	tv2.at(1, 4) = 10;
 
-	std::cout << tv1.at(1);
+	std::cout << tv2.at(1,4);
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
