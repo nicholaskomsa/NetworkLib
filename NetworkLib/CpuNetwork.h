@@ -27,7 +27,7 @@ namespace NetworkLib {
 		void create(Dimensions&& ...dimensions) {
 
 			std::size_t size = 1;
-			(size *= ... *= dimensions);
+			size = ( ... * dimensions);
 			mFloats.resize(size);
 
 			mView =  ViewT(mFloats.data(), dimensions...);

@@ -19,11 +19,11 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 	
-	NetworkLib::Tensor2 t2;
-	t2.create(5,5);
-	t2.at(1,1) = 7;
+	NetworkLib::Tensor3 t2;
+	t2.create(5,5,5);
+	t2.at(1,1,1) = 7;
 //
-	std::cout << t2.at(1,1);
+	std::cout << t2.at(1,1,1);
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
