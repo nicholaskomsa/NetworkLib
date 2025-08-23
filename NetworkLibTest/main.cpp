@@ -19,23 +19,20 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 	
-	NetworkLib::FloatSpace1 t1;
-	t1.resize(5);
+	NetworkLib::FloatSpace1 floatSpace;
+	floatSpace.resize(5 + 5 * 5);
 
-
-	NetworkLib::Floats floats(5 + 5*5, 6);
-	auto begin = floats.begin();
-	NetworkLib::View1D tv1; 
+	auto begin = floatSpace.mFloats.begin();
+	NetworkLib::View1D tv1;
 	NetworkLib::View2D tv2;
 
-	NetworkLib::advance(tv1, begin, 5 );
-	NetworkLib::advance(tv2, begin, 5,5 );
+	NetworkLib::advance(tv1, begin, 5);
+	NetworkLib::advance(tv2, begin, 5, 5);
+
+	NetworkLib::at(tv2, 2, 3) = 5;
 
 	std::cout << NetworkLib::at(tv1, 2);
-	std::cout << NetworkLib::at(tv2, 2,3);
-
-
-
+	std::cout << NetworkLib::at(tv2, 2, 3);
 	//tv1.advance(begin, 5);
 	//tv2.advance(begin, 5, 5);
 

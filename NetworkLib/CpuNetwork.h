@@ -14,7 +14,7 @@ namespace NetworkLib {
 	using View2D = std::mdspan<FloatType, Extents2>;
 	using View3D = std::mdspan<FloatType, Extents3>;
 
-	using ColView = std::span<float>;
+	using ColView = std::span<FloatType>;
 
 	template<typename T>
 	concept ViewConcept = std::is_same_v<T, View1D>
@@ -35,7 +35,7 @@ namespace NetworkLib {
 	}
 
 	template<ViewConcept ViewType>
-	class FloatSpace : public ViewType {
+	class FloatSpace {
 	public:
 		Floats mFloats;
 		ViewType mView;
