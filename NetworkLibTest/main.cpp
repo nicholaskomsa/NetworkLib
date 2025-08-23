@@ -19,11 +19,22 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 	
-	NetworkLib::Tensor3 t2;
-	t2.create(5,5,5);
-	t2.at(1,1,1) = 7;
+	NetworkLib::Tensor1 t1;
+	t1.create(5);
+	t1.at(1) = 7;
 //
-	std::cout << t2.at(1,1,1);
+	std::cout << t1.at(1);
+
+	NetworkLib::Floats floats(10);
+	auto begin = floats.begin();
+	NetworkLib::TensorView1 tv1, tv2;
+	tv1.advance(begin, 5);
+	tv2.advance(begin, 5);
+
+	tv1.at(1) = 5;
+	tv2.at(1) = 10;
+
+	std::cout << tv1.at(1);
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
