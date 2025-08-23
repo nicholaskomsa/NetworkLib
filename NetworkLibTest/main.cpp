@@ -23,14 +23,16 @@ int main() {
 	t1.resize(5);
 
 
-	NetworkLib::Floats floats(5 + 5*5);
+	NetworkLib::Floats floats(5 + 5*5, 6);
 	auto begin = floats.begin();
 	NetworkLib::View1D tv1; 
 	NetworkLib::View2D tv2;
 
-	NetworkLib::advance(tv1, begin, 5);
-	
-	NetworkLib::at(tv1, 2);
+	NetworkLib::advance(tv1, begin, 5 );
+	NetworkLib::advance(tv2, begin, 5,5 );
+
+	std::cout << NetworkLib::at(tv1, 2);
+	std::cout << NetworkLib::at(tv2, 2,3);
 
 
 

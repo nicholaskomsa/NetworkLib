@@ -28,29 +28,24 @@ namespace NetworkLib {
 	template<ViewConcept ViewType, typename... Dimensions>
 	void advance(ViewType& view, Floats::iterator& begin, Dimensions&& ...dimensions ) {
 		
-		view = ViewType( &*begin, dimensions...);
+		view = ViewType( &*begin, dimensions... );
 		
 		std::size_t size = (... * dimensions);
 		std::advance(begin, size);
 	}
 
-	template<typename T>
-	concept AnyViewConcept = std::is_same_v<T, View1D>
-		|| std::is_same_v<T, View2D>
-		|| std::is_same_v<T, View3D>;
-
-	template<AnyViewConcept AnyView>
-	class FloatSpace : public AnyView {
+	template<ViewConcept ViewType>
+	class FloatSpace : public ViewType {
 	public:
 		Floats mFloats;
-		AnyView mView;
+		ViewType mView;
 
 		template<typename... Dimensions>
 		void resize(Dimensions&& ...dimensions) {
 
 			std::size_t size = ( ... * dimensions);
 			mFloats.resize(size);
-			mView = AnyView(mFloats.data(), dimensions...);
+			mView = ViewType(mFloats.data(), dimensions...);
 		}
 	};
 
