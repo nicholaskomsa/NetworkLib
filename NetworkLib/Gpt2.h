@@ -9,7 +9,7 @@
 #include <boost/bimap.hpp>
 
 #include "Algorithms.h"
-#include "Tensor.h"
+#include "Gpt2Tensor.h"
 #include "Parallel.h";
 
 namespace NetworkLib {

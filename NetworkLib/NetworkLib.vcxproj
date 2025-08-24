@@ -91,11 +91,12 @@
   <ItemGroup>
     <ClInclude Include="Algorithms.h" />
     <ClInclude Include="CpuNetwork.h" />
+    <ClInclude Include="CpuTensor.h" />
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="Serializer.h" />
-    <ClInclude Include="Tensor.h" />
+    <ClInclude Include="Gpt2Tensor.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
@@ -105,7 +106,7 @@
     <ClCompile Include="Gpt2Diagnostics.cpp" />
     <ClCompile Include="Gpt2Forward.cpp" />
     <ClCompile Include="Gpt2Translator.cpp" />
-    <ClCompile Include="Tensor.cpp" />
+    <ClCompile Include="Gpt2Tensor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />

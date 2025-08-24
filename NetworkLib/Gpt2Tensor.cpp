@@ -1,4 +1,4 @@
-#include "Tensor.h"
+#include "Gpt2Tensor.h"
 
 using namespace NetworkLib;
 

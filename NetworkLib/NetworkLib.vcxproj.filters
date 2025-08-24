@@ -30,11 +30,14 @@
     <ClInclude Include="Algorithms.h">
       <Filter>Algorithms</Filter>
     </ClInclude>
-    <ClInclude Include="Tensor.h">
+    <ClInclude Include="Gpt2Tensor.h">
       <Filter>Gpt</Filter>
     </ClInclude>
     <ClInclude Include="Serializer.h">
       <Filter>Algorithms</Filter>
+    </ClInclude>
+    <ClInclude Include="CpuTensor.h">
+      <Filter>Network</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -56,7 +59,7 @@
     <ClCompile Include="Gpt2Backward.cpp">
       <Filter>Gpt</Filter>
     </ClCompile>
-    <ClCompile Include="Tensor.cpp">
+    <ClCompile Include="Gpt2Tensor.cpp">
       <Filter>Gpt</Filter>
     </ClCompile>
     <ClCompile Include="FloatSpaceConvert.cpp">
