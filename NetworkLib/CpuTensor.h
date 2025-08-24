@@ -24,7 +24,7 @@ namespace NetworkLib {
 
 		using View1 = View<Dynamic>;
 		using View2 = View<Dynamic, Dynamic>;
-		using View3 = View<Dynamic, Dynamic>;
+		using View3 = View<Dynamic, Dynamic, Dynamic>;
 
 		//match mdspans
 		template<typename T>
