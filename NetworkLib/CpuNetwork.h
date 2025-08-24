@@ -19,11 +19,27 @@ namespace NetworkLib {
 	using View1 = std::mdspan<FloatType, Extents1>;
 	using View2 = std::mdspan<FloatType, Extents2>;
 	using View3 = std::mdspan<FloatType, Extents3>;
+	
+	//match mdspans
+	template<typename T>
+	concept ViewConcept = requires {
+		typename T::element_type;
+		typename T::extents_type;
+		typename T::layout_type;
+		typename T::mapping_type;
+		typename T::accessor_type;
+	};
 
 	template<typename T>
-	concept ViewConcept = std::is_same_v<T, View1>
-		|| std::is_same_v<T, View2>
-		|| std::is_same_v<T, View3>;
+	concept DynamicViewConcept = ViewConcept<T> &&
+		(std::remove_cvref_t<T>::extents_type::rank_dynamic() > 0);
+
+	template<typename T>
+	concept FixedViewConcept = ViewConcept<T> &&
+		(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 0);
+
+	template<typename T>
+	concept AnyViewConcept = ViewConcept<T>;
 
 	template<typename T>
 	concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
@@ -36,14 +52,20 @@ namespace NetworkLib {
 		return (... * dimensions);
 	}
 
-	template<ViewConcept ViewType, DimensionsConcept... Dimensions>
-	void advance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
+	template<DynamicViewConcept ViewType, DimensionsConcept... Dimensions>
+	void dynamicAdvance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
 
 		view = ViewType(&*begin, std::array{ dimensions... });
 		std::advance(begin, area(dimensions...));
 	}
+	template<FixedViewConcept ViewType, DimensionsConcept... Dimensions>
+	void fixedAdvance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
 
-	template<ViewConcept ViewType>
+		view = ViewType(&*begin);
+		std::advance(begin, area(dimensions...));
+	}
+
+	template<AnyViewConcept ViewType>
 	std::vector<Dimension> getShape(const ViewType& view) {
 
 		auto rank = ViewType::rank();
@@ -55,7 +77,7 @@ namespace NetworkLib {
 		return result;
 	}
 
-	template<ViewConcept ViewType>
+	template<AnyViewConcept ViewType>
 	class FloatSpace {
 	public:
 		Floats mFloats;
