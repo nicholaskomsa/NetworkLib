@@ -33,7 +33,7 @@ int main() {
 
 	NetworkLib::dynamicAdvance(v1, begin, a);
 	NetworkLib::dynamicAdvance(v2, begin, b, c);
-	NetworkLib::fixedAdvance(fv2, begin, b, c);
+	NetworkLib::fixedAdvance(fv2, begin);
 
 	v2[b-1, c-1] = 6;
 	floatSpace1.mView[2] = 7;

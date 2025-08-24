@@ -38,8 +38,6 @@ namespace NetworkLib {
 	concept FixedViewConcept = ViewConcept<T> &&
 		(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 0);
 
-	template<typename T>
-	concept AnyViewConcept = ViewConcept<T>;
 
 	template<typename T>
 	concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
@@ -51,6 +49,15 @@ namespace NetworkLib {
 	std::size_t area(Dimensions&& ...dimensions) {
 		return (... * dimensions);
 	}
+	
+	template<ViewConcept ViewType>
+	size_t area(const ViewType& view) {
+		size_t result = 1;
+		for (size_t i = 0; i < view.rank(); ++i) 
+			result *= view.extent(i);
+		
+		return result;
+	}
 
 	template<DynamicViewConcept ViewType, DimensionsConcept... Dimensions>
 	void dynamicAdvance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
@@ -58,26 +65,25 @@ namespace NetworkLib {
 		view = ViewType(&*begin, std::array{ dimensions... });
 		std::advance(begin, area(dimensions...));
 	}
-	template<FixedViewConcept ViewType, DimensionsConcept... Dimensions>
-	void fixedAdvance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
+	template<FixedViewConcept ViewType>
+	void fixedAdvance(ViewType& view, Floats::iterator& begin) {
 
 		view = ViewType(&*begin);
-		std::advance(begin, area(dimensions...));
+		std::advance(begin, area(view));
 	}
 
-	template<AnyViewConcept ViewType>
+	template<ViewConcept ViewType>
 	std::vector<Dimension> getShape(const ViewType& view) {
 
 		auto rank = ViewType::rank();
 		std::vector<Dimension> result(rank);
-		auto& extents = view.extents();
 		for (auto i : std::views::iota(0ULL, rank ) )
-			result[i] = extents.extent(i);
+			result[i] = view.extent(i);
 		
 		return result;
 	}
 
-	template<AnyViewConcept ViewType>
+	template<ViewConcept ViewType>
 	class FloatSpace {
 	public:
 		Floats mFloats;
