@@ -22,13 +22,16 @@ namespace NetworkLib {
 		|| std::is_same_v<T, View2>
 		|| std::is_same_v<T, View3>;
 
-	template<typename... Dimensions>
+	template<typename T>
+	concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
+
+	template<DimensionsConcept... Dimensions>
 	std::size_t area(Dimensions&& ...dimensions) {
 		return (... * dimensions);
 	}
 
-	template<ViewConcept ViewType, typename... Dimensions>
-	void advance(ViewType& view, Floats::iterator& begin, Dimensions&& ...dimensions) {
+	template<ViewConcept ViewType, DimensionsConcept... Dimensions>
+	void advance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
 
 		view = ViewType(&*begin, std::array{ dimensions... });
 		std::advance(begin, area(dimensions...));
@@ -52,7 +55,7 @@ namespace NetworkLib {
 		Floats mFloats;
 		ViewType mView;
 
-		template<typename... Dimensions>
+		template<DimensionsConcept... Dimensions>
 		void resize(Dimensions&& ...dimensions) {
 			mFloats.resize(area(dimensions...));
 			mView = ViewType(mFloats.data(), std::array{ dimensions... });
