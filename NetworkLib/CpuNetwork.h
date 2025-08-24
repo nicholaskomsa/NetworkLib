@@ -2,6 +2,9 @@
 
 #include <vector>
 #include <mdspan>
+#include <concepts>
+#include <cstddef>
+#include <type_traits>
 
 namespace NetworkLib {
 
@@ -25,6 +28,9 @@ namespace NetworkLib {
 	template<typename T>
 	concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
 
+	template<typename T>
+	concept CoordinatesConcept = std::convertible_to<std::remove_reference_t<T>, Coordinate>;
+
 	template<DimensionsConcept... Dimensions>
 	std::size_t area(Dimensions&& ...dimensions) {
 		return (... * dimensions);
@@ -38,7 +44,7 @@ namespace NetworkLib {
 	}
 
 	template<ViewConcept ViewType>
-	std::vector<Dimension> getShape(ViewType& view) {
+	std::vector<Dimension> getShape(const ViewType& view) {
 
 		auto rank = ViewType::rank();
 		std::vector<Dimension> result(rank);
