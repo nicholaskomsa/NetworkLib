@@ -27,8 +27,8 @@ int main() {
 	NetworkLib::View1 v1;
 	NetworkLib::View2 v2;
 
-	v1.advance(begin, a);
-	v2.advance(begin, b, c);
+	NetworkLib::advance(v1, begin, a);
+	NetworkLib::advance(v2, begin, b, c);
 
 	v2[b-1, c-1] = 6;
 
