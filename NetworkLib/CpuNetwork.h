@@ -27,19 +27,21 @@ namespace NetworkLib {
 		return (... * dimensions);
 	}
 
-	template<ViewConcept ViewT, typename... Dimensions>
-	void advance(ViewT& view, Floats::iterator& begin, Dimensions&& ...dimensions) {
+	template<ViewConcept ViewType, typename... Dimensions>
+	void advance(ViewType& view, Floats::iterator& begin, Dimensions&& ...dimensions) {
 
-		view = ViewT(&*begin, std::array{ dimensions... });
+		view = ViewType(&*begin, std::array{ dimensions... });
 		std::advance(begin, area(dimensions...));
 	}
 
-	template<ViewConcept ViewT>
-	std::vector<Dimension> getShape(ViewT& view) {
+	template<ViewConcept ViewType>
+	std::vector<Dimension> getShape(ViewType& view) {
 
-		std::vector<Dimension> result;
-		for (auto i : std::views::iota(0, ViewT::rank()) )
-			result[i] = view.extents().extent(i);
+		auto rank = ViewType::rank();
+		std::vector<Dimension> result(rank);
+		auto& extents = view.extents();
+		for (auto i : std::views::iota(0ULL, rank ) )
+			result[i] = extents.extent(i);
 		
 		return result;
 	}

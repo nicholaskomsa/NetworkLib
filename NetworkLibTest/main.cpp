@@ -32,8 +32,11 @@ int main() {
 
 	v2[b-1, c-1] = 6;
 
-	std::cout << v2[b - 1, c - 1];
-	std::cout << v1[2];
+	std::println("{} {}", v2[b - 1, c - 1], v1[2] );
+
+	auto v2Shape = NetworkLib::getShape(v2);
+	for (auto d : v2Shape)
+		std::print("{} ", d);
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
