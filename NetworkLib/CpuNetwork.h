@@ -22,7 +22,6 @@ namespace NetworkLib {
 			struct Layer {
 				Tensor::View2 mWeights;
 				Tensor::View1 mBias;
-
 			};
 
 			Tensor::FloatSpace1 mWeightsAndBias;

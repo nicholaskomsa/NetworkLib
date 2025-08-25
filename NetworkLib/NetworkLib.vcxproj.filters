@@ -42,6 +42,9 @@
     <ClInclude Include="CpuModel.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="GpuNetwork.h">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">

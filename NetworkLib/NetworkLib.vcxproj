@@ -95,6 +95,7 @@
     <ClInclude Include="CpuTensor.h" />
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
+    <ClInclude Include="GpuNetwork.h" />
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="Serializer.h" />
     <ClInclude Include="Gpt2Tensor.h" />

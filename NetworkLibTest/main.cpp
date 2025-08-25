@@ -7,6 +7,8 @@
 #include <CpuTensor.h>
 #include <CpuModel.h>
 
+#include <GpuNetwork.h>
+
 int main() {
 
 	using GPT2 = NetworkLib::GPT2;
@@ -24,6 +26,12 @@ int main() {
 	namespace Cpu = NetworkLib::Cpu;
 	//Cpu::Tensor::example();
 	Cpu::exampleModel();
+
+	namespace Gpu = NetworkLib::Gpu;
+	Gpu::Network gnn;
+	Gpu::Environment genv;
+	genv.setup();
+	genv.shutdown();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
