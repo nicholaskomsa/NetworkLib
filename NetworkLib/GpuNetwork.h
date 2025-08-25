@@ -131,15 +131,6 @@ namespace NetworkLib {
 				cudaMemcpy(mGPUVector->getData(), mVector, mGPUVector->getMemSize(), cudaMemcpyHostToDevice);
 			}
 
-			template<typename Action>
-			void forEach(Action&& action) {
-
-				std::size_t elementNum = getLength();
-				for (std::size_t i = 0; i < elementNum; ++i) {
-					action(mVector[i]);
-				}
-			}
-
 			float* begin() { return mVector; }
 			float* end() { return mVector + getLength(); }
 
