@@ -14,7 +14,7 @@ namespace NetworkLib {
 			Error(std::errc code, const std::string& message) 
 				: std::system_error(int(code), std::generic_category(), message) {}
 
-			static void cudaError(cudaError_t result, const std::source_location& location) {
+			static void cudaError(cudaError_t result, const std::source_location& location = std::source_location::current()) {
 
 				auto message = std::format(
 					"Cuda Error ={}:\n{}\n"
@@ -24,14 +24,39 @@ namespace NetworkLib {
 				
 				throw Error(std::errc::operation_canceled, message);
 			}
+			static void blasError(cublasStatus_t result, const std::source_location& location = std::source_location::current()) {
+				
+				auto getBLASString = [&]() {
+					switch (result) {
+					case CUBLAS_STATUS_SUCCESS:          return "Success";
+					case CUBLAS_STATUS_NOT_INITIALIZED:  return "cuBLAS not initialized";
+					case CUBLAS_STATUS_ALLOC_FAILED:     return "Resource allocation failed";
+					case CUBLAS_STATUS_INVALID_VALUE:    return "Invalid value";
+					case CUBLAS_STATUS_ARCH_MISMATCH:    return "Architecture mismatch";
+					case CUBLAS_STATUS_MAPPING_ERROR:    return "Memory mapping error";
+					case CUBLAS_STATUS_EXECUTION_FAILED: return "Execution failed";
+					case CUBLAS_STATUS_INTERNAL_ERROR:   return "Internal error";
+					default:                             return "Unknown cuBLAS error";
+					}
+
+					};
+				
+				auto message = std::format(
+					"BLAS Error ={}:\n{}\n"
+					"{}\n{}\n{}\n"
+					, int(result), getBLASString()
+					, location.file_name(), location.line(), location.function_name());
+
+				throw Error(std::errc::operation_canceled, message);
+			}
 
 			static void checkCuda(cudaError_t result, const std::source_location& location = std::source_location::current()) {
 				if (result != cudaSuccess)
 					cudaError(result, location);
 			}
-			static void checkCUBlas() {
-
-
+			static void checkBlas(cublasStatus_t result, const std::source_location& location = std::source_location::current()) {
+				if (result != CUBLAS_STATUS_SUCCESS)
+					blasError(result);
 			}
 		};
 
@@ -79,6 +104,11 @@ namespace NetworkLib {
 
 			GPUVector* mGPUVector{ nullptr };
 		public:
+
+			HostVector() = default;
+			HostVector(GPUVector& gpuVector) {
+				allocate(gpuVector);
+			}
 
 			~HostVector() {
 				free();
@@ -134,9 +164,6 @@ namespace NetworkLib {
 			float* begin() { return mVector; }
 			float* end() { return mVector + getLength(); }
 
-			const float* begin() const { return mVector; }
-			const float* end() const { return mVector + getLength(); }
-
 		};
 		class Environment {
 
@@ -159,7 +186,8 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				int n = a.getLength();
 
-				cublasSaxpy(mHandle, n, &alpha, a.getData(), 1, bOut.getData(), 1);
+				auto result = cublasSaxpy(mHandle, n, &alpha, a.getData(), 1, bOut.getData(), 1);
+				Error::checkBlas(result);
 			}
 
 			void example() {
