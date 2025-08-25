@@ -151,14 +151,14 @@ namespace NetworkLib {
 			}
 
 			void download() const {
-				cudaMemcpy(mVector, mGPUVector->getData(), mGPUVector->getMemSize(), cudaMemcpyDeviceToHost);
+				Error::checkCuda(cudaMemcpy(mVector, mGPUVector->getData(), mGPUVector->getMemSize(), cudaMemcpyDeviceToHost));
 			}
 			void download(GPUVector& gpuVector) {
 				allocate(gpuVector);
 				download();
 			}
 			void upload() const {
-				cudaMemcpy(mGPUVector->getData(), mVector, mGPUVector->getMemSize(), cudaMemcpyHostToDevice);
+				Error::checkCuda(cudaMemcpy(mGPUVector->getData(), mVector, mGPUVector->getMemSize(), cudaMemcpyHostToDevice));
 			}
 
 			float* begin() { return mVector; }
@@ -172,14 +172,13 @@ namespace NetworkLib {
 
 		public:
 			void setup() {
-				cublasCreate(&mHandle);
-				cudaStreamCreate(&mStream);
-
-				cublasSetStream(mHandle, mStream);
+				Error::checkBlas(cublasCreate(&mHandle));
+				Error::checkCuda(cudaStreamCreate(&mStream));
+				Error::checkBlas(cublasSetStream(mHandle, mStream));
 			}
 			void shutdown() {
-				cudaStreamDestroy(mStream);
-				cublasDestroy(mHandle);
+				Error::checkCuda(cudaStreamDestroy(mStream));
+				Error::checkBlas(cublasDestroy(mHandle));
 			}
 
 			void vecAddVec(const GPUVector& a, GPUVector& bOut) const {
