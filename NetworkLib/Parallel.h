@@ -95,11 +95,11 @@ namespace NetworkLib {
 
 			mSectionsView = { mSections.begin(), sectionNum };
 
-			for (std::size_t s = 0; s < sectionNum - 1; ++s) {
+			for(auto& s: mSectionsView | std::views::take(sectionNum-1) ){
 
 				end = start + sectionSize;
 
-				mSectionsView[s].mIotaView = std::ranges::iota_view(start, end);
+				s.mIotaView = std::ranges::iota_view(start, end);
 
 				start = end;
 			}
@@ -135,7 +135,5 @@ namespace NetworkLib {
 			operator()(std::move(functor), single);
 			operator()(std::move(finale), true);
 		}
-
-
 	};
 }

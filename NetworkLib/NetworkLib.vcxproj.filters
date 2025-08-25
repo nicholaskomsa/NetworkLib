@@ -39,6 +39,9 @@
     <ClInclude Include="CpuTensor.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="CpuModel.h">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">

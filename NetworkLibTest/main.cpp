@@ -5,7 +5,7 @@
 
 #include <CpuNetwork.h>
 #include <CpuTensor.h>
-
+#include <CpuModel.h>
 
 int main() {
 
@@ -21,8 +21,9 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 
-	namespace CpuTensor = NetworkLib::CpuTensor;
-	CpuTensor::example();
+	namespace Cpu = NetworkLib::Cpu;
+	//Cpu::Tensor::example();
+	Cpu::exampleModel();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
