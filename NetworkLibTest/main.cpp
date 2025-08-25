@@ -31,6 +31,7 @@ int main() {
 	Gpu::Network gnn;
 	Gpu::Environment genv;
 	genv.setup();
+	genv.example();
 	genv.shutdown();
 
 	std::puts("\nProgram Finished press enter to exit");
