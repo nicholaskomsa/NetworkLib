@@ -150,12 +150,19 @@ namespace NetworkLib {
 				return mGPUVector->getLength();
 			}
 
-			void download() const {
-				Error::checkCuda(cudaMemcpy(mVector, mGPUVector->getData(), mGPUVector->getMemSize(), cudaMemcpyDeviceToHost));
+			void downloadAsync(const cudaStream_t& stream) const {
+			//	Error::checkCuda(cudaMemcpy(mVector, mGPUVector->getData(), mGPUVector->getMemSize(), cudaMemcpyDeviceToHost));
+				Error::checkCuda(cudaMemcpyAsync(
+					mVector,
+					mGPUVector->getData(),
+					mGPUVector->getMemSize(),
+					cudaMemcpyDeviceToHost,
+					stream));
+
 			}
-			void download(GPUVector& gpuVector) {
+			void downloadAsync(GPUVector& gpuVector, const cudaStream_t& stream) {
 				allocate(gpuVector);
-				download();
+				downloadAsync(stream);
 			}
 			void upload() const {
 				Error::checkCuda(cudaMemcpy(mGPUVector->getData(), mVector, mGPUVector->getMemSize(), cudaMemcpyHostToDevice));
@@ -202,12 +209,10 @@ namespace NetworkLib {
 
 				vecAddVec(g1, g1);
 
-				h1.download();
+				h1.downloadAsync(mStream);
 
 				for (auto& v : h1)
 					std::cout << v << ", ";
-
-				g1.free();
 			}
 
 		};
