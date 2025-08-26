@@ -140,9 +140,7 @@ namespace NetworkLib {
 						stream));
 
 				}
-				float* begin() { return mHostView.data_handle(); }
-				float* end() { return mHostView.data_handle() + Cpu::Tensor::area(mHostView); }
-				
+
 				template<Cpu::Tensor::ViewConcept ViewType>
 				float* begin(ViewType& view) {
 					return view.data_handle();
@@ -151,6 +149,9 @@ namespace NetworkLib {
 				float* end(ViewType& view) {
 					return view.data_handle() + Cpu::Tensor::area(view);
 				}
+				float* begin() { return begin(mHostView); }
+				float* end() { return end(mHostView); }
+
 			};
 
 			void example() {
