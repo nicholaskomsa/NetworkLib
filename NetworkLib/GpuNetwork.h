@@ -82,76 +82,81 @@ namespace NetworkLib {
 				auto result = cublasSaxpy(mHandle, size, &alpha, a, 1, b, 1);
 				Error::checkBlas(result);
 			}
+			static std::size_t getMemSize(std::size_t floatCount) {
+				return floatCount * sizeof(float);
+			}
+			template<Cpu::Tensor::ViewConcept ViewType>
+			struct GpuView {
+				ViewType mView;
+				float* mGpu = nullptr;
 
-			struct FloatSpace1 {
-
-				Cpu::Tensor::View1 mHostView;
-				float* mGpuFloats=nullptr;
-
-				void allocate(std::size_t size) {
-					auto memSize = size * sizeof(float);
-					float* phost = nullptr;
-					Error::checkCuda(cudaMallocHost(&phost, memSize));
-					Cpu::Tensor::advance(mHostView, phost, size);
-					
-					Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mGpuFloats), memSize));
+				void upload() {
+					auto memSize = getMemSize(Cpu::Tensor::area(mView));
+					Error::checkCuda(cudaMemcpy(
+						mGpu,
+						data(),
+						memSize,
+						cudaMemcpyHostToDevice));
 				}
-
-				void free() {
-					float* phost = mHostView.data_handle();
-					if (phost)
-						Error::checkCuda(cudaFreeHost(phost));
-					if (mGpuFloats)
-						Error::checkCuda(cudaFree(mGpuFloats));
-
-					mHostView = {};
-					mGpuFloats = nullptr;
-				}
-
-				template<Cpu::Tensor::ViewConcept ViewType>
-				float* getGpuOffset(const ViewType& view) {
-					float* phost = mHostView.data_handle();
-					float* vhost = view.data_handle();
-					return mGpuFloats + ( vhost-phost );
-				}
-
-				template<Cpu::Tensor::ViewConcept ViewType>
-				void upload(const ViewType& view) {	
-					auto size = Cpu::Tensor::area(view);
-					auto memSize = size * sizeof(float);
-					const float* phost = view.data_handle();
-					float* ghost = getGpuOffset(view);
-					
-					Error::checkCuda(cudaMemcpy(ghost, phost, memSize, cudaMemcpyHostToDevice));
-				}
-				template<Cpu::Tensor::ViewConcept ViewType>
-				void downloadAsync(ViewType& view, const cudaStream_t& stream) {
-
-					auto size = Cpu::Tensor::area(view);
-					auto memSize = size * sizeof(float);
-					float* phost = view.data_handle();
-					float* ghost = getGpuOffset(view);
-
+				void downloadAsync(const cudaStream_t& stream) {
+					auto memSize = getMemSize(Cpu::Tensor::area(mView));
 					Error::checkCuda(cudaMemcpyAsync(
-						phost,
-						ghost,
+						data(),
+						mGpu,
 						memSize,
 						cudaMemcpyDeviceToHost,
 						stream));
+				}
+				float* begin() {
+					return data();
+				}
+				float* end() {
+					return data() + Cpu::Tensor::area(mView);
+				}
 
+				float* data() { return mView.data_handle(); }
+			};
+
+			struct FloatSpace1 {
+
+				GpuView<Cpu::Tensor::View1> mView;
+
+				void allocate(std::size_t size) {
+					auto memSize = getMemSize(size);
+					float* phost = nullptr;
+					Error::checkCuda(cudaMallocHost(&phost, memSize));
+					Cpu::Tensor::advance(mView.mView, phost, size);
+					
+					Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), memSize));
+				}
+
+				void free() {
+					float* phost = mView.mView.data_handle();
+					if (phost)
+						Error::checkCuda(cudaFreeHost(phost));
+					if (mView.mGpu)
+						Error::checkCuda(cudaFree(mView.mGpu));
+
+					mView = {};
 				}
 
 				template<Cpu::Tensor::ViewConcept ViewType>
-				float* begin(ViewType& view) {
-					return view.data_handle();
+				float* getGpu(ViewType& view) {
+					float* phost = mView.mView.data_handle();
+					float* vhost = view.data_handle();
+					float* vgpu = mView.mGpu + (vhost - phost);
+					return vgpu;
 				}
-				template<Cpu::Tensor::ViewConcept ViewType>
-				float* end(ViewType& view) {
-					return view.data_handle() + Cpu::Tensor::area(view);
-				}
-				float* begin() { return begin(mHostView); }
-				float* end() { return end(mHostView); }
 
+				float* begin() { return mView.begin(); }
+				float* end() { return mView.end(); }
+
+				template<Cpu::Tensor::ViewConcept ViewType, typename... Dimensions>
+				GpuView<ViewType> advance(float*& begin, Dimensions&&...dimensions) {
+					ViewType view;
+					Cpu::Tensor::advance(view, begin, dimensions...);
+					return { view, getGpu(view) };
+				}
 			};
 
 			void example() {
@@ -160,29 +165,27 @@ namespace NetworkLib {
 				fs1.allocate(200);
 
 				auto begin = fs1.begin();
-				Cpu::Tensor::View1 v1, v2;
-				Cpu::Tensor::advance(v1, begin, 100);
-				Cpu::Tensor::advance(v2, begin, 100);
+				auto v1 = fs1.advance<Cpu::Tensor::View1>(begin, 100);
+				auto v2 = fs1.advance<Cpu::Tensor::View2>(begin, 10, 10);
 
-				std::iota(fs1.begin(), fs1.end(), 0);
-				std::iota(fs1.begin(v2), fs1.end(v2), 0);
+				v1.downloadAsync(mStream);
+				v2.downloadAsync(mStream);
 
-				fs1.upload(v1);
-				fs1.upload(v2);
+				//fs1.downloadAsync(v2, mStream);
 
-				std::fill(fs1.begin(v2), fs1.end(v2), 0);
-
-				fs1.downloadAsync(v2, mStream);
-
-				std::for_each(fs1.begin(v1), fs1.end(v1), [&](auto& f) {
+				std::for_each(v1.begin(), v1.end(), [&](auto& f) {
 
 					std::cout << f << ",";
 					});
-				
-				std::for_each(fs1.begin(v2), fs1.end(v2), [&](auto& f) {
+
+				std::for_each(v2.begin(), v2.end(), [&](auto& f) {
 
 					std::cout << f << ",";
 					});
+				//std::for_each(fs1.begin(v2), fs1.end(v2), [&](auto& f) {
+
+				//	std::cout << f << ",";
+				//	});
 
 				fs1.free();
 			}
