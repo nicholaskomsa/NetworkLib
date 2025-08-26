@@ -88,7 +88,7 @@ namespace NetworkLib {
 			template<Cpu::Tensor::ViewConcept ViewType>
 			struct GpuView {
 				ViewType mView;
-				float* mGpu = nullptr;
+				float* mGpu = nullptr, *mCpu = nullptr;;
 
 				void upload() {
 					auto memSize = getMemSize(Cpu::Tensor::area(mView));
@@ -123,26 +123,31 @@ namespace NetworkLib {
 
 				void allocate(std::size_t size) {
 					auto memSize = getMemSize(size);
-					float* phost = nullptr;
-					Error::checkCuda(cudaMallocHost(&phost, memSize));
-					Cpu::Tensor::advance(mView.mView, phost, size);
+					Error::checkCuda(cudaMallocHost(&mView.mCpu, memSize));
+					float* begin = mView.mCpu;
+					Cpu::Tensor::advance(mView.mView, begin, size);
 					
 					Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), memSize));
 				}
 
 				void free() {
-					float* phost = mView.mView.data_handle();
-					if (phost)
-						Error::checkCuda(cudaFreeHost(phost));
+					freeHost();
+					freeGpu();
+				}
+				void freeHost() {
+					if (mView.mCpu)
+						Error::checkCuda(cudaFreeHost(mView.mCpu));
+					mView.mCpu = nullptr;
+				}
+				void freeGpu() {
 					if (mView.mGpu)
 						Error::checkCuda(cudaFree(mView.mGpu));
-
-					mView = {};
+					mView.mGpu = nullptr;
 				}
 
 				template<Cpu::Tensor::ViewConcept ViewType>
 				float* getGpu(ViewType& view) {
-					float* phost = mView.mView.data_handle();
+					float* phost = mView.mCpu;
 					float* vhost = view.data_handle();
 					float* vgpu = mView.mGpu + (vhost - phost);
 					return vgpu;
@@ -154,8 +159,9 @@ namespace NetworkLib {
 				template<Cpu::Tensor::ViewConcept ViewType, typename... Dimensions>
 				GpuView<ViewType> advance(float*& begin, Dimensions&&...dimensions) {
 					ViewType view;
+					auto source = begin;
 					Cpu::Tensor::advance(view, begin, dimensions...);
-					return { view, getGpu(view) };
+					return { view, getGpu(view), source };
 				}
 			};
 
@@ -168,10 +174,16 @@ namespace NetworkLib {
 				auto v1 = fs1.advance<Cpu::Tensor::View1>(begin, 100);
 				auto v2 = fs1.advance<Cpu::Tensor::View2>(begin, 10, 10);
 
+				std::iota(fs1.begin(), fs1.end(), 0);
+				v2.mView[5, 5] = 16.333f;
+
+				//fs1.mView.upload();
+				v2.upload();
+
+				std::fill(fs1.begin(), fs1.end(), 0);
+
 				v1.downloadAsync(mStream);
 				v2.downloadAsync(mStream);
-
-				//fs1.downloadAsync(v2, mStream);
 
 				std::for_each(v1.begin(), v1.end(), [&](auto& f) {
 
@@ -182,10 +194,6 @@ namespace NetworkLib {
 
 					std::cout << f << ",";
 					});
-				//std::for_each(fs1.begin(v2), fs1.end(v2), [&](auto& f) {
-
-				//	std::cout << f << ",";
-				//	});
 
 				fs1.free();
 			}
