@@ -5,6 +5,7 @@
 #include <cuda_profiler_api.h>
 #include <source_location>
 
+#include "CpuTensor.h"
 
 namespace NetworkLib {
 	namespace Gpu {
@@ -60,118 +61,6 @@ namespace NetworkLib {
 			}
 		};
 
-		class GPUVector {
-
-			float* mVector = nullptr;
-			int mLength = 0;
-
-		public:
-			~GPUVector() {
-				free();
-			}
-
-			void allocate(int length) {
-
-				if (length != mLength) {
-					mLength = length;
-
-					if (mVector != nullptr)
-						free();
-
-					Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mVector), getMemSize()));
-				}
-			}
-			void free() {
-				if (mVector)
-					Error::checkCuda(cudaFree(mVector));
-				mVector = nullptr;
-			}
-			int getMemSize() const {
-				return mLength * sizeof(float);
-			}
-
-			std::size_t getLength() const {
-				return mLength;
-			}
-			float* getData() const {
-				return mVector;
-			}
-		};
-
-		class HostVector {
-
-			float* mVector{ nullptr };
-
-			GPUVector* mGPUVector{ nullptr };
-		public:
-
-			HostVector() = default;
-			HostVector(GPUVector& gpuVector) {
-				allocate(gpuVector);
-			}
-
-			~HostVector() {
-				free();
-			}
-
-			void allocate(GPUVector& gpuVector) {
-				bool allocate = true;
-
-				if (mGPUVector) {
-
-					auto oldSize = mGPUVector->getMemSize();
-					auto newSize = gpuVector.getMemSize();
-
-					if (oldSize == newSize)
-						allocate = false;
-					else
-						free();
-				}
-
-				mGPUVector = &gpuVector;
-
-				if (allocate)
-					Error::checkCuda(cudaMallocHost(&mVector, getMemSize()));
-			}
-			void free() {
-				if (mVector){
-					Error::checkCuda(cudaFreeHost(mVector));
-					mVector = nullptr;
-				}
-			}
-
-			float* getData() { return mVector; }
-
-			std::size_t getMemSize() const {
-				return mGPUVector->getMemSize();
-			}
-
-			std::size_t getLength() const {
-				return mGPUVector->getLength();
-			}
-
-			void downloadAsync(const cudaStream_t& stream) const {
-			//	Error::checkCuda(cudaMemcpy(mVector, mGPUVector->getData(), mGPUVector->getMemSize(), cudaMemcpyDeviceToHost));
-				Error::checkCuda(cudaMemcpyAsync(
-					mVector,
-					mGPUVector->getData(),
-					mGPUVector->getMemSize(),
-					cudaMemcpyDeviceToHost,
-					stream));
-
-			}
-			void downloadAsync(GPUVector& gpuVector, const cudaStream_t& stream) {
-				allocate(gpuVector);
-				downloadAsync(stream);
-			}
-			void upload() const {
-				Error::checkCuda(cudaMemcpy(mGPUVector->getData(), mVector, mGPUVector->getMemSize(), cudaMemcpyHostToDevice));
-			}
-
-			float* begin() { return mVector; }
-			float* end() { return mVector + getLength(); }
-
-		};
 		class Environment {
 
 			cublasHandle_t mHandle;
@@ -188,31 +77,113 @@ namespace NetworkLib {
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
 
-			void vecAddVec(const GPUVector& a, GPUVector& bOut) const {
+			void vecAddVec(const float* a, float* b, std::size_t size) const {
 				float alpha = 1.0f;
-				int n = a.getLength();
-
-				auto result = cublasSaxpy(mHandle, n, &alpha, a.getData(), 1, bOut.getData(), 1);
+				auto result = cublasSaxpy(mHandle, size, &alpha, a, 1, b, 1);
 				Error::checkBlas(result);
 			}
 
+			struct FloatSpace1 {
+
+				Cpu::Tensor::View1 mHostView;
+				float* mGpuFloats=nullptr;
+
+				void allocate(std::size_t size) {
+					auto memSize = size * sizeof(float);
+					float* phost = nullptr;
+					Error::checkCuda(cudaMallocHost(&phost, memSize));
+					Cpu::Tensor::advance(mHostView, phost, size);
+					
+					Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mGpuFloats), memSize));
+				}
+
+				void free() {
+					float* phost = mHostView.data_handle();
+					if (phost)
+						Error::checkCuda(cudaFreeHost(phost));
+					if (mGpuFloats)
+						Error::checkCuda(cudaFree(mGpuFloats));
+
+					mHostView = {};
+					mGpuFloats = nullptr;
+				}
+
+				template<Cpu::Tensor::ViewConcept ViewType>
+				float* getGpuOffset(const ViewType& view) {
+					float* phost = mHostView.data_handle();
+					float* vhost = view.data_handle();
+					return mGpuFloats + ( vhost-phost );
+				}
+
+				template<Cpu::Tensor::ViewConcept ViewType>
+				void upload(const ViewType& view) {	
+					auto size = Cpu::Tensor::area(view);
+					auto memSize = size * sizeof(float);
+					const float* phost = view.data_handle();
+					float* ghost = getGpuOffset(view);
+					
+					Error::checkCuda(cudaMemcpy(ghost, phost, memSize, cudaMemcpyHostToDevice));
+				}
+				template<Cpu::Tensor::ViewConcept ViewType>
+				void downloadAsync(ViewType& view, const cudaStream_t& stream) {
+
+					auto size = Cpu::Tensor::area(view);
+					auto memSize = size * sizeof(float);
+					float* phost = view.data_handle();
+					float* ghost = getGpuOffset(view);
+
+					Error::checkCuda(cudaMemcpyAsync(
+						phost,
+						ghost,
+						memSize,
+						cudaMemcpyDeviceToHost,
+						stream));
+
+				}
+				float* begin() { return mHostView.data_handle(); }
+				float* end() { return mHostView.data_handle() + Cpu::Tensor::area(mHostView); }
+				
+				template<Cpu::Tensor::ViewConcept ViewType>
+				float* begin(ViewType& view) {
+					return view.data_handle();
+				}
+				template<Cpu::Tensor::ViewConcept ViewType>
+				float* end(ViewType& view) {
+					return view.data_handle() + Cpu::Tensor::area(view);
+				}
+			};
+
 			void example() {
 
-				GPUVector g1;
-				g1.allocate(20);
+				FloatSpace1 fs1;
+				fs1.allocate(200);
 
-				HostVector h1;
-				h1.allocate(g1);
+				auto begin = fs1.begin();
+				Cpu::Tensor::View1 v1, v2;
+				Cpu::Tensor::advance(v1, begin, 100);
+				Cpu::Tensor::advance(v2, begin, 100);
 
-				std::iota(h1.begin(), h1.end(), 0);
-				h1.upload();
+				std::iota(fs1.begin(), fs1.end(), 0);
+				std::iota(fs1.begin(v2), fs1.end(v2), 0);
 
-				vecAddVec(g1, g1);
+				fs1.upload(v1);
+				fs1.upload(v2);
 
-				h1.downloadAsync(mStream);
+				std::fill(fs1.begin(v2), fs1.end(v2), 0);
 
-				for (auto& v : h1)
-					std::cout << v << ", ";
+				fs1.downloadAsync(v2, mStream);
+
+				std::for_each(fs1.begin(v1), fs1.end(v1), [&](auto& f) {
+
+					std::cout << f << ",";
+					});
+				
+				std::for_each(fs1.begin(v2), fs1.end(v2), [&](auto& f) {
+
+					std::cout << f << ",";
+					});
+
+				fs1.free();
 			}
 
 		};
