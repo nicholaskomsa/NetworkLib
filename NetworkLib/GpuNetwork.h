@@ -88,7 +88,7 @@ namespace NetworkLib {
 			template<Cpu::Tensor::ViewConcept ViewType>
 			struct GpuView {
 				ViewType mView;
-				float* mGpu = nullptr, *mCpu = nullptr;;
+				float* mGpu = nullptr, *mCpu = nullptr;
 
 				void upload() {
 					auto memSize = getMemSize(Cpu::Tensor::area(mView));
