@@ -14,8 +14,8 @@ namespace NetworkLib {
 
 		nn.create();
 
-		Gpu::Environment env;
-		env.create();
+		Gpu::Environment gpu;
+		gpu.create();
 
 		Gpu::Network gnn(&networkTemplate);
 		gnn.create();
@@ -26,8 +26,7 @@ namespace NetworkLib {
 
 		gnn.destroy();
 		
-		env.destroy();
-
+		gpu.destroy();
 	}
 	
 }
