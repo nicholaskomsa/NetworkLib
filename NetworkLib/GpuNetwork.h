@@ -61,6 +61,46 @@ namespace NetworkLib {
 			}
 		};
 
+		std::size_t getMemSize(std::size_t floatCount) {
+			return floatCount * sizeof(float);
+		}
+
+		template<Cpu::Tensor::ViewConcept ViewType>
+		struct GpuView {
+			ViewType mView;
+			float* mGpu = nullptr, * mCpu = nullptr;
+
+			GpuView() = default;
+			GpuView(ViewType view, float* gpu, float* cpu)
+				:mView(view), mGpu(gpu), mCpu(cpu) {}
+
+			void upload() {
+				auto memSize = getMemSize(Cpu::Tensor::area(mView));
+				Error::checkCuda(cudaMemcpy(
+					mGpu,
+					data(),
+					memSize,
+					cudaMemcpyHostToDevice));
+			}
+			void downloadAsync(const cudaStream_t& stream) {
+				auto memSize = getMemSize(Cpu::Tensor::area(mView));
+				Error::checkCuda(cudaMemcpyAsync(
+					data(),
+					mGpu,
+					memSize,
+					cudaMemcpyDeviceToHost,
+					stream));
+			}
+			float* begin() {
+				return data();
+			}
+			float* end() {
+				return data() + Cpu::Tensor::area(mView);
+			}
+
+			float* data() { return mView.data_handle(); }
+		};
+
 		class Environment {
 
 			cublasHandle_t mHandle;
@@ -82,40 +122,6 @@ namespace NetworkLib {
 				auto result = cublasSaxpy(mHandle, size, &alpha, a, 1, b, 1);
 				Error::checkBlas(result);
 			}
-			static std::size_t getMemSize(std::size_t floatCount) {
-				return floatCount * sizeof(float);
-			}
-			template<Cpu::Tensor::ViewConcept ViewType>
-			struct GpuView {
-				ViewType mView;
-				float* mGpu = nullptr, *mCpu = nullptr;
-
-				void upload() {
-					auto memSize = getMemSize(Cpu::Tensor::area(mView));
-					Error::checkCuda(cudaMemcpy(
-						mGpu,
-						data(),
-						memSize,
-						cudaMemcpyHostToDevice));
-				}
-				void downloadAsync(const cudaStream_t& stream) {
-					auto memSize = getMemSize(Cpu::Tensor::area(mView));
-					Error::checkCuda(cudaMemcpyAsync(
-						data(),
-						mGpu,
-						memSize,
-						cudaMemcpyDeviceToHost,
-						stream));
-				}
-				float* begin() {
-					return data();
-				}
-				float* end() {
-					return data() + Cpu::Tensor::area(mView);
-				}
-
-				float* data() { return mView.data_handle(); }
-			};
 
 			struct FloatSpace1 {
 
@@ -157,11 +163,11 @@ namespace NetworkLib {
 				float* end() { return mView.end(); }
 
 				template<Cpu::Tensor::ViewConcept ViewType, typename... Dimensions>
-				GpuView<ViewType> advance(float*& begin, Dimensions&&...dimensions) {
+				void advance(GpuView<ViewType>& gpuView, float*& begin, Dimensions&&...dimensions) {
 					ViewType view;
 					auto source = begin;
 					Cpu::Tensor::advance(view, begin, dimensions...);
-					return { view, getGpu(view), source };
+					gpuView = { view, getGpu(view), source };
 				}
 			};
 
@@ -171,8 +177,12 @@ namespace NetworkLib {
 				fs1.allocate(200);
 
 				auto begin = fs1.begin();
-				auto v1 = fs1.advance<Cpu::Tensor::View1>(begin, 100);
-				auto v2 = fs1.advance<Cpu::Tensor::View2>(begin, 10, 10);
+
+				GpuView<Cpu::Tensor::View1> v1;
+				GpuView<Cpu::Tensor::View2> v2;
+
+				fs1.advance(v1, begin, 100);
+				fs1.advance(v2, begin, 10, 10);
 
 				std::iota(fs1.begin(), fs1.end(), 0);
 				v2.mView[5, 5] = 16.333f;
@@ -202,7 +212,55 @@ namespace NetworkLib {
 
 		class Network {
 
+			NetworkTemplate* mNetworkTemplate = nullptr;
+
+			Environment::FloatSpace1 mGpuFloats;
+
+			struct Layer {
+				GpuView<Cpu::Tensor::View2> mWeights;
+				GpuView<Cpu::Tensor::View1> mBias;
+			};
+
+			std::vector<Layer> mLayers;
+
 		public:
+
+			Network(NetworkTemplate* networkTemplate)
+				: mNetworkTemplate(networkTemplate) {
+			}
+
+			void create() {
+
+				auto& networkTemplate = *mNetworkTemplate;
+				std::span<LayerTemplate> layerTemplates = networkTemplate.mLayerTemplates;
+
+				auto& firstInputSize = networkTemplate.mInputSize;
+				std::size_t size = 0, inputSize = firstInputSize;
+				for (auto [n] : layerTemplates) {
+					size += inputSize * n + n;
+					inputSize = n;
+				}
+
+				mGpuFloats.allocate(size);
+
+				mLayers.resize(layerTemplates.size());
+
+				auto begin = mGpuFloats.begin();
+				inputSize = firstInputSize;
+				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
+
+					const auto& [n] = layerTemplate;
+					auto& [w, b] = layer;
+
+					mGpuFloats.advance(w, begin, inputSize, n);
+					mGpuFloats.advance(b, begin, n);
+
+					inputSize = n;
+				}
+			}
+			void destroy() {
+				mGpuFloats.free();
+			}
 
 		};
 

@@ -90,12 +90,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithms.h" />
-    <ClInclude Include="CpuModel.h" />
+    <ClInclude Include="Model.h" />
     <ClInclude Include="CpuNetwork.h" />
     <ClInclude Include="CpuTensor.h" />
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
     <ClInclude Include="GpuNetwork.h" />
+    <ClInclude Include="NetworkTemplate.h" />
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="Serializer.h" />
     <ClInclude Include="Gpt2Tensor.h" />

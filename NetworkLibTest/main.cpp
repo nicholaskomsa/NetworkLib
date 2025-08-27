@@ -5,7 +5,7 @@
 
 #include <CpuNetwork.h>
 #include <CpuTensor.h>
-#include <CpuModel.h>
+#include <Model.h>
 
 #include <GpuNetwork.h>
 
@@ -23,16 +23,8 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 
-	namespace Cpu = NetworkLib::Cpu;
 	//Cpu::Tensor::example();
-	Cpu::exampleModel();
-
-	namespace Gpu = NetworkLib::Gpu;
-	Gpu::Network gnn;
-	Gpu::Environment genv;
-	genv.setup();
-	genv.example();
-	genv.shutdown();
+	NetworkLib::exampleModel();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();
