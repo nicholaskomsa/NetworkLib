@@ -107,12 +107,12 @@ namespace NetworkLib {
 			cudaStream_t mStream;
 
 		public:
-			void setup() {
+			void create() {
 				Error::checkBlas(cublasCreate(&mHandle));
 				Error::checkCuda(cudaStreamCreate(&mStream));
 				Error::checkBlas(cublasSetStream(mHandle, mStream));
 			}
-			void shutdown() {
+			void destroy() {
 				Error::checkCuda(cudaStreamDestroy(mStream));
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
@@ -172,7 +172,7 @@ namespace NetworkLib {
 			};
 
 			void example() {
-
+				
 				FloatSpace1 fs1;
 				fs1.allocate(200);
 
