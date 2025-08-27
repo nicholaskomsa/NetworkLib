@@ -78,27 +78,25 @@ namespace NetworkLib {
 				auto memSize = getMemSize(Cpu::Tensor::area(mView));
 				Error::checkCuda(cudaMemcpy(
 					mGpu,
-					data(),
+					mCpu,
 					memSize,
 					cudaMemcpyHostToDevice));
 			}
 			void downloadAsync(const cudaStream_t& stream) {
 				auto memSize = getMemSize(Cpu::Tensor::area(mView));
 				Error::checkCuda(cudaMemcpyAsync(
-					data(),
+					mCpu,
 					mGpu,
 					memSize,
 					cudaMemcpyDeviceToHost,
 					stream));
 			}
 			float* begin() {
-				return data();
+				return mCpu;
 			}
 			float* end() {
-				return data() + Cpu::Tensor::area(mView);
+				return mCpu + Cpu::Tensor::area(mView);
 			}
-
-			float* data() { return mView.data_handle(); }
 		};
 
 		class Environment {
