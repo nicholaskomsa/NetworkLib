@@ -11,7 +11,7 @@ namespace NetworkLib {
 		public:
 			static void applyKHScale(std::size_t inputSize, std::size_t size, GpuView2 weights) {
 
-				auto scale = std::sqrtf(6.0f / inputSize + size);
+				auto scale = std::sqrtf(6.0f / (inputSize + size));
 
 				for (auto& w : weights)
 					w *= scale;
@@ -69,24 +69,32 @@ namespace NetworkLib {
 						});
 				}
 
+				applyKHScales();
+			}
+
+			void upload() {
+				mGpuFloats.mView.upload();
+			}
+
+			void applyKHScales() {
 				auto layersIota = std::views::iota(0ULL, mLayers.size());
 				std::for_each(std::execution::par, layersIota.begin(), layersIota.end(), [&](auto l) {
 
 					auto& layer = mLayers[l];
 
-					std::size_t inputSize = (l == 0) ?
-						mNetworkTemplate->mInputSize : mLayers[l - 1].mBias.mSize
+					std::size_t inputSize
 						, size = layer.mBias.mSize;
+
+					if (l == 0)
+						inputSize = mNetworkTemplate->mInputSize;
+					else
+						inputSize = mLayers[l - 1].mBias.mSize;
 
 					auto& w = layer.mWeights;
 
 					applyKHScale(inputSize, size, w);
 
 					});
-			}
-
-			void upload() {
-				mGpuFloats.mView.upload();
 			}
 		private:
 			NetworkTemplate* mNetworkTemplate = nullptr;
