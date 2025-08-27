@@ -57,7 +57,6 @@ namespace NetworkLib {
 					inputSize = n;
 				}
 					
-
 			}
 
 

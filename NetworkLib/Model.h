@@ -8,7 +8,9 @@ namespace NetworkLib {
 
 	void exampleModel() {
 
-		NetworkTemplate networkTemplate{ 748, { 10, 10, 1} };
+		std::mt19937 random;
+
+		NetworkTemplate networkTemplate{ 748, { 100, 50, 10} };
 
 		Cpu::Network nn(&networkTemplate);
 
@@ -20,8 +22,8 @@ namespace NetworkLib {
 		Gpu::Network gnn(&networkTemplate);
 		gnn.create();
 
-
-
+		gnn.initialize(random);
+		gnn.upload();
 
 
 		gnn.destroy();

@@ -98,6 +98,9 @@ namespace NetworkLib {
 			}
 		};
 
+		using GpuView1 = GpuView<Cpu::Tensor::View1>;
+		using GpuView2 = GpuView<Cpu::Tensor::View2>;
+
 		struct FloatSpace1 {
 
 			GpuView<Cpu::Tensor::View1> mView;

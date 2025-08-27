@@ -2,23 +2,20 @@
 
 #include "GpuTensor.h"
 
+#include <random>
+
 namespace NetworkLib {
 	namespace Gpu {
 
 		class Network {
-
-			NetworkTemplate* mNetworkTemplate = nullptr;
-
-			FloatSpace1 mGpuFloats;
-
-			struct Layer {
-				GpuView<Cpu::Tensor::View2> mWeights;
-				GpuView<Cpu::Tensor::View1> mBias;
-			};
-
-			std::vector<Layer> mLayers;
-
 		public:
+			static void applyKHScale(std::size_t inputSize, std::size_t size, GpuView2 weights) {
+
+				auto scale = std::sqrtf(6.0f / inputSize + size);
+
+				for (auto& w : weights)
+					w *= scale;
+			}
 
 			Network(NetworkTemplate* networkTemplate)
 				: mNetworkTemplate(networkTemplate) {
@@ -57,6 +54,51 @@ namespace NetworkLib {
 				mGpuFloats.free();
 			}
 
+			void initialize(std::mt19937& random) {
+
+				std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
+
+				for (auto& [w, b] : mLayers) {
+
+					std::generate(w.begin(), w.end(), [&]() {
+						return reals(random);
+						});
+
+					std::generate(b.begin(), b.end(), [&]() {
+						return reals(random);
+						});
+				}
+
+				auto layersIota = std::views::iota(0ULL, mLayers.size());
+				std::for_each(std::execution::par, layersIota.begin(), layersIota.end(), [&](auto l) {
+
+					auto& layer = mLayers[l];
+
+					std::size_t inputSize = (l == 0) ?
+						mNetworkTemplate->mInputSize : mLayers[l - 1].mBias.mSize
+						, size = layer.mBias.mSize;
+
+					auto& w = layer.mWeights;
+
+					applyKHScale(inputSize, size, w);
+
+					});
+			}
+
+			void upload() {
+				mGpuFloats.mView.upload();
+			}
+		private:
+			NetworkTemplate* mNetworkTemplate = nullptr;
+
+			FloatSpace1 mGpuFloats;
+
+			struct Layer {
+				GpuView<Cpu::Tensor::View2> mWeights;
+				GpuView<Cpu::Tensor::View1> mBias;
+			};
+
+			std::vector<Layer> mLayers;
 		};
 
 	}
