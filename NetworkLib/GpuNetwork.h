@@ -9,7 +9,7 @@ namespace NetworkLib {
 
 		class Network {
 		public:
-			static void applyKHScale(std::size_t inputSize, std::size_t size, GpuView2 weights) {
+			static void applyKHScaleUniform(std::size_t inputSize, std::size_t size, GpuView2 weights) {
 
 				auto scale = std::sqrtf(6.0f / (inputSize + size));
 
@@ -92,7 +92,7 @@ namespace NetworkLib {
 
 					auto& w = layer.mWeights;
 
-					applyKHScale(inputSize, size, w);
+					applyKHScaleUniform(inputSize, size, w);
 
 					});
 			}
