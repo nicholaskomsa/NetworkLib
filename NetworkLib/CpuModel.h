@@ -9,9 +9,9 @@ namespace NetworkLib {
 
 		void exampleModel() {
 
-			LayersTemplate layersTemplate{ {748, 10}, {10, 10}, { 10, 1} };
+			NetworkTemplate networkTemplate{ 748, LayerTemplates{ 10, 10, 1} };
 
-			Network nn(&layersTemplate);
+			Network nn(&networkTemplate);
 
 			nn.create();
 

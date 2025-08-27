@@ -6,16 +6,21 @@ namespace NetworkLib {
 
 	namespace Cpu {
 
-
 		struct LayerTemplate {
+			std::size_t mNodeCount = 0;
 
-			std::size_t mInputSize = 0, mNodeCount = 0;
+			LayerTemplate(std::size_t nodeCount) : mNodeCount(nodeCount) {}
 		};
-		using LayersTemplate = std::vector<LayerTemplate>;
+		using LayerTemplates = std::vector<LayerTemplate>;
 
+		struct NetworkTemplate {
+			std::size_t mInputSize = 0;
+			LayerTemplates mLayerTemplates;
+		};
+		
 		class Network {
 
-			LayersTemplate* mLayerTemplates = nullptr;
+			NetworkTemplate* mNetworkTemplate = nullptr;
 
 			Tensor::FloatSpace1 mFloats;
 			
@@ -31,29 +36,35 @@ namespace NetworkLib {
 
 			Network() = default;
 
-			Network(LayersTemplate* layersTemplate)
-			: mLayerTemplates(layersTemplate) {}
+			Network(NetworkTemplate* networkTemplate)
+			: mNetworkTemplate(networkTemplate) {}
 
 			void create() {
 				
-				auto& layerTemplates = *mLayerTemplates;
+				auto& networkTemplate = *mNetworkTemplate;
+				std::span<LayerTemplate> layerTemplates = networkTemplate.mLayerTemplates;
 
 				mLayers.resize(layerTemplates.size());
 
-				std::size_t size = 0;
-				for (auto& [i, n] : layerTemplates)
-					size += i * n + n;
-
+				std::size_t size = 0, inputSize = networkTemplate.mInputSize;
+				for (auto [n] : layerTemplates ) {
+					size += inputSize * n + n;
+					inputSize = n;
+				}
+				
 				mFloats.resize(size);
 				auto begin = mFloats.mFloats.begin();
+				inputSize = networkTemplate.mInputSize;
 
 				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
-					const auto& [i, n] = layerTemplate;
+					const auto& [n] = layerTemplate;
 					auto& [w, b] = layer;
 
-					Tensor::advance(w, begin, i, n);
+					Tensor::advance(w, begin, inputSize, n);
 					Tensor::advance(b, begin, n);
+
+					inputSize = n;
 				}
 					
 
