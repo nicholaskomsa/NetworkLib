@@ -186,18 +186,18 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int r = w2.mView.extent(1);
-				int c = w2.mView.extent(0);
+				int c = w2.mView.extent(1);
+				int r = w2.mView.extent(0);
 				int k = i1.mSize;
 
-				if (c != k)
+				if (r != k)
 					throw std::logic_error("matrix * vec incorrect dimensions");
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_N,
-					r, c,
+					c, r,
 					&alpha,
-					w2.mGpu, r,
+					w2.mGpu, c,
 					i1.mGpu, 1,
 					&beta,
 					o1.mGpu, 1);
