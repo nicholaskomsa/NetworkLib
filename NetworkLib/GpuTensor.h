@@ -185,23 +185,24 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int m = w2.mView.extent(0);
-				int n = w2.mView.extent(1);
+				int r = w2.mView.extent(0);
+				int c = w2.mView.extent(1);
 				int k = i1.mSize;
 
-				if (n != k)
+				if (c != k)
 					throw std::logic_error("matrix * vec incorrect dimensions");
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_N,
-					m, n,
+					r, c,
 					&alpha,
-					w2.mGpu, m,
+					w2.mGpu, r,
 					i1.mGpu, 1,
 					&beta,
 					o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
+
 			void sync() {
 				Error::checkCuda(cudaDeviceSynchronize());
 			}
@@ -236,8 +237,11 @@ namespace NetworkLib {
 
 				sync();
 
-				vecMulMat(i, w, o);
-				vecAddVec(b, o);
+				auto forward = [&]() {
+					vecMulMat(i, w, o);
+					vecAddVec(b, o);
+					};
+				forward();
 
 				o.downloadAsync(getStream());
 
