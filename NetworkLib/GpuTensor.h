@@ -165,10 +165,10 @@ namespace NetworkLib {
 				Error::checkCuda(cudaStreamDestroy(mStream));
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
-			const cublasHandle_t& getBlas() {
+			const cublasHandle_t getBlas() {
 				return mHandle;
 			}
-			const cudaStream_t& getStream() {
+			const cudaStream_t getStream() {
 				return mStream;
 			}
 			operator cudaStream_t() {
