@@ -62,7 +62,6 @@ namespace NetworkLib {
 			}
 		};
 
-
 		template<Cpu::Tensor::ViewConcept ViewType>
 		struct GpuView {
 			ViewType mView;
