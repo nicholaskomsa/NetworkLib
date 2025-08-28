@@ -109,7 +109,7 @@ namespace NetworkLib {
 
 			GpuView<Cpu::Tensor::View1> mView;
 
-			void allocate(std::size_t size) {
+			void create(std::size_t size) {
 				
 				Error::checkCuda(cudaMallocHost(&mView.mCpu, size * sizeof(float)));
 				float* begin = mView.mCpu;
@@ -118,10 +118,11 @@ namespace NetworkLib {
 				Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), size * sizeof(float)));
 			}
 
-			void free() {
+			void destroy() {
 				freeHost();
 				freeGpu();
 			}
+
 			void freeHost() {
 				if (mView.mCpu)
 					Error::checkCuda(cudaFreeHost(mView.mCpu));
@@ -218,7 +219,7 @@ namespace NetworkLib {
 				std::size_t inputSize = 784
 					, biasSize = 10;
 
-				fs1.allocate(inputSize + inputSize * biasSize + biasSize * 2);
+				fs1.create(inputSize + biasSize * inputSize + biasSize * 2);
 
 				auto begin = fs1.begin();
 
@@ -245,16 +246,16 @@ namespace NetworkLib {
 
 				o.downloadAsync(getStream());
 
+				sync();
+
 				//cpu relu
 				for (auto& f : o)
 					f = std::max(f, 0.0f);
 
-				sync();
-
 				for (auto f : o)
 					std::print("{} ", f );
 
-				fs1.free();
+				fs1.destroy();
 
 				destroy();
 			}
