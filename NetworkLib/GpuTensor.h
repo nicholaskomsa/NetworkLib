@@ -186,8 +186,9 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int c = w2.mView.extent(1);
 				int r = w2.mView.extent(0);
+				int c = w2.mView.extent(1);
+
 				int k = i1.mSize;
 
 				if (r != k)
@@ -249,11 +250,10 @@ namespace NetworkLib {
 				sync();
 
 				//cpu relu
-				for (auto& f : o)
+				for (auto& f : o) {
 					f = std::max(f, 0.0f);
-
-				for (auto f : o)
-					std::print("{} ", f );
+					std::print("{} ", f);
+				}		
 
 				fs1.destroy();
 
