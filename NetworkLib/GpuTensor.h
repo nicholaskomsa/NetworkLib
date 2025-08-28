@@ -247,7 +247,7 @@ namespace NetworkLib {
 
 				//cpu relu
 				for (auto& f : o)
-					f = f > 0 ? f : 0;
+					f = std::max(f, 0.0f);
 
 				sync();
 
