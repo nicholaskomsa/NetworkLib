@@ -210,17 +210,17 @@ namespace NetworkLib {
 			void example() {
 
 				create();
-				Gpu::FloatSpace1 fs1;
 
-				std::size_t biasSize = 10
-					, inputSize = 784;
+				Gpu::FloatSpace1 fs1;
+				Gpu::GpuView<Cpu::Tensor::View1> i, b, o;
+				Gpu::GpuView<Cpu::Tensor::View2> w;
+
+				std::size_t inputSize = 784
+					, biasSize = 10;
 
 				fs1.allocate(inputSize + inputSize * biasSize + biasSize * 2);
 
 				auto begin = fs1.begin();
-
-				Gpu::GpuView<Cpu::Tensor::View2> w;
-				Gpu::GpuView<Cpu::Tensor::View1> i, b, o;
 
 				fs1.advance(i, begin, inputSize);
 				fs1.advance(w, begin, biasSize, inputSize);
@@ -241,11 +241,15 @@ namespace NetworkLib {
 				vecAddVec(b, o);
 
 				o.downloadAsync(getStream());
-				
+
+				//cpu relu
+				for (auto& f : o)
+					f = f > 0 ? f : 0;
+
 				sync();
 
 				for (auto f : o)
-					std::print("{} ", f);
+					std::print("{} ", f );
 
 				fs1.free();
 
