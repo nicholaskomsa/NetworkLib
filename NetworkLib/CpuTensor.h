@@ -92,7 +92,6 @@ namespace NetworkLib {
 				begin+= area(view);
 			}
 
-
 			template<ViewConcept ViewType>
 			std::vector<Dimension> getShape(const ViewType& view) {
 
@@ -155,7 +154,6 @@ namespace NetworkLib {
 				for (auto d : v2Shape)
 					std::print("{} ", d);
 			}
-
 		}
 	}
 }

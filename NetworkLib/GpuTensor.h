@@ -71,8 +71,13 @@ namespace NetworkLib {
 
 			GpuView() = default;
 			GpuView(ViewType view, float* gpu, float* cpu)
-				:mView(view), mGpu(gpu), mCpu(cpu)
-				, mSize(Cpu::Tensor::area(mView)) {
+				:mView(view), mGpu(gpu), mCpu(cpu){
+
+				setSize();
+			}
+
+			void setSize() {
+				mSize = Cpu::Tensor::area(mView);
 			}
 
 			void upload() {
@@ -106,10 +111,11 @@ namespace NetworkLib {
 			GpuView<Cpu::Tensor::View1> mView;
 
 			void allocate(std::size_t size) {
+				
 				Error::checkCuda(cudaMallocHost(&mView.mCpu, size * sizeof(float)));
 				float* begin = mView.mCpu;
 				Cpu::Tensor::advance(mView.mView, begin, size);
-
+				mView.mSize = size;
 				Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), size * sizeof(float)));
 			}
 
@@ -150,12 +156,6 @@ namespace NetworkLib {
 
 		class Environment {
 		public:
-
-		private:
-			cublasHandle_t mHandle;
-			cudaStream_t mStream;
-
-		public:
 			void create() {
 				Error::checkBlas(cublasCreate(&mHandle));
 				Error::checkCuda(cudaStreamCreate(&mStream));
@@ -165,50 +165,96 @@ namespace NetworkLib {
 				Error::checkCuda(cudaStreamDestroy(mStream));
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
-
-			void vecAddVec(const float* a, float* b, std::size_t size) const {
-				float alpha = 1.0f;
-				auto result = cublasSaxpy(mHandle, size, &alpha, a, 1, b, 1);
-				Error::checkBlas(result);
+			const cublasHandle_t& getBlas() {
+				return mHandle;
+			}
+			const cudaStream_t& getStream() {
+				return mStream;
+			}
+			operator cudaStream_t() {
+				return mStream;
 			}
 
+			void vecAddVec(const GpuView1& a1, GpuView1& o1){
+				std::size_t size = o1.mSize;
+				float alpha = 1.0f;
+				auto result = cublasSaxpy(mHandle, size, &alpha, a1.mGpu, 1, o1.mGpu, 1);
+				Error::checkBlas(result);
+			}
+			void vecMulMat(const GpuView1& i1, const GpuView2& w2, GpuView1& o1){
+
+				float alpha = 1.0f;
+				float beta = 0.0f;
+
+				int m = w2.mView.extent(0);
+				int n = w2.mView.extent(1);
+				int k = i1.mSize;
+
+				if (n != k)
+					throw std::logic_error("matrix * vec incorrect dimensions");
+
+				auto result = cublasSgemv(mHandle,
+					CUBLAS_OP_N,
+					m, n,
+					&alpha,
+					w2.mGpu, m,
+					i1.mGpu, 1,
+					&beta,
+					o1.mGpu, 1);
+				Error::checkBlas(result);
+			}
+			void sync() {
+				Error::checkCuda(cudaDeviceSynchronize());
+			}
+			
 			void example() {
 
 				create();
+				Gpu::FloatSpace1 fs1;
 
-				FloatSpace1 fs1;
-				fs1.allocate(200);
+				std::size_t biasSize = 10
+					, inputSize = 784;
+
+				fs1.allocate(inputSize + inputSize * biasSize + biasSize * 2);
 
 				auto begin = fs1.begin();
 
-				GpuView<Cpu::Tensor::View1> v1;
-				GpuView<Cpu::Tensor::View2> v2;
+				Gpu::GpuView<Cpu::Tensor::View2> w;
+				Gpu::GpuView<Cpu::Tensor::View1> i, b, o;
 
-				fs1.advance(v1, begin, 100);
-				fs1.advance(v2, begin, 10, 10);
+				fs1.advance(i, begin, inputSize);
+				fs1.advance(w, begin, biasSize, inputSize);
+				fs1.advance(b, begin, biasSize);
+				fs1.advance(o, begin, biasSize);
 
-				std::iota(fs1.begin(), fs1.end(), 0);
-				v2.mView[5, 5] = 16.333f;
+				std::fill(w.begin(), w.end(), 1);
+				std::fill(i.begin(), i.end(), 1);
+				std::fill(b.begin(), b.end(), 1);
 
-				//fs1.mView.upload();
-				v2.upload();
+				w.mView[0, 0] = 0;
 
-				std::fill(fs1.begin(), fs1.end(), 0);
+				fs1.mView.upload();
 
-				v1.downloadAsync(mStream);
-				v2.downloadAsync(mStream);
+				sync();
 
-				for (auto f : v1)
-					std::cout << f << ",";
+				vecMulMat(i, w, o);
+				vecAddVec(b, o);
+
+				o.downloadAsync(getStream());
 				
-				for(auto f: v2)
-					std::cout << f << ",";
+				sync();
+
+				for (auto f : o)
+					std::print("{} ", f);
 
 				fs1.free();
 
 				destroy();
 			}
 
+		private:
+			cublasHandle_t mHandle;
+			cudaStream_t mStream;
 		};
 	}
 }
