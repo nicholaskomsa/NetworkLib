@@ -79,13 +79,13 @@ namespace NetworkLib {
 				view = ViewType(&*begin);
 				std::advance(begin, area(view));
 			}
-			template<Cpu::Tensor::DynamicViewConcept ViewType, typename... Dimensions>
+			template<DynamicViewConcept ViewType, typename... Dimensions>
 			void advance(ViewType& view, float*& begin, Dimensions ...dimensions) {
 
 				view = ViewType(&*begin, std::array{ dimensions... });
 				begin+= area(view);
 			}
-			template<Cpu::Tensor::FixedViewConcept ViewType>
+			template<FixedViewConcept ViewType>
 			void advance(ViewType& view, float*& begin) {
 
 				view = ViewType(&*begin);

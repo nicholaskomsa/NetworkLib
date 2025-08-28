@@ -18,7 +18,6 @@ namespace NetworkLib {
 				Tensor::View1 mBias;
 			};
 
-			Tensor::FloatSpace1 mWeightsAndBias;
 			std::vector<Layer> mLayers;
 
 		public:
@@ -33,7 +32,7 @@ namespace NetworkLib {
 				auto& networkTemplate = *mNetworkTemplate;
 				std::span<LayerTemplate> layerTemplates = networkTemplate.mLayerTemplates;
 
-				auto& firstInputSize = networkTemplate.mInputSize;
+				const auto firstInputSize = networkTemplate.mInputSize;
 				std::size_t size = 0, inputSize = firstInputSize;
 				for (auto [n] : layerTemplates ) {
 					size += inputSize * n + n;
@@ -58,7 +57,6 @@ namespace NetworkLib {
 				}
 					
 			}
-
 
 		};
 	};
