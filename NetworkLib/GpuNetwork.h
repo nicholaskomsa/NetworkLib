@@ -33,7 +33,7 @@ namespace NetworkLib {
 					inputSize = n;
 				}
 
-				mGpuFloats.allocate(size);
+				mGpuFloats.create(size);
 
 				mLayers.resize(layerTemplates.size());
 
@@ -51,7 +51,7 @@ namespace NetworkLib {
 				}
 			}
 			void destroy() {
-				mGpuFloats.free();
+				mGpuFloats.destroy();
 			}
 
 			void initialize(std::mt19937& random) {

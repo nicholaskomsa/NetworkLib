@@ -186,8 +186,8 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int r = w2.mView.extent(0);
-				int c = w2.mView.extent(1);
+				int r = w2.mView.extent(1);
+				int c = w2.mView.extent(0);
 				int k = i1.mSize;
 
 				if (c != k)
@@ -224,7 +224,7 @@ namespace NetworkLib {
 				auto begin = fs1.begin();
 
 				fs1.advance(i, begin, inputSize);
-				fs1.advance(w, begin, biasSize, inputSize);
+				fs1.advance(w, begin, inputSize, biasSize);
 				fs1.advance(b, begin, biasSize);
 				fs1.advance(o, begin, biasSize);
 
@@ -232,7 +232,7 @@ namespace NetworkLib {
 				std::fill(i.begin(), i.end(), 1);
 				std::fill(b.begin(), b.end(), 1);
 
-				w.mView[0, 0] = 0;
+				w.mView[100, 9] = 0;
 
 				fs1.mView.upload();
 
