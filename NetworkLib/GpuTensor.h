@@ -62,7 +62,10 @@ namespace NetworkLib {
 			}
 		};
 
-		template<Cpu::Tensor::ViewConcept ViewType>
+		template<typename T>
+		concept ViewConcept = Cpu::Tensor::ViewConcept<T>;
+
+		template<ViewConcept ViewType>
 		struct GpuView {
 			ViewType mView;
 			float* mGpu = nullptr, * mCpu = nullptr;
@@ -107,7 +110,7 @@ namespace NetworkLib {
 
 		struct FloatSpace1 {
 
-			GpuView<Cpu::Tensor::View1> mView;
+			GpuView1 mView;
 
 			void create(std::size_t size) {
 				
@@ -134,7 +137,7 @@ namespace NetworkLib {
 				mView.mGpu = nullptr;
 			}
 
-			template<Cpu::Tensor::ViewConcept ViewType>
+			template<ViewConcept ViewType>
 			float* getGpu(ViewType& view) {
 				float* phost = mView.mCpu;
 				float* vhost = view.data_handle();
@@ -145,7 +148,7 @@ namespace NetworkLib {
 			float* begin() { return mView.begin(); }
 			float* end() { return mView.end(); }
 
-			template<Cpu::Tensor::ViewConcept ViewType, typename... Dimensions>
+			template<ViewConcept ViewType, typename... Dimensions>
 			void advance(GpuView<ViewType>& gpuView, float*& begin, Dimensions&&...dimensions) {
 				ViewType view;
 				auto source = begin;
@@ -181,7 +184,7 @@ namespace NetworkLib {
 				auto result = cublasSaxpy(mHandle, size, &alpha, a1.mGpu, 1, o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
-			void matMulVec(const GpuView1& i1, const GpuView2& w2, GpuView1& o1){
+			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1){
 
 				float alpha = 1.0f;
 				float beta = 0.0f;
@@ -214,8 +217,8 @@ namespace NetworkLib {
 				create();
 
 				Gpu::FloatSpace1 fs1;
-				Gpu::GpuView<Cpu::Tensor::View1> i, b, o;
-				Gpu::GpuView<Cpu::Tensor::View2> w;
+				Gpu::GpuView1 i, b, o;
+				Gpu::GpuView2 w;
 
 				std::size_t inputSize = 784
 					, biasSize = 10;
@@ -240,7 +243,7 @@ namespace NetworkLib {
 				sync();
 
 				auto forward = [&]() {
-					matMulVec(i, w, o);
+					matMulVec(w, i, o);
 					vecAddVec(b, o);
 					};
 				forward();
