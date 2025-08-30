@@ -181,7 +181,7 @@ namespace NetworkLib {
 				auto result = cublasSaxpy(mHandle, size, &alpha, a1.mGpu, 1, o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
-			void vecMulMat(const GpuView1& i1, const GpuView2& w2, GpuView1& o1){
+			void matMulVec(const GpuView1& i1, const GpuView2& w2, GpuView1& o1){
 
 				float alpha = 1.0f;
 				float beta = 0.0f;
@@ -240,7 +240,7 @@ namespace NetworkLib {
 				sync();
 
 				auto forward = [&]() {
-					vecMulMat(i, w, o);
+					matMulVec(i, w, o);
 					vecAddVec(b, o);
 					};
 				forward();
