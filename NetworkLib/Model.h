@@ -6,7 +6,7 @@
 namespace NetworkLib {
 
 
-	void exampleModel() {
+	static void exampleModel() {
 
 		std::mt19937 random;
 		Gpu::Environment gpu;
@@ -23,6 +23,7 @@ namespace NetworkLib {
 
 		Gpu::FloatSpace1 trainingData;
 		trainingData.create(784);
+		std::fill(trainingData.begin(), trainingData.end(), 1);
 
 		gnn.forward(gpu, trainingData.mView);
 

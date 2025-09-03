@@ -34,7 +34,7 @@ namespace NetworkLib {
 
 				const auto firstInputSize = networkTemplate.mInputSize;
 				std::size_t size = 0, inputSize = firstInputSize;
-				for (auto [n] : layerTemplates ) {
+				for (auto [n, af] : layerTemplates ) {
 					size += inputSize * n + n;
 					inputSize = n;
 				}
@@ -47,7 +47,7 @@ namespace NetworkLib {
 				inputSize = firstInputSize;
 				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
-					const auto& [n] = layerTemplate;
+					const auto& [n, af] = layerTemplate;
 					auto& [w, b] = layer;
 
 					Tensor::advance(w, begin, inputSize, n);

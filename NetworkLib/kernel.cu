@@ -5,7 +5,9 @@
 
 #include "kernel.h"
 
-__global__ void krelu(float* outputs, float* activations, int size) {
+namespace Kernel = NetworkLib::Gpu::Kernel;
+
+__global__ void cuRelu(float* outputs, float* activations, int size) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < size) {
@@ -13,8 +15,8 @@ __global__ void krelu(float* outputs, float* activations, int size) {
     }
 }
 
-void NetworkLib::Gpu::Kernel::relu(cudaStream_t stream, float* outputs, float* activations, int size) {
+void Kernel::relu(cudaStream_t stream, float* outputs, float* activations, int size) {
     int threadsPerBlock = 64;
     int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
-    krelu <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(outputs, activations, size);
+    cuRelu <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(outputs, activations, size);
 }

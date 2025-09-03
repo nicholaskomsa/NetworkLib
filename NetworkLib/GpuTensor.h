@@ -6,6 +6,7 @@
 #include <source_location>
 
 #include "CpuTensor.h"
+#include "NetworkTemplate.h"
 
 namespace NetworkLib {
 
@@ -207,6 +208,18 @@ namespace NetworkLib {
 				Error::checkBlas(result);
 			}
 			void relu(const GpuView1& o1, GpuView1& a1);
+			bool activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
+				switch( af) {
+				case LayerTemplate::ActivationFunction::ReLU:
+					relu(o1, a1);
+					return true;
+				case LayerTemplate::ActivationFunction::None:
+					return false;
+				default:
+					throw std::logic_error("unknown activation function");
+				}
+			}
+			
 			void sync() {
 				Error::checkCuda(cudaDeviceSynchronize());
 			}
@@ -237,7 +250,7 @@ namespace NetworkLib {
 				std::fill(i.begin(), i.end(), 1);
 				std::fill(b.begin(), b.end(), 1);
 
-				//w.mView[783, 9] = 0;
+				w.mView[783, 9] = 0;
 
 				fs1.mView.upload();
 

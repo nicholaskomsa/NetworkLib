@@ -2,6 +2,7 @@
 
 #include <random>
 
+#include "Parallel.h"
 #include "GpuTensor.h"
 #include "NetworkTemplate.h"
 
@@ -29,7 +30,8 @@ namespace NetworkLib {
 
 				auto& firstInputSize = networkTemplate.mInputSize;
 				std::size_t size = 0, inputSize = firstInputSize;
-				for (auto [n] : layerTemplates) {
+				for (auto& layerTemplate : layerTemplates) {
+					const auto n = layerTemplate.mNodeCount;
 					size += inputSize * n + n * 3;
 					inputSize = n;
 				}
@@ -42,13 +44,15 @@ namespace NetworkLib {
 				inputSize = firstInputSize;
 				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
-					const auto& [n] = layerTemplate;
-					auto& [w, b, o, a] = layer;
+					const auto n = layerTemplate.mNodeCount;
+					auto& [w, b, o, a, af] = layer;
 
 					mGpuFloats.advance(w, begin, inputSize, n);
 					mGpuFloats.advance(b, begin, n);
 					mGpuFloats.advance(o, begin, n);
 					mGpuFloats.advance(a, begin, n);
+
+					af = layerTemplate.mActivationFunction;
 
 					inputSize = n;
 				}
@@ -61,7 +65,10 @@ namespace NetworkLib {
 
 				std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
 
-				for (auto& [w, b, o, a] : mLayers) {
+				for (auto& layer : mLayers) {
+
+					auto& w = layer.mWeights;
+					auto& b = layer.mBias;
 
 					std::generate(w.begin(), w.end(), [&]() {
 						return reals(random);
@@ -80,23 +87,26 @@ namespace NetworkLib {
 			}
 
 			void applyKHScales() {
-				auto layersIota = std::views::iota(0ULL, mLayers.size());
-				std::for_each(std::execution::par, layersIota.begin(), layersIota.end(), [&](auto l) {
 
-					auto& layer = mLayers[l];
+				Parallel parallel(mLayers.size());
+				parallel([&](auto& section) {
 
-					std::size_t inputSize
-						, size = layer.mBias.mSize;
+					for (auto l : section.mIotaView) {
 
-					if (l == 0)
-						inputSize = mNetworkTemplate->mInputSize;
-					else
-						inputSize = mLayers[l - 1].mBias.mSize;
+						auto& layer = mLayers[l];
 
-					auto& w = layer.mWeights;
+						std::size_t inputSize
+							, size = layer.mBias.mSize;
 
-					applyKHScaleUniform(inputSize, size, w);
+						if (l == 0)
+							inputSize = mNetworkTemplate->mInputSize;
+						else
+							inputSize = mLayers[l - 1].mBias.mSize;
 
+						auto& w = layer.mWeights;
+
+						applyKHScaleUniform(inputSize, size, w);
+					}
 					});
 			}
 
@@ -104,18 +114,23 @@ namespace NetworkLib {
 				
 				const GpuView1* i = &input;
 
-				for( auto& layer : mLayers) {
+			
+				for( auto& layer : mLayers ) {
 					
+					const auto& w = layer.mWeights;
+					const auto& b = layer.mBias;
 					auto& o = layer.mOutputs;
-					auto& w = layer.mWeights;
-					auto& b = layer.mBias;
 					auto& a = layer.mActivations;
 
 					env.matMulVec(w, *i, o);
 					env.vecAddVec(b, o);
-					env.relu(o, a);
 
-					i = &a;
+					const auto& af = layer.mActivationFunction;
+
+					if( env.activationFunction(af,o,a))
+						i = &a;
+					else
+						i = &o;
 				}
 			}
 
@@ -129,6 +144,7 @@ namespace NetworkLib {
 				GpuView<Cpu::Tensor::View1> mBias;
 				GpuView<Cpu::Tensor::View1> mOutputs;
 				GpuView<Cpu::Tensor::View1> mActivations;
+				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
 			};
 
 			std::vector<Layer> mLayers;
