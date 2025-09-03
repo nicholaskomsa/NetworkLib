@@ -91,6 +91,7 @@
   <ItemGroup>
     <ClInclude Include="Algorithms.h" />
     <ClInclude Include="GpuTensor.h" />
+    <ClInclude Include="kernel.h" />
     <ClInclude Include="Model.h" />
     <ClInclude Include="CpuNetwork.h" />
     <ClInclude Include="CpuTensor.h" />
@@ -111,6 +112,7 @@
     <ClCompile Include="Gpt2Forward.cpp" />
     <ClCompile Include="Gpt2Translator.cpp" />
     <ClCompile Include="Gpt2Tensor.cpp" />
+    <ClCompile Include="GpuTensor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />

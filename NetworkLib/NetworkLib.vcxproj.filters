@@ -51,6 +51,9 @@
     <ClInclude Include="GpuTensor.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="kernel.h">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">
@@ -76,6 +79,9 @@
     </ClCompile>
     <ClCompile Include="FloatSpaceConvert.cpp">
       <Filter>Algorithms</Filter>
+    </ClCompile>
+    <ClCompile Include="GpuTensor.cpp">
+      <Filter>Network</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

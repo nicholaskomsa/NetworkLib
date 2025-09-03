@@ -8,11 +8,12 @@ namespace NetworkLib {
 
 	void exampleModel() {
 
+		std::mt19937 random;
 		Gpu::Environment gpu;
-		gpu.example();
-
-		/*
+		//gpu.example();
 		gpu.create();
+
+		NetworkTemplate networkTemplate = { 784, {100, 50, 10} };
 
 		Gpu::Network gnn(&networkTemplate);
 		gnn.create();
@@ -20,10 +21,15 @@ namespace NetworkLib {
 		gnn.initialize(random);
 		gnn.upload();
 
+		Gpu::FloatSpace1 trainingData;
+		trainingData.create(784);
+
+		gnn.forward(gpu, trainingData.mView);
+
 		gnn.destroy();
 		
 		gpu.destroy();
-		*/
+		
 	}
 	
 }

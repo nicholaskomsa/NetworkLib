@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ranges>
+#include <print>
 #include <vector>
 #include <mdspan>
 #include <concepts>
@@ -118,7 +120,7 @@ namespace NetworkLib {
 			using FloatSpace2 = FloatSpace<View2>;
 			using FloatSpace3 = FloatSpace<View3>;
 
-			void example() {
+			static void example() {
 
 				//namespace CpuTensor = NetworkLib::Cpu::Tensor;
 

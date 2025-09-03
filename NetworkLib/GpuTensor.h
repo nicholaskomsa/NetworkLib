@@ -89,7 +89,7 @@ namespace NetworkLib {
 					mSize * sizeof(float),
 					cudaMemcpyHostToDevice));
 			}
-			void downloadAsync(const cudaStream_t& stream) {
+			void downloadAsync(cudaStream_t stream) {
 				Error::checkCuda(cudaMemcpyAsync(
 					mCpu,
 					mGpu,
@@ -115,8 +115,7 @@ namespace NetworkLib {
 			void create(std::size_t size) {
 				
 				Error::checkCuda(cudaMallocHost(&mView.mCpu, size * sizeof(float)));
-				float* begin = mView.mCpu;
-				Cpu::Tensor::advance(mView.mView, begin, size);
+				mView.mView = Cpu::Tensor::View1(mView.mCpu, size);
 				mView.mSize = size;
 				Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), size * sizeof(float)));
 			}
@@ -168,10 +167,10 @@ namespace NetworkLib {
 				Error::checkCuda(cudaStreamDestroy(mStream));
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
-			const cublasHandle_t getBlas() {
+			cublasHandle_t getBlas() {
 				return mHandle;
 			}
-			const cudaStream_t getStream() {
+			cudaStream_t getStream() {
 				return mStream;
 			}
 			operator cudaStream_t() {
@@ -207,23 +206,24 @@ namespace NetworkLib {
 					o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
-
+			void relu(const GpuView1& o1, GpuView1& a1);
 			void sync() {
 				Error::checkCuda(cudaDeviceSynchronize());
 			}
 			
-			void example() {
+			static void example() {
 
-				create();
+				Environment env;
+				env.create();
 
 				Gpu::FloatSpace1 fs1;
-				Gpu::GpuView1 i, b, o;
+				Gpu::GpuView1 i, b, o, a;
 				Gpu::GpuView2 w;
 
 				std::size_t inputSize = 784
 					, biasSize = 10;
 
-				fs1.create(inputSize + biasSize * inputSize + biasSize * 2);
+				fs1.create(inputSize + inputSize * biasSize + biasSize * 3);
 
 				auto begin = fs1.begin();
 
@@ -231,36 +231,35 @@ namespace NetworkLib {
 				fs1.advance(w, begin, inputSize, biasSize);
 				fs1.advance(b, begin, biasSize);
 				fs1.advance(o, begin, biasSize);
+				fs1.advance(a, begin, biasSize);
 
 				std::fill(w.begin(), w.end(), 1);
 				std::fill(i.begin(), i.end(), 1);
 				std::fill(b.begin(), b.end(), 1);
 
-				w.mView[100, 9] = 0;
+				//w.mView[783, 9] = 0;
 
 				fs1.mView.upload();
 
-				sync();
+				env.sync();
 
 				auto forward = [&]() {
-					matMulVec(w, i, o);
-					vecAddVec(b, o);
+					env.matMulVec(w, i, o);
+					env.vecAddVec(b, o);
+					env.relu(o, a);
 					};
 				forward();
 
-				o.downloadAsync(getStream());
+				o.downloadAsync(env.getStream());
 
-				sync();
+				env.sync();
 
-				//cpu relu
-				for (auto& f : o) {
-					f = std::max(f, 0.0f);
-					std::print("{} ", f);
-				}		
-
+				for (auto& af : a) 
+					std::print("{} ", af);
+				
 				fs1.destroy();
 
-				destroy();
+				env.destroy();
 			}
 
 		private:
