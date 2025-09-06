@@ -188,8 +188,10 @@ namespace NetworkLib {
 				Error::checkBlas(result);
 			}
 			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
-				//cuda and mdspan are in C++ style of row-major
-				//but cublas wants Fortran style, col-major,
+				//cuda is in C++ style of row-major
+				//cublas wants Fortran style, col-major,
+				//mdspan has been configured to be layout_left - cublas correct
+
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
