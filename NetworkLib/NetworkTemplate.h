@@ -13,10 +13,11 @@ namespace NetworkLib {
 			ReLU,
 			Sigmoid,
 			Tanh,
-			Softmax
-		} mActivationFunction = ActivationFunction::ReLU;
+			Softmax,
+			SoftmaxCrossEntropy,
+		} mActivationFunction = ActivationFunction::None;
 
-		LayerTemplate(std::size_t nodeCount) : mNodeCount(nodeCount) {}
+		LayerTemplate(std::size_t nodeCount, ActivationFunction af) : mNodeCount(nodeCount), mActivationFunction(af){}
 	};
 	using LayerTemplates = std::vector<LayerTemplate>;
 

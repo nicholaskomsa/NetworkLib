@@ -178,14 +178,18 @@ namespace NetworkLib {
 				return mStream;
 			}
 
+			void vecScale( GpuView1& a1, float scale) {
+				cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
+			}
 			void vecAddVec(const GpuView1& a1, GpuView1& o1){
 				std::size_t size = o1.mSize;
 				float alpha = 1.0f;
 				auto result = cublasSaxpy(mHandle, size, &alpha, a1.mGpu, 1, o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
-			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1){
-
+			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
+				//cuda and mdspan are in C++ style of row-major
+				//but cublas wants Fortran style, col-major,
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
@@ -194,32 +198,82 @@ namespace NetworkLib {
 
 				int k = i1.mSize;
 
-				if (r != k)
-					throw std::logic_error("matrix * vec incorrect dimensions");
+				//if (c != k)
+			//		throw std::logic_error("matrix * vec incorrect dimensions");
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_N,
-					c, r,
+					r, c,
 					&alpha,
-					w2.mGpu, c,
+					w2.mGpu, r,
 					i1.mGpu, 1,
 					&beta,
 					o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
+			void matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1){
+				
+				float alpha = 1.0f;
+				float beta = 0.0f;
+
+				int r = w2.mView.extent(0);
+				int c = w2.mView.extent(1);
+
+				int k = i1.mSize;
+				
+				auto result = cublasSgemv(mHandle,
+					CUBLAS_OP_T,
+					r, c,
+					&alpha,
+					w2.mGpu, r,
+					i1.mGpu, 1,
+					&beta,
+					o1.mGpu, 1);
+				Error::checkBlas(result);
+			}
+	
 			void relu(const GpuView1& o1, GpuView1& a1);
+			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
+			void softmax(const GpuView1& o1, GpuView1& a1);
+			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
+			void updateWeights(Environment& env, const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
+
 			bool activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
+				
+				using ActivationFunction = LayerTemplate::ActivationFunction;
 				switch( af) {
-				case LayerTemplate::ActivationFunction::ReLU:
+				case ActivationFunction::ReLU:
 					relu(o1, a1);
 					return true;
-				case LayerTemplate::ActivationFunction::None:
+				case ActivationFunction::SoftmaxCrossEntropy:
+					softmax(o1, a1);
+					return true;
+				case ActivationFunction::None:
 					return false;
-				default:
-					throw std::logic_error("unknown activation function");
+				}
+				return false;
+			}
+			bool activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
+
+				using ActivationFunction = LayerTemplate::ActivationFunction;
+				switch (af) {
+				case ActivationFunction::ReLU:
+					applyReluPrime(a1, p1);
+					return true;
+				case ActivationFunction::None:
+					return false;
+				}
+				return false;
+			}
+			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, GpuView1& sought, GpuView1& p1) {
+				switch (af) {
+				case LayerTemplate::ActivationFunction::None:
+				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
+					//softmax-cross-entropy is a diff
+					diff(desired, sought, p1);
+					return;
 				}
 			}
-			
 			void sync() {
 				Error::checkCuda(cudaDeviceSynchronize());
 			}
@@ -230,18 +284,19 @@ namespace NetworkLib {
 				env.create();
 
 				Gpu::FloatSpace1 fs1;
-				Gpu::GpuView1 i, b, o, a;
+				Gpu::GpuView1 i, i2, b, o, a;
 				Gpu::GpuView2 w;
 
-				std::size_t inputSize = 784
-					, biasSize = 10;
+				std::size_t inputSize = 3
+					, biasSize = 2;
 
-				fs1.create(inputSize + inputSize * biasSize + biasSize * 3);
+				fs1.create(inputSize*2 + inputSize * biasSize + biasSize * 3);
 
 				auto begin = fs1.begin();
 
 				fs1.advance(i, begin, inputSize);
-				fs1.advance(w, begin, inputSize, biasSize);
+				fs1.advance(i2, begin, inputSize);
+				fs1.advance(w, begin, biasSize, inputSize);
 				fs1.advance(b, begin, biasSize);
 				fs1.advance(o, begin, biasSize);
 				fs1.advance(a, begin, biasSize);
@@ -250,25 +305,38 @@ namespace NetworkLib {
 				std::fill(i.begin(), i.end(), 1);
 				std::fill(b.begin(), b.end(), 1);
 
-				w.mView[783, 9] = 0;
+				//for( auto i : std::views::iota(0, 5))
+				//w.mView[1, i] = 0;
+				for( auto i : std::views::iota(0ULL, o.mSize))
+					o.mView[i] = 1;
 
 				fs1.mView.upload();
 
 				env.sync();
 
 				auto forward = [&]() {
-					env.matMulVec(w, i, o);
-					env.vecAddVec(b, o);
-					env.relu(o, a);
+
+
+					//env.matMulVec(w, i, o);
+					//env.vecAddVec(b, o);
+					env.matTMulVec(w, o, i2);
+					
+					//env.softmax(o, a);
 					};
 				forward();
 
+				i.downloadAsync(env.getStream());
+				i2.downloadAsync(env.getStream());
 				o.downloadAsync(env.getStream());
+				a.downloadAsync(env.getStream());
 
 				env.sync();
 
-				for (auto& af : a) 
-					std::print("{} ", af);
+				for (const auto& of :	i2)
+					std::print("{} ", of);
+
+				//for (const auto& [of, af] : std::views::zip(o,a)) 
+				//	std::print("{} {}; ", of, af);
 				
 				fs1.destroy();
 
