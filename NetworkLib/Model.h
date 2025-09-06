@@ -78,17 +78,13 @@ namespace NetworkLib {
 				gnnOutput->downloadAsync(gpu.getStream());
 				gpu.sync();
 
-				std::print("\nseen: ");
-				for (auto f : sample.first)
-					std::print("{}, ", f);
-				std::print("\ndesired: ");
-				for (auto f : sample.second)
-					std::print("{}, ", f);
-				std::print("\nsought: ");
-				for (auto f : *gnnOutput)
-					std::print("{}, ", f);
-
-
+				std::print("\nseen: {}"
+							"\ndesired: {}"
+							"\nsought: {}"
+					, sample.first
+					, sample.second
+					, *gnnOutput
+					);
 				});
 		}
 

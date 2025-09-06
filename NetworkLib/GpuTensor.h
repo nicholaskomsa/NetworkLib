@@ -5,6 +5,8 @@
 #include <cuda_profiler_api.h>
 #include <source_location>
 
+#include <sstream>
+
 #include "CpuTensor.h"
 #include "NetworkTemplate.h"
 
@@ -320,11 +322,9 @@ namespace NetworkLib {
 				auto forward = [&]() {
 
 
-					//env.matMulVec(w, i, o);
-					//env.vecAddVec(b, o);
-					env.matTMulVec(w, o, i2);
-					
-					//env.softmax(o, a);
+					env.matMulVec(w, i, o);
+					env.vecAddVec(b, o);
+					env.softmax(o, a);
 					};
 				forward();
 
