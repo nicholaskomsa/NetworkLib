@@ -200,8 +200,8 @@ namespace NetworkLib {
 
 				int k = i1.mSize;
 
-				//if (c != k)
-			//		throw std::logic_error("matrix * vec incorrect dimensions");
+				if (c != k)
+					throw std::logic_error("matrix * vec incorrect dimensions");
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_N,
@@ -223,6 +223,9 @@ namespace NetworkLib {
 
 				int k = i1.mSize;
 				
+				if (r != k)
+					throw std::logic_error("matrix * vec incorrect dimensions");
+
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_T,
 					r, c,
