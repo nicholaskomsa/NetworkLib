@@ -42,7 +42,7 @@ namespace NetworkLib {
 
 			//values to map x, y = x2, y2 == {x ,y, x2, y2 }
 			std::vector<float> sample1 = { 5, 5, 0.5, 0.5 }
-			, sample2 = { 1, 7, 7, 1 };
+				, sample2 = { 1, 7, 7, 1 };
 
 			auto generateSample = [&](const std::vector<float>& sample, GpuSample& gpuSample) {
 
@@ -64,15 +64,13 @@ namespace NetworkLib {
 
 		gpu.sync();
 
-		Gpu::GpuView1* gnnOutput = nullptr;
-
 		for (auto generation : std::views::iota(0ULL, 1000ULL)) {
 
 			TimeAverage<milliseconds> trainTime;
 			trainTime.accumulateTime([&]() {
 
 				auto& sample = trainingSamples[generation % trainingSamples.size()];
-				gnnOutput = &gnn.forward(gpu, sample.first);
+				Gpu::GpuView1* gnnOutput = &gnn.forward(gpu, sample.first);
 				gnn.backward(gpu, sample.first, sample.second, 0.0020f);
 
 				gnnOutput->downloadAsync(gpu.getStream());

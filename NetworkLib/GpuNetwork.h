@@ -177,7 +177,7 @@ namespace NetworkLib {
 				GpuView1& forward(Environment& env, const GpuView1& input) {
 
 					env.matMulVec(mWeights, input, mOutputs);
-					//env.vecAddVec(mBias, mOutputs);
+					env.vecAddVec(mBias, mOutputs);
 					if (env.activationFunction(mActivationFunction, mOutputs, mActivations))
 						return mActivations;
 					else
