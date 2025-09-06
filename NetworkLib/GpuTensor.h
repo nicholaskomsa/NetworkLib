@@ -106,6 +106,13 @@ namespace NetworkLib {
 			float* end() {
 				return mCpu + mSize;
 			}
+
+			const float* cbegin() const{
+				return mCpu;
+			}
+			const float* cend() const{
+				return mCpu + mSize;
+			}
 		};
 
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;
@@ -243,32 +250,32 @@ namespace NetworkLib {
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
 			void updateWeights(Environment& env, const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
 
-			bool activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
+			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
 				
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				switch( af) {
 				case ActivationFunction::ReLU:
 					relu(o1, a1);
-					return true;
+					break;
 				case ActivationFunction::SoftmaxCrossEntropy:
 					softmax(o1, a1);
-					return true;
+					break;
 				case ActivationFunction::None:
-					return false;
+					cublasScopy(mHandle, o1.mSize, o1.mGpu, 1, a1.mGpu, 1);
+					break;
 				}
-				return false;
 			}
-			bool activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
+			void activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				switch (af) {
 				case ActivationFunction::ReLU:
 					applyReluPrime(a1, p1);
-					return true;
+					break;
 				case ActivationFunction::None:
-					return false;
+					cublasScopy(mHandle, a1.mSize, a1.mGpu, 1, p1.mGpu, 1);
+					break;
 				}
-				return false;
 			}
 			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, GpuView1& sought, GpuView1& p1) {
 				switch (af) {

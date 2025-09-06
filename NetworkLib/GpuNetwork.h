@@ -135,8 +135,7 @@ namespace NetworkLib {
 
 				auto af = back.mActivationFunction;
 
-				auto& sought =(af == LayerTemplate::ActivationFunction::None)? 
-					back.mOutputs: back.mActivations;
+				auto& sought = back.mActivations;
 				auto& p1 = back.mPrimes;
 				
 				//output layer makes a comparison between desired and sought
@@ -158,18 +157,22 @@ namespace NetworkLib {
 					env.activationFunctionPrime(af, o1, p1);
 				}
 
-				for (auto l : std::views::iota(0ULL, mLayers.size())) {
+				auto updateWeights = [&]() {
+					for (auto l : std::views::iota(0ULL, mLayers.size())) {
 
-					auto& layer = mLayers[l];
+						auto& layer = mLayers[l];
 
-					GpuView1* input = nullptr;
-					if( l == 0)
-						input = &seen;
-					else
-						input = &mLayers[l - 1].mActivations;
+						GpuView1* input = nullptr;
+						if (l == 0)
+							input = &seen;
+						else
+							input = &mLayers[l - 1].mActivations;
 
-					env.updateWeights(env, *input, layer.mWeights, layer.mPrimes, learnRate);
-				}
+						env.updateWeights(env, *input, layer.mWeights, layer.mPrimes, learnRate);
+					}
+					};
+				updateWeights();
+			
 			}
 	
 			struct Layer {
@@ -178,10 +181,9 @@ namespace NetworkLib {
 
 					env.matMulVec(mWeights, input, mOutputs);
 					env.vecAddVec(mBias, mOutputs);
-					if (env.activationFunction(mActivationFunction, mOutputs, mActivations))
-						return mActivations;
-					else
-						return mOutputs;
+					env.activationFunction(mActivationFunction, mOutputs, mActivations);
+
+					return mActivations;
 				}
 
 				GpuView<Cpu::Tensor::View2> mWeights;
