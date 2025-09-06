@@ -197,7 +197,6 @@ namespace NetworkLib {
 
 				int r = w2.mView.extent(0);
 				int c = w2.mView.extent(1);
-
 				int k = i1.mSize;
 
 				if (c != k)
@@ -220,7 +219,6 @@ namespace NetworkLib {
 
 				int r = w2.mView.extent(0);
 				int c = w2.mView.extent(1);
-
 				int k = i1.mSize;
 				
 				if (r != k)
