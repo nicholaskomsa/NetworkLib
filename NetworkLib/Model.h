@@ -40,6 +40,18 @@ namespace NetworkLib {
 			return gpuSamples;
 		}
 
+		GpuSamples createXORSamples(Gpu::FloatSpace1& gpuSampleSpace) {
+
+			const std::vector<Sample> samples = {
+				{{0,0}, {1,0}},
+				{{0,1}, {0,1}},
+				{{1,0}, {0,1}},
+				{{1,1}, {1,0}},
+			};
+
+			return createGPUSamples(gpuSampleSpace, samples, 2, 2);
+			};
+
 		static void modelXOR() {
 
 			std::mt19937 random;
@@ -63,18 +75,6 @@ namespace NetworkLib {
 
 			gnn.initialize(random);
 			gnn.upload();
-
-			auto createXORSamples = [&](auto& sampleSpace) {
-
-				const std::vector<Sample> samples = {
-					{{0,0}, {1,0}},
-					{{0,1}, {0,1}},
-					{{1,0}, {0,1}},
-					{{1,1}, {1,0}},
-				};
-
-				return createGPUSamples(sampleSpace, samples, inputSize, outputSize);
-				};
 
 			Gpu::FloatSpace1 sampleSpace;
 			GpuSamples trainingSamples = createXORSamples(sampleSpace);
