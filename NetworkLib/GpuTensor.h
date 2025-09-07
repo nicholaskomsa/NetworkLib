@@ -92,7 +92,7 @@ namespace NetworkLib {
 					mSize * sizeof(float),
 					cudaMemcpyHostToDevice));
 			}
-			void downloadAsync(cudaStream_t stream) {
+			void downloadAsync(cudaStream_t stream) const {
 				Error::checkCuda(cudaMemcpyAsync(
 					mCpu,
 					mGpu,
@@ -106,11 +106,10 @@ namespace NetworkLib {
 			float* end() {
 				return mCpu + mSize;
 			}
-
-			const float* cbegin() const{
+			const float* begin() const{
 				return mCpu;
 			}
-			const float* cend() const{
+			const float* end() const {
 				return mCpu + mSize;
 			}
 		};
@@ -319,8 +318,8 @@ namespace NetworkLib {
 
 				//for( auto i : std::views::iota(0, 5))
 				//w.mView[1, i] = 0;
-				for( auto i : std::views::iota(0ULL, o.mSize))
-					o.mView[i] = 1;
+				//for( auto i : std::views::iota(0ULL, o.mSize))
+				//	o.mView[i] = 1;
 
 				fs1.mView.upload();
 

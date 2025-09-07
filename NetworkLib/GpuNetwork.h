@@ -120,49 +120,58 @@ namespace NetworkLib {
 					});
 			}
 
-			GpuView1& forward(Environment& env, GpuView1& seen) {
+			const GpuView1& forward(Environment& env, const GpuView1& seen) {
 				
-				GpuView1* i = &seen;
+				const GpuView1* i = &seen;
 
 				for( auto& layer : mLayers ) 
 					i = &layer.forward(env, *i);
 				
 				return *i;
 			}
-			void backward(Environment& env, GpuView1& seen, GpuView1& desired, float learnRate) {
-;
-				auto& back = mLayers.back();
+			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, float learnRate) {
 
-				auto af = back.mActivationFunction;
+				auto backLayer = [&]() {
+					auto& back = mLayers.back();
 
-				auto& sought = back.mActivations;
-				auto& p1 = back.mPrimes;
+					auto af = back.mActivationFunction;
+
+					auto& sought = back.mActivations;
+					auto& p1 = back.mPrimes;
+
+					//output layer makes a comparison between desired and sought
+					env.errorFunction(af, desired, sought, p1);
+					};
+
+				backLayer();
+
+				auto hiddenLayers = [&]() {
+
+					for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
+
+						auto& layer = mLayers[l];
+						auto& nextLayer = mLayers[l + 1];
+
+						auto& p1 = layer.mPrimes;
+						auto& o1 = layer.mOutputs;
+						auto& np1 = nextLayer.mPrimes;
+						auto& nw2 = nextLayer.mWeights;
+
+						auto af = layer.mActivationFunction;
+
+						env.matTMulVec(nw2, np1, p1);
+						env.activationFunctionPrime(af, o1, p1);
+					}
+					};
 				
-				//output layer makes a comparison between desired and sought
-				env.errorFunction(af, desired, sought, p1);
-
-				for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
-
-					auto& layer = mLayers[l];
-					auto& nextLayer = mLayers[l + 1];
-
-					auto& p1 = layer.mPrimes;
-					auto& o1 = layer.mOutputs;
-					auto& np1 = nextLayer.mPrimes;
-					auto& nw2 = nextLayer.mWeights;
-
-					auto af = layer.mActivationFunction;
-
-					env.matTMulVec(nw2, np1, p1);
-					env.activationFunctionPrime(af, o1, p1);
-				}
+				hiddenLayers();
 
 				auto updateWeights = [&]() {
 					for (auto l : std::views::iota(0ULL, mLayers.size())) {
 
 						auto& layer = mLayers[l];
 
-						GpuView1* input = nullptr;
+						const GpuView1* input = nullptr;
 						if (l == 0)
 							input = &seen;
 						else
@@ -174,7 +183,9 @@ namespace NetworkLib {
 				updateWeights();
 			
 			}
-	
+			const GpuView1& getSought() {
+				return mLayers.back().mActivations;
+			}
 			struct Layer {
 
 				GpuView1& forward(Environment& env, const GpuView1& input) {

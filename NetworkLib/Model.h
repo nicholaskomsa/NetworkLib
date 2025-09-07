@@ -7,17 +7,19 @@
 
 namespace NetworkLib {
 
-	static void modelMap() {
+	static void modelMapXOR() {
 
 		std::mt19937 random;
 		Gpu::Environment gpu;
 
 		gpu.create();
+		
+		const auto inputSize = 2, outputSize = 2;
 
 		using ActivationFunction = LayerTemplate::ActivationFunction;
-		NetworkTemplate networkTemplate = { 2
+		NetworkTemplate networkTemplate = { inputSize
 			, {{ 100, ActivationFunction::ReLU}
-			, { 2, ActivationFunction::None}}
+			, { outputSize, ActivationFunction::None}}
 		};
 
 		Gpu::Network gnn(&networkTemplate);
@@ -31,60 +33,80 @@ namespace NetworkLib {
 
 		auto createSamples = [&]() {
 
-			std::vector<GpuSample> gpuSamples(2);
+			using Sample = std::pair<std::vector<float>, std::vector<float>>;
 
-			sampleSpace.create(gpuSamples.size() * (2 + 2));
+			std::vector<Sample> samples = {
+				  {{0.0f, 0.0f}, {1.0f, 0.0f}}
+				, {{1.0f, 0.0f}, {0.0f, 1.0f}}
+				, {{0.0f, 1.0f}, {0.0f, 1.0f}}
+				, {{1.0f, 1.0f}, {1.0f, 0.0f}}
+			};
+
+			std::vector<GpuSample> gpuSamples(samples.size());
+
+			sampleSpace.create(gpuSamples.size() * (inputSize + outputSize));
 			auto begin = sampleSpace.begin();
 			for (auto& [seen, desired] : gpuSamples) {
-				sampleSpace.advance(seen, begin, 2);
-				sampleSpace.advance(desired, begin, 2);
+				sampleSpace.advance(seen, begin, inputSize);
+				sampleSpace.advance(desired, begin, outputSize);
 			}
 
-			//values to map x, y = x2, y2 == {x ,y, x2, y2 }
-			std::vector<float> sample1 = { 5, 5, 0.5, 0.5 }
-				, sample2 = { 1, 7, 7, 1 };
+			auto generateSample = [&](const Sample& sample, GpuSample& gpuSample) {
 
-			auto generateSample = [&](const std::vector<float>& sample, GpuSample& gpuSample) {
-
-				std::span<const float> seen(sample.cbegin(), 2)
-					, desired(sample.cbegin() + 2, 2);
+				const auto& [seen, desired] = sample;
 
 				std::copy(seen.begin(), seen.end(), gpuSample.first.begin());
 				std::copy(desired.begin(), desired.end(), gpuSample.second.begin());
 				};
 
-			generateSample(sample1, gpuSamples.front());
-			generateSample(sample2, gpuSamples.back());
+			for (const auto& [sample, gpuSample] : std::views::zip(samples, gpuSamples))
+				generateSample(sample, gpuSample);
 
 			return gpuSamples;
 			};
 
+
+
 		auto trainingSamples = createSamples();
 		sampleSpace.mView.upload();
 
-		gpu.sync();
+		auto calculateConvergence = [&]() {
 
-		for (auto generation : std::views::iota(0ULL, 1000ULL)) {
+			for (const auto& [seen, desired] : trainingSamples) {
 
-			TimeAverage<milliseconds> trainTime;
-			trainTime.accumulateTime([&]() {
-
-				auto& sample = trainingSamples[generation % trainingSamples.size()];
-				Gpu::GpuView1* gnnOutput = &gnn.forward(gpu, sample.first);
-				gnn.backward(gpu, sample.first, sample.second, 0.0020f);
-
-				gnnOutput->downloadAsync(gpu.getStream());
+				const auto& sought = gnn.forward(gpu, seen);
+				sought.downloadAsync(gpu);
 				gpu.sync();
 
 				std::print("\nseen: {}"
-							"\ndesired: {}"
-							"\nsought: {}"
-					, sample.first
-					, sample.second
-					, *gnnOutput
-					);
+					"\ndesired: {}"
+					"\nsought: {}"
+					, seen
+					, desired
+					, sought
+				);
+			}
+			};
+
+		gpu.sync();
+
+		calculateConvergence();
+
+		TimeAverage<milliseconds> trainTime;
+
+		for (auto generation : std::views::iota(0ULL, 2000ULL)) 
+			trainTime.accumulateTime([&]() {
+
+				const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
+
+				gnn.forward(gpu, seen);
+				gnn.backward(gpu, seen, desired, 0.002f);
+
+				std::print(".");
+					
 				});
-		}
+		
+		calculateConvergence();
 
 		sampleSpace.destroy();
 
