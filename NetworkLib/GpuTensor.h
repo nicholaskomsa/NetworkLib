@@ -163,6 +163,10 @@ namespace NetworkLib {
 				Cpu::Tensor::advance(view, begin, dimensions...);
 				gpuView = { view, getGpu(view), source };
 			}
+
+			void upload(){
+				mView.upload();
+			}
 		};
 
 		class Environment {
@@ -247,8 +251,11 @@ namespace NetworkLib {
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
-			void updateWeights(Environment& env, const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
-
+			void updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
+			void copy(const GpuView1& source, GpuView1& dest) {
+				auto result = cublasScopy(mHandle, source.mSize, source.mGpu, 1, dest.mGpu, 1);
+				Error::checkBlas(result);
+			}
 			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
 				
 				using ActivationFunction = LayerTemplate::ActivationFunction;
@@ -260,7 +267,7 @@ namespace NetworkLib {
 					softmax(o1, a1);
 					break;
 				case ActivationFunction::None:
-					cublasScopy(mHandle, o1.mSize, o1.mGpu, 1, a1.mGpu, 1);
+					copy(o1, a1);
 					break;
 				}
 			}
@@ -272,7 +279,7 @@ namespace NetworkLib {
 					applyReluPrime(a1, p1);
 					break;
 				case ActivationFunction::None:
-					cublasScopy(mHandle, a1.mSize, a1.mGpu, 1, p1.mGpu, 1);
+					//applyNone(a1,p1);
 					break;
 				}
 			}

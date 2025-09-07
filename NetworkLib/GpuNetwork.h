@@ -177,7 +177,7 @@ namespace NetworkLib {
 						else
 							input = &mLayers[l - 1].mActivations;
 
-						env.updateWeights(env, *input, layer.mWeights, layer.mPrimes, learnRate);
+						env.updateWeights(*input, layer.mWeights, layer.mPrimes, learnRate);
 					}
 					};
 				updateWeights();

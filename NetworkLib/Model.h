@@ -31,11 +31,6 @@ namespace NetworkLib {
 		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
 		using Sample = std::pair<std::vector<float>, std::vector<float>>;
 
-		auto generateGPUSample = [&](const Sample& sample, GpuSample& gpuSample) {
-			const auto& [seen, desired] = sample;
-			std::copy(seen.begin(), seen.end(), gpuSample.first.begin());
-			std::copy(desired.begin(), desired.end(), gpuSample.second.begin());
-			};
 		auto createSamples = [&](auto& sampleSpace, const auto& samples) {
 
 			std::vector<GpuSample> gpuSamples(samples.size());
@@ -46,6 +41,13 @@ namespace NetworkLib {
 				sampleSpace.advance(seen, begin, inputSize);
 				sampleSpace.advance(desired, begin, outputSize);
 			}
+
+			auto generateGPUSample = [&](const Sample& sample, GpuSample& gpuSample) {
+				const auto& [seen, desired] = sample;
+				auto& [gpuSeen, gpuDesired] = gpuSample;
+				std::copy(seen.begin(), seen.end(), gpuSeen.begin());
+				std::copy(desired.begin(), desired.end(), gpuDesired.begin());
+				};
 
 			for (const auto& [sample, gpuSample] : std::views::zip(samples, gpuSamples))
 				generateGPUSample(sample, gpuSample);
@@ -67,7 +69,7 @@ namespace NetworkLib {
 
 		Gpu::FloatSpace1 sampleSpace;
 		auto trainingSamples = createXORSamples(sampleSpace);
-		sampleSpace.mView.upload();
+		sampleSpace.upload();
 
 		auto calculateConvergence = [&]() {
 
@@ -117,7 +119,7 @@ namespace NetworkLib {
 
 	static void exampleModel() {
 
-		modelMap();
+		modelMapXOR();
 	}
 	
 }
