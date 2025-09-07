@@ -23,6 +23,7 @@ __global__ void cuApplyReluPrime(const float* reluActivations, float* reluPrimes
     if (idx < size)
         reluPrimes[idx] *= kReluPrime(reluActivations[idx]);
 }
+
 __global__ void cuSoftmax1024(const float* outputs, float* softmaxActivations, int size) {
     extern __shared__ float shared_exp[];
 
