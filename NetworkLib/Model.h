@@ -29,18 +29,14 @@ namespace NetworkLib {
 		gnn.upload();
 
 		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
-		Gpu::FloatSpace1 sampleSpace;
+		using Sample = std::pair<std::vector<float>, std::vector<float>>;
 
-		auto createSamples = [&]() {
-
-			using Sample = std::pair<std::vector<float>, std::vector<float>>;
-
-			std::vector<Sample> samples = {
-				  {{0.0f, 0.0f}, {1.0f, 0.0f}}
-				, {{1.0f, 0.0f}, {0.0f, 1.0f}}
-				, {{0.0f, 1.0f}, {0.0f, 1.0f}}
-				, {{1.0f, 1.0f}, {1.0f, 0.0f}}
+		auto generateGPUSample = [&](const Sample& sample, GpuSample& gpuSample) {
+			const auto& [seen, desired] = sample;
+			std::copy(seen.begin(), seen.end(), gpuSample.first.begin());
+			std::copy(desired.begin(), desired.end(), gpuSample.second.begin());
 			};
+		auto createSamples = [&](auto& sampleSpace, const auto& samples) {
 
 			std::vector<GpuSample> gpuSamples(samples.size());
 
@@ -51,23 +47,26 @@ namespace NetworkLib {
 				sampleSpace.advance(desired, begin, outputSize);
 			}
 
-			auto generateSample = [&](const Sample& sample, GpuSample& gpuSample) {
-
-				const auto& [seen, desired] = sample;
-
-				std::copy(seen.begin(), seen.end(), gpuSample.first.begin());
-				std::copy(desired.begin(), desired.end(), gpuSample.second.begin());
-				};
-
 			for (const auto& [sample, gpuSample] : std::views::zip(samples, gpuSamples))
-				generateSample(sample, gpuSample);
+				generateGPUSample(sample, gpuSample);
 
 			return gpuSamples;
 			};
 
+		auto createXORSamples = [&](auto& sampleSpace) {
 
+			const std::vector<Sample> samples = {
+				{{0,0}, {1,0}},
+				{{0,1}, {0,1}},
+				{{1,0}, {0,1}},
+				{{1,1}, {1,0}},
+			};
 
-		auto trainingSamples = createSamples();
+			return createSamples(sampleSpace, samples);
+			};
+
+		Gpu::FloatSpace1 sampleSpace;
+		auto trainingSamples = createXORSamples(sampleSpace);
 		sampleSpace.mView.upload();
 
 		auto calculateConvergence = [&]() {
