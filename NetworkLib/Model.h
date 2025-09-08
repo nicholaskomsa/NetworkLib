@@ -112,7 +112,7 @@ namespace NetworkLib {
 					gnn.forward(gpu, seen);
 					gnn.backward(gpu, seen, desired, learnRate);
 
-					printPercent(generation, trainNum);
+					printProgress(generation, trainNum);
 
 					});
 
