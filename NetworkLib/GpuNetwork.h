@@ -143,8 +143,6 @@ namespace NetworkLib {
 					env.errorFunction(af, desired, sought, p1);
 					};
 
-				backLayer();
-
 				auto hiddenLayers = [&]() {
 
 					for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
@@ -163,8 +161,6 @@ namespace NetworkLib {
 						env.activationFunctionPrime(af, o1, p1);
 					}
 					};
-				
-				hiddenLayers();
 
 				auto updateWeights = [&]() {
 					for (auto l : std::views::iota(0ULL, mLayers.size())) {
@@ -180,8 +176,10 @@ namespace NetworkLib {
 						env.updateWeights(*input, layer.mWeights, layer.mPrimes, learnRate);
 					}
 					};
+
+				backLayer();
+				hiddenLayers();
 				updateWeights();
-			
 			}
 			const GpuView1& getSought() {
 				return mLayers.back().mActivations;
