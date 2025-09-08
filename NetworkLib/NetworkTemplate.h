@@ -22,7 +22,7 @@ namespace NetworkLib {
 	using LayerTemplates = std::vector<LayerTemplate>;
 
 	struct NetworkTemplate {
-		std::size_t mInputSize = 0;
+		std::size_t mInputSize = 0, mBatchSize = 1;
 		LayerTemplates mLayerTemplates;
 	};
 }

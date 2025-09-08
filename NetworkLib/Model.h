@@ -62,9 +62,10 @@ namespace NetworkLib {
 			constexpr std::size_t inputSize = 2, outputSize = 2
 				, trainNum = 5000;
 			constexpr float learnRate = 0.002f;
+			std::size_t batchSize = 1;
 
 			using ActivationFunction = LayerTemplate::ActivationFunction;
-			NetworkTemplate networkTemplate = { inputSize
+			NetworkTemplate networkTemplate = { inputSize, batchSize
 				, {{ 7, ActivationFunction::ReLU}
 				, { 4, ActivationFunction::ReLU}
 				, { outputSize, ActivationFunction::None}}

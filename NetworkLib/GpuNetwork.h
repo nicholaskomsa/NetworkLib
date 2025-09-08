@@ -11,6 +11,13 @@ namespace NetworkLib {
 
 		class Network {
 		public:
+			static void applyKHScaleUniform(std::size_t inputSize, std::size_t size, GpuView2 weights) {
+
+				auto scale = std::sqrtf(6.0f / (inputSize + size));
+
+				for (auto& w : weights)
+					w *= scale;
+			}
 
 			Network(NetworkTemplate* networkTemplate)
 				: mNetworkTemplate(networkTemplate) {
@@ -57,8 +64,21 @@ namespace NetworkLib {
 
 			void initialize(std::mt19937& random) {
 
-				for (auto& layer : mLayers)
-					layer.generate(random);
+				std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
+
+				for (auto& layer : mLayers) {
+
+					auto& w = layer.mWeights;
+					auto& b = layer.mBias;
+
+					std::generate(w.begin(), w.end(), [&]() {
+						return reals(random);
+						});
+
+					std::generate(b.begin(), b.end(), [&]() {
+						return reals(random);
+						});
+				}
 
 				applyKHScales();
 			}
@@ -84,7 +104,9 @@ namespace NetworkLib {
 						else
 							inputSize = mLayers[l - 1].mBias.mSize;
 
-						layer.applyKHScaleUniform(inputSize, size);
+						auto& w = layer.mWeights;
+
+						applyKHScaleUniform(inputSize, size, w);
 					}
 					});
 			}
@@ -105,7 +127,7 @@ namespace NetworkLib {
 
 					auto af = back.mActivationFunction;
 
-					auto& sought = back.mActivations;
+					const auto& sought = back.mActivations;
 					auto& p1 = back.mPrimes;
 
 					//output layer makes a comparison between desired and sought
@@ -155,14 +177,6 @@ namespace NetworkLib {
 			}
 			struct Layer {
 
-				void applyKHScaleUniform(std::size_t inputSize, std::size_t size) {
-
-					auto scale = std::sqrtf(6.0f / (inputSize + size));
-
-					for (auto& w : mWeights)
-						w *= scale;
-				}
-
 				GpuView1& forward(Environment& env, const GpuView1& input) {
 
 					env.matMulVec(mWeights, input, mOutputs);
@@ -186,21 +200,10 @@ namespace NetworkLib {
 					if (backwards)
 						gpuFloats.advance(mPrimes, begin, n);
 				}
-
-				void generate(std::mt19937& random) {
-
-					std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
-					std::generate(mWeights.begin(), mWeights.end(), [&]() {
-						return reals(random);
-						});
-					std::generate(mBias.begin(), mBias.end(), [&]() {
-						return reals(random);
-						});
-				}
-
 				GpuView2 mWeights;
-				GpuView1 mBias, mOutputs, mActivations, mPrimes;
+				GpuView1 mBias,mOutputs,mActivations, mPrimes;
 				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
+
 			};
 
 			using Layers = std::vector<Layer>;

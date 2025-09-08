@@ -167,6 +167,9 @@ namespace NetworkLib {
 			void upload(){
 				mView.upload();
 			}
+			void downloadAsync(cudaStream_t stream) {
+				mView.downloadAsync(stream);
+			}
 		};
 
 		class Environment {
@@ -188,6 +191,19 @@ namespace NetworkLib {
 			}
 			operator cudaStream_t() {
 				return mStream;
+			}
+
+			GpuView1 viewColumn(const GpuView2& v2, std::size_t col) {
+				if (col >= v2.mView.extent(1))
+					throw std::logic_error("column out of range");
+
+				int rows = v2.mView.extent(0);
+
+				return {
+					 Cpu::Tensor::View1(v2.mCpu, rows)
+					, v2.mGpu + col * rows
+					, v2.mCpu + col * rows
+				};
 			}
 
 			void vecScale( GpuView1& a1, float scale) {
@@ -224,6 +240,41 @@ namespace NetworkLib {
 					o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
+			void matMulVecBatch(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+				//cuda is in C++ style of row-major
+				//cublas wants Fortran style, col-major,
+				//mdspan has been configured to be layout_left - cublas correct
+
+				float alpha = 1.0f;
+				float beta = 0.0f;
+
+				int r = w2.mView.extent(0);
+				int c = w2.mView.extent(1);
+
+				int k = i2.mView.extent(0);
+
+				if (c != k)
+					throw std::logic_error("matrix * vec incorrect dimensions");
+
+				int batchSize = i2.mView.extent(1);
+
+				for (auto v : std::views::iota(0, batchSize)) {
+
+					GpuView1 i1 = viewColumn(i2, v)
+						, o1 = viewColumn(o2, v);
+
+					auto result = cublasSgemv(mHandle,
+						CUBLAS_OP_N,
+						r, c,
+						&alpha,
+						w2.mGpu, r,
+						i1.mGpu, 1,
+						&beta,
+						o1.mGpu, 1);
+					Error::checkBlas(result);
+				}
+			}
+
 			void matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1){
 				
 				float alpha = 1.0f;
@@ -282,7 +333,7 @@ namespace NetworkLib {
 					break;
 				}
 			}
-			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, GpuView1& sought, GpuView1& p1) {
+			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1) {
 				switch (af) {
 				case LayerTemplate::ActivationFunction::None:
 				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
@@ -297,65 +348,59 @@ namespace NetworkLib {
 			
 			static void example() {
 
-				Environment env;
-				env.create();
+				Environment gpu;
+				gpu.create();
 
 				Gpu::FloatSpace1 fs1;
-				Gpu::GpuView1 i, i2, b, o, a;
-				Gpu::GpuView2 w;
+				Gpu::GpuView1 b1;
+				Gpu::GpuView2 o2, a2, i2;
+				Gpu::GpuView2 w2;
 
 				std::size_t inputSize = 3
-					, biasSize = 2;
+					, biasSize = 2
+					, batchSize = 3;
 
-				fs1.create(inputSize*2 + inputSize * biasSize + biasSize * 3);
+				fs1.create((inputSize + biasSize*2)*batchSize 
+					+ biasSize 
+					+ biasSize * inputSize);
 
 				auto begin = fs1.begin();
 
-				fs1.advance(i, begin, inputSize);
-				fs1.advance(i2, begin, inputSize);
-				fs1.advance(w, begin, biasSize, inputSize);
-				fs1.advance(b, begin, biasSize);
-				fs1.advance(o, begin, biasSize);
-				fs1.advance(a, begin, biasSize);
+				fs1.advance(i2, begin, inputSize, batchSize);
+				fs1.advance(w2, begin, biasSize, inputSize);
+				fs1.advance(b1, begin, biasSize);
+				fs1.advance(o2, begin, biasSize, batchSize);
+				fs1.advance(a2, begin, biasSize, batchSize);
 
-				std::fill(w.begin(), w.end(), 1);
-				std::fill(i.begin(), i.end(), 1);
-				std::fill(b.begin(), b.end(), 1);
+				std::fill(w2.begin(), w2.end(), 1);
+				std::fill(i2.begin(), i2.end(), 1);
+				std::fill(b1.begin(), b1.end(), 1);
 
-				//for( auto i : std::views::iota(0, 5))
-				//w.mView[1, i] = 0;
-				//for( auto i : std::views::iota(0ULL, o.mSize))
-				//	o.mView[i] = 1;
+				i2.mView[0, 1] = 0;
 
-				fs1.mView.upload();
+				fs1.upload();
 
-				env.sync();
+				gpu.sync();
 
 				auto forward = [&]() {
 
-
-					env.matMulVec(w, i, o);
-					env.vecAddVec(b, o);
-					env.softmax(o, a);
+					gpu.matMulVecBatch(w2, i2, o2);
+					//gpu.matMulVec(w, i, o);
+					//gpu.vecAddVec(b, o);
+				//	gpu.softmax(o, a);
 					};
 				forward();
 
-				i.downloadAsync(env.getStream());
-				i2.downloadAsync(env.getStream());
-				o.downloadAsync(env.getStream());
-				a.downloadAsync(env.getStream());
+				fs1.downloadAsync(gpu);
 
-				env.sync();
+				gpu.sync();
 
-				for (const auto& of :	i2)
-					std::print("{} ", of);
+				for (const auto& f : o2)
+					std::print("{} ", f);
 
-				//for (const auto& [of, af] : std::views::zip(o,a)) 
-				//	std::print("{} {}; ", of, af);
-				
 				fs1.destroy();
 
-				env.destroy();
+				gpu.destroy();
 			}
 
 		private:
