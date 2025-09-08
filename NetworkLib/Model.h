@@ -59,7 +59,7 @@ namespace NetworkLib {
 
 			gpu.create();
 
-			constexpr auto inputSize = 2, outputSize = 2
+			constexpr std::size_t inputSize = 2, outputSize = 2
 				, trainNum = 5000;
 			constexpr float learnRate = 0.002f;
 
@@ -102,7 +102,7 @@ namespace NetworkLib {
 
 			TimeAverage<milliseconds> trainTime;
 
-			for (auto generation : std::views::iota(0, trainNum))
+			for (auto generation : std::views::iota(0ULL, trainNum))
 				trainTime.accumulateTime([&]() {
 
 					const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
@@ -110,7 +110,7 @@ namespace NetworkLib {
 					gnn.forward(gpu, seen);
 					gnn.backward(gpu, seen, desired, learnRate);
 
-					std::print(".");
+					printPercent(generation, trainNum, 10);
 
 					});
 

@@ -2,6 +2,7 @@
 
 #include <string>
 #include <chrono>
+#include <print>
 
 namespace NetworkLib {
 
@@ -67,4 +68,10 @@ namespace NetworkLib {
 			return str;
 			};
 	};
+
+	void printPercent(std::size_t progress, std::size_t totalSize, std::size_t printPercent = 10) {
+
+		if (progress % std::size_t(std::ceil(totalSize / printPercent)) == 0 || progress >= totalSize - 1)
+			std::print("{:.0f}% ", progress / float(totalSize) * 100.0f);
+	}
 }
