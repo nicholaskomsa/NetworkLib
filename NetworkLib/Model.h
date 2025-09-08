@@ -88,7 +88,7 @@ namespace NetworkLib {
 					sought.downloadAsync(gpu);
 					gpu.sync();
 
-					std::print("\nseen: {}"
+					std::println("\nseen: {}"
 						"\ndesired: {}"
 						"\nsought: {}"
 						, seen
@@ -102,6 +102,8 @@ namespace NetworkLib {
 
 			TimeAverage<milliseconds> trainTime;
 
+			std::print("Training: ");
+
 			for (auto generation : std::views::iota(0ULL, trainNum))
 				trainTime.accumulateTime([&]() {
 
@@ -110,7 +112,7 @@ namespace NetworkLib {
 					gnn.forward(gpu, seen);
 					gnn.backward(gpu, seen, desired, learnRate);
 
-					printPercent(generation, trainNum, 10);
+					printPercent(generation, trainNum);
 
 					});
 

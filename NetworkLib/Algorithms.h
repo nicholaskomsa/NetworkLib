@@ -69,9 +69,9 @@ namespace NetworkLib {
 			};
 	};
 
-	void printPercent(std::size_t progress, std::size_t totalSize, std::size_t printPercent = 10) {
+	void printPercent(std::size_t progress, std::size_t totalSize, float printPercent = 0.10f ) {
 
-		if (progress % std::size_t(std::ceil(totalSize / printPercent)) == 0 || progress >= totalSize - 1)
+		if (progress % std::size_t(std::ceil(totalSize * printPercent)) == 0 || progress >= totalSize - 1)
 			std::print("{:.0f}% ", progress / float(totalSize) * 100.0f);
 	}
 }
