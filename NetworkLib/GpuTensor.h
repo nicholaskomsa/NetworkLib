@@ -249,7 +249,6 @@ namespace NetworkLib {
 	
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
-			void applyNone(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
 			void updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
