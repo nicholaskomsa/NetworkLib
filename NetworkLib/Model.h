@@ -42,7 +42,7 @@ namespace NetworkLib {
 
 		GpuSamples createXORSamples(Gpu::FloatSpace1& gpuSampleSpace) {
 
-			const std::vector<Sample> samples = {
+			const Samples samples = {
 				{{0,0}, {1,0}},
 				{{0,1}, {0,1}},
 				{{1,0}, {0,1}},
@@ -105,12 +105,12 @@ namespace NetworkLib {
 			for (auto generation : std::views::iota(0, trainNum))
 				trainTime.accumulateTime([&]() {
 
-				const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
+					const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
 
-				gnn.forward(gpu, seen);
-				gnn.backward(gpu, seen, desired, learnRate);
+					gnn.forward(gpu, seen);
+					gnn.backward(gpu, seen, desired, learnRate);
 
-				std::print(".");
+					std::print(".");
 
 					});
 
