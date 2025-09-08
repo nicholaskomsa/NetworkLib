@@ -241,37 +241,21 @@ namespace NetworkLib {
 				Error::checkBlas(result);
 			}
 			void matMulVecBatch(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
-				//cuda is in C++ style of row-major
-				//cublas wants Fortran style, col-major,
-				//mdspan has been configured to be layout_left - cublas correct
 
-				float alpha = 1.0f;
-				float beta = 0.0f;
-
-				int r = w2.mView.extent(0);
 				int c = w2.mView.extent(1);
-
 				int k = i2.mView.extent(0);
 
 				if (c != k)
 					throw std::logic_error("matrix * vec incorrect dimensions");
 
-				int batchSize = i2.mView.extent(1);
+				std::size_t batchSize = i2.mView.extent(1);
 
-				for (auto v : std::views::iota(0, batchSize)) {
+				for (auto v : std::views::iota(0ULL, batchSize)) {
 
 					GpuView1 i1 = viewColumn(i2, v)
 						, o1 = viewColumn(o2, v);
 
-					auto result = cublasSgemv(mHandle,
-						CUBLAS_OP_N,
-						r, c,
-						&alpha,
-						w2.mGpu, r,
-						i1.mGpu, 1,
-						&beta,
-						o1.mGpu, 1);
-					Error::checkBlas(result);
+					matMulVec(w2, i1, o1);
 				}
 			}
 
