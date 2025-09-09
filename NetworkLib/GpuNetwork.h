@@ -45,8 +45,9 @@ namespace NetworkLib {
 				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
 					const auto n = layerTemplate.mNodeCount;
-					
-					layer.advance(mGpuFloats, begin, n, inputSize, layerTemplate.mActivationFunction, backwards);
+					const auto af = layerTemplate.mActivationFunction;
+
+					layer.advance(mGpuFloats, begin, n, inputSize, af, backwards);
 
 					inputSize = n;
 				}
@@ -64,7 +65,7 @@ namespace NetworkLib {
 			}
 
 			void upload() {
-				mGpuFloats.mView.upload();
+				mGpuFloats.upload();
 			}
 
 			void applyKHScales() {
@@ -82,8 +83,6 @@ namespace NetworkLib {
 							inputSize = mNetworkTemplate->mInputSize;
 						else
 							inputSize = mLayers[l - 1].mBias.mSize;
-
-						auto& w = layer.mWeights;
 
 						layer.applyKHScaleUniform(inputSize);
 					}
@@ -204,7 +203,6 @@ namespace NetworkLib {
 				GpuView2 mWeights;
 				GpuView1 mBias,mOutputs,mActivations, mPrimes;
 				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
-
 			};
 
 			using Layers = std::vector<Layer>;

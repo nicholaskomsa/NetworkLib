@@ -133,10 +133,10 @@ namespace NetworkLib {
 
 			void create(std::size_t size) {
 				
-				Error::checkCuda(cudaMallocHost(&mView.mCpu, size * sizeof(float)));
-				mView.mView = Cpu::Tensor::View1(mView.mCpu, size);
-				mView.mSize = size;
-				Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&mView.mGpu), size * sizeof(float)));
+				float* cpu, *gpu;
+				Error::checkCuda(cudaMallocHost(&cpu, size * sizeof(float)));
+				Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&gpu), size * sizeof(float)));
+				mView = { Cpu::Tensor::View1(cpu, size), gpu, cpu };
 			}
 
 			void destroy() {
