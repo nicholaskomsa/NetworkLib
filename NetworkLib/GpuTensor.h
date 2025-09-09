@@ -55,6 +55,16 @@ namespace NetworkLib {
 				throw Error(std::errc::operation_canceled, message);
 			}
 
+			static void missMatchError(auto& a, auto& b, const std::source_location& location = std::source_location::current()) {
+				auto message = std::format("{}x{} mismatch", a, b);
+				throw Error(std::errc::invalid_argument, message);
+			}
+
+			static void checkMissMatch(auto& a, auto& b, const std::source_location& location = std::source_location::current()) {
+				if (a != b)
+					missMatchError(a, b, location);
+			}
+
 			static void checkCuda(cudaError_t result, const std::source_location& location = std::source_location::current()) {
 				if (result != cudaSuccess)
 					cudaError(result, location);
@@ -207,12 +217,12 @@ namespace NetworkLib {
 			}
 
 			void vecScale( GpuView1& a1, float scale) {
-				cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
+				auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
+				Error::checkBlas(result);
 			}
 			void vecAddVec(const GpuView1& a1, GpuView1& o1){
-				std::size_t size = o1.mSize;
 				float alpha = 1.0f;
-				auto result = cublasSaxpy(mHandle, size, &alpha, a1.mGpu, 1, o1.mGpu, 1);
+				auto result = cublasSaxpy(mHandle, o1.mSize, &alpha, a1.mGpu, 1, o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
 			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
@@ -223,12 +233,10 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int r = w2.mView.extent(0);
-				int c = w2.mView.extent(1);
-				int k = i1.mSize;
+				std::size_t r = w2.mView.extent(0)
+					, c = w2.mView.extent(1);
 
-				if (c != k)
-					throw std::logic_error("matrix * vec incorrect dimensions");
+				Error::checkMissMatch(c, i1.mSize);
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_N,
@@ -245,15 +253,14 @@ namespace NetworkLib {
 				int c = w2.mView.extent(1);
 				int k = i2.mView.extent(0);
 
-				if (c != k)
-					throw std::logic_error("matrix * vec incorrect dimensions");
+				Error::checkMissMatch(c, k);
 
 				std::size_t batchSize = i2.mView.extent(1);
 
-				for (auto v : std::views::iota(0ULL, batchSize)) {
+				for (auto b : std::views::iota(0ULL, batchSize)) {
 
-					GpuView1 i1 = viewColumn(i2, v)
-						, o1 = viewColumn(o2, v);
+					GpuView1 i1 = viewColumn(i2, b)
+						, o1 = viewColumn(o2, b);
 
 					matMulVec(w2, i1, o1);
 				}
@@ -264,12 +271,10 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				int r = w2.mView.extent(0);
-				int c = w2.mView.extent(1);
-				int k = i1.mSize;
-				
-				if (r != k)
-					throw std::logic_error("matrix * vec incorrect dimensions");
+				std::size_t r = w2.mView.extent(0)
+					, c = w2.mView.extent(1);
+
+				Error::checkMissMatch(r, i1.mSize);
 
 				auto result = cublasSgemv(mHandle,
 					CUBLAS_OP_T,

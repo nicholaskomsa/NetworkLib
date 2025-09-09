@@ -11,13 +11,6 @@ namespace NetworkLib {
 
 		class Network {
 		public:
-			static void applyKHScaleUniform(std::size_t inputSize, std::size_t size, GpuView2 weights) {
-
-				auto scale = std::sqrtf(6.0f / (inputSize + size));
-
-				for (auto& w : weights)
-					w *= scale;
-			}
 
 			Network(NetworkTemplate* networkTemplate)
 				: mNetworkTemplate(networkTemplate) {
@@ -26,7 +19,7 @@ namespace NetworkLib {
 			void create(bool backwards=true) {
 
 				auto& networkTemplate = *mNetworkTemplate;
-				std::span<LayerTemplate> layerTemplates = networkTemplate.mLayerTemplates;
+				auto& layerTemplates = networkTemplate.mLayerTemplates;
 
 				auto& firstInputSize = networkTemplate.mInputSize;
 				std::size_t size = 0, inputSize = firstInputSize;
@@ -64,22 +57,9 @@ namespace NetworkLib {
 
 			void initialize(std::mt19937& random) {
 
-				std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
-
-				for (auto& layer : mLayers) {
-
-					auto& w = layer.mWeights;
-					auto& b = layer.mBias;
-
-					std::generate(w.begin(), w.end(), [&]() {
-						return reals(random);
-						});
-
-					std::generate(b.begin(), b.end(), [&]() {
-						return reals(random);
-						});
-				}
-
+				for (auto& layer : mLayers) 
+					layer.generate(random);
+				
 				applyKHScales();
 			}
 
@@ -96,8 +76,7 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 
-						std::size_t inputSize
-							, size = layer.mBias.mSize;
+						std::size_t inputSize;
 
 						if (l == 0)
 							inputSize = mNetworkTemplate->mInputSize;
@@ -106,7 +85,7 @@ namespace NetworkLib {
 
 						auto& w = layer.mWeights;
 
-						applyKHScaleUniform(inputSize, size, w);
+						layer.applyKHScaleUniform(inputSize);
 					}
 					});
 			}
@@ -120,6 +99,7 @@ namespace NetworkLib {
 				
 				return *i;
 			}
+
 			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, float learnRate) {
 
 				auto backLayer = [&]() {
@@ -175,7 +155,28 @@ namespace NetworkLib {
 			const GpuView1& getSought() {
 				return mLayers.back().mActivations;
 			}
-			struct Layer {
+			class Layer {
+			public:
+				void generate(std::mt19937& random) {
+
+					std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
+
+					std::generate(mWeights.begin(), mWeights.end(), [&]() {
+						return reals(random);
+						});
+
+					std::generate(mBias.begin(), mBias.end(), [&]() {
+						return reals(random);
+						});
+				}
+
+				void applyKHScaleUniform(std::size_t inputSize) {
+
+					auto scale = std::sqrtf(6.0f / (inputSize + mBias.mSize));
+
+					for (auto& w : mWeights)
+						w *= scale;
+				}
 
 				GpuView1& forward(Environment& env, const GpuView1& input) {
 
