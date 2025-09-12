@@ -14,6 +14,9 @@ namespace NetworkLib {
 
 	namespace Gpu {
 
+		using Dimension = Cpu::Tensor::Dimension;
+		using Coordinate = Cpu::Tensor::Coordinate;
+
 		struct Error : public std::system_error {
 
 			Error(std::errc code, const std::string& message)
@@ -22,8 +25,8 @@ namespace NetworkLib {
 			static void cudaError(cudaError_t result, const std::source_location& location = std::source_location::current()) {
 
 				auto message = std::format(
-					"Cuda Error ={}:\n{}\n"
-					"{}\n{}\n{}\n"
+					"Cuda Error ={}:\n{}"
+					"\n{}\n{}\n{}\n"
 					, int(result), cudaGetErrorString(result)
 					, location.file_name(), location.line(), location.function_name());
 
@@ -47,32 +50,40 @@ namespace NetworkLib {
 					};
 
 				auto message = std::format(
-					"BLAS Error ={}:\n{}\n"
-					"{}\n{}\n{}\n"
+					"BLAS Error ={}:\n{}"
+					"\n{}\n{}\n{}\n"
 					, int(result), getBLASString()
 					, location.file_name(), location.line(), location.function_name());
 
 				throw Error(std::errc::operation_canceled, message);
 			}
-
-			static void missMatchError(auto& a, auto& b, const std::source_location& location = std::source_location::current()) {
-				auto message = std::format("{}x{} mismatch", a, b);
-				throw Error(std::errc::invalid_argument, message);
-			}
-
-			static void checkMissMatch(auto& a, auto& b, const std::source_location& location = std::source_location::current()) {
-				if (a != b)
-					missMatchError(a, b, location);
-			}
-
 			static void checkCuda(cudaError_t result, const std::source_location& location = std::source_location::current()) {
 				if (result != cudaSuccess)
 					cudaError(result, location);
 			}
 			static void checkBlas(cublasStatus_t result, const std::source_location& location = std::source_location::current()) {
 				if (result != CUBLAS_STATUS_SUCCESS)
-					blasError(result);
+					blasError(result, location);
 			}
+
+			static void missMatchError(Dimension a, Dimension b, const std::source_location& location = std::source_location::current()) {
+				auto message = std::format("{}x{} mismatch\n{}\n{}\n{}\n", a, b, location.file_name(), location.line(), location.function_name());
+				throw Error(std::errc::invalid_argument, message);
+			}
+			static void checkMissMatch(Dimension a, Dimension b, const std::source_location& location = std::source_location::current()) {
+				if (a != b)
+					missMatchError(a, b, location);
+			}
+			static void boundsError(Coordinate a, Dimension b, const std::source_location& location = std::source_location::current()) {
+				auto message = std::format("{}, {} out of bounds\n{}\n{}\n{}\n", a, b, location.file_name(), location.line(), location.function_name());
+				throw Error(std::errc::invalid_argument, message);
+			}
+			static void checkBounds(Coordinate a, Dimension b, const std::source_location& location = std::source_location::current()) {
+				if (a >= b)
+					boundsError(a, b, location);
+			}
+
+		
 		};
 
 		template<typename T>
@@ -82,7 +93,7 @@ namespace NetworkLib {
 		struct GpuView {
 			ViewType mView;
 			float* mGpu = nullptr, * mCpu = nullptr;
-			std::size_t mSize = 0;
+			Dimension mSize = 0;
 
 			GpuView() = default;
 			GpuView(ViewType view, float* gpu, float* cpu)
@@ -203,9 +214,9 @@ namespace NetworkLib {
 				return mStream;
 			}
 
-			GpuView1 viewColumn(const GpuView2& v2, std::size_t col) {
-				if (col >= v2.mView.extent(1))
-					throw std::logic_error("column out of range");
+			GpuView1 viewColumn(const GpuView2& v2, Coordinate col) {
+			
+				Error::checkBounds(col, v2.mView.extent(1));
 
 				int rows = v2.mView.extent(0);
 
@@ -233,7 +244,7 @@ namespace NetworkLib {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				std::size_t r = w2.mView.extent(0)
+				Dimension r = w2.mView.extent(0)
 					, c = w2.mView.extent(1);
 
 				Error::checkMissMatch(c, i1.mSize);
@@ -255,7 +266,7 @@ namespace NetworkLib {
 
 				Error::checkMissMatch(c, k);
 
-				std::size_t batchSize = i2.mView.extent(1);
+				Dimension batchSize = i2.mView.extent(1);
 
 				for (auto b : std::views::iota(0ULL, batchSize)) {
 
@@ -265,13 +276,84 @@ namespace NetworkLib {
 					matMulVec(w2, i1, o1);
 				}
 			}
+			void matMulVecBatchStrided(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+				
+				float alpha = 1.0f;
+				float beta = 0.0f;
+
+				int r = w2.mView.extent(0);       // rows of matrix
+				int c = w2.mView.extent(1);       // cols of matrix
+				int batchSize = i2.mView.extent(1);
+
+				Error::checkMissMatch(c, i2.mView.extent(0));
+				Error::checkMissMatch(batchSize, o2.mView.extent(1));
+
+				// Leading dimensions
+				int lda = r;  // w2: (r × c)
+				int ldb = c;  // i2: (c × 1)
+				int ldc = r;  // o2: (r × 1)
+
+				// Strides
+				long long strideA = 0;                  // w2 is shared across batches
+				long long strideB = static_cast<long long>(c);  // each vector is c × 1
+				long long strideC = static_cast<long long>(r);  // each output is r × 1
+
+				auto result = cublasSgemmStridedBatched(
+					mHandle,
+					CUBLAS_OP_N, CUBLAS_OP_N,
+					r, 1, c,
+					&alpha,
+					w2.mGpu, lda, strideA,
+					i2.mGpu, ldb, strideB,
+					&beta,
+					o2.mGpu, ldc, strideC,
+					batchSize
+				);
+
+				Error::checkBlas(result);
+			}
+			void matTMulVecBatchedStrided(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+				float alpha = 1.0f;
+				float beta = 0.0f;
+
+				int r = w2.mView.extent(0);       // rows of w2
+				int c = w2.mView.extent(1);       // cols of w2
+				int batchSize = i2.mView.extent(1);
+
+				Error::checkMissMatch(r, i2.mView.extent(0));
+				Error::checkMissMatch(batchSize, o2.mView.extent(1));
+
+				// Leading dimensions
+				int lda = r;  // w2: (r × c), column-major
+				int ldb = r;  // i2: (r × 1), column-major
+				int ldc = c;  // o2: (c × 1), column-major
+
+				// Strides
+				long long strideA = 0;                  // shared w2
+				long long strideB = static_cast<long long>(r);  // input vector stride
+				long long strideC = static_cast<long long>(c);  // output vector stride
+
+				auto result = cublasSgemmStridedBatched(
+					mHandle,
+					CUBLAS_OP_T, CUBLAS_OP_N,  // transpose w2, no transpose i2
+					c, 1, r,                   // output dim: (c × 1), inner dim: r
+					&alpha,
+					w2.mGpu, lda, strideA,
+					i2.mGpu, ldb, strideB,
+					&beta,
+					o2.mGpu, ldc, strideC,
+					batchSize
+				);
+
+				Error::checkBlas(result);
+			}
 
 			void matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1){
 				
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
-				std::size_t r = w2.mView.extent(0)
+				Dimension r = w2.mView.extent(0)
 					, c = w2.mView.extent(1);
 
 				Error::checkMissMatch(r, i1.mSize);
@@ -296,6 +378,10 @@ namespace NetworkLib {
 				auto result = cublasScopy(mHandle, source.mSize, source.mGpu, 1, dest.mGpu, 1);
 				Error::checkBlas(result);
 			}
+			void batchedCopy(const GpuView2& source, GpuView2& dest);
+			void batchedBroadcast(const GpuView1& source, GpuView2& dest);
+			void batchedBroadcastAdd(const GpuView1& source, GpuView2& dest);
+
 			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
 				
 				using ActivationFunction = LayerTemplate::ActivationFunction;
@@ -372,8 +458,13 @@ namespace NetworkLib {
 				gpu.sync();
 
 				auto forward = [&]() {
+					gpu.matMulVecBatchStrided(w2, i2, o2);
+					gpu.batchedBroadcastAdd(b1, o2);
+					gpu.batchedCopy(o2, a2);
 
-					gpu.matMulVecBatch(w2, i2, o2);
+					gpu.matTMulVecBatchedStrided(w2, o2, i2);
+
+					//gpu.matMulVecBatch(w2, i2, o2);
 					//gpu.matMulVec(w, i, o);
 					//gpu.vecAddVec(b, o);
 				//	gpu.softmax(o, a);
@@ -384,7 +475,7 @@ namespace NetworkLib {
 
 				gpu.sync();
 
-				for (const auto& f : o2)
+				for (const auto& f : i2)
 					std::print("{} ", f);
 
 				fs1.destroy();

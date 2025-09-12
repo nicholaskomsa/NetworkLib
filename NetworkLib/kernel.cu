@@ -52,6 +52,15 @@ __global__ void cuDiff(const float* desired, const float* sought, float* primes,
     if (i < size) 
         primes[i] = sought[i] - desired[i];
 }
+__global__ void cuBatchedCopy(const float* src, float* dst, int size, int batchSize) {
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+
+    if (row < size && col < batchSize) {
+        int i = row + col * size; // column-major offset
+        dst[i] = src[i];
+    }
+}
 
 __global__ void cuUpdateWeights(float* weights, const float* primes, const float* seen, int r, int c, float learnRate) {
     int col = blockIdx.x * blockDim.x + threadIdx.x; // Column index
@@ -63,6 +72,24 @@ __global__ void cuUpdateWeights(float* weights, const float* primes, const float
         weights[index_col_major] -= primes[row] * seen[col] * learnRate;
     }
 }
+__global__ void cuBroadcastVectorToColumns(const float* src, float* dst, int size, int batchSize) {
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+
+    if (row < size && col < batchSize) {
+        dst[row + col * size] = src[row];  // column-major offset
+    }
+}
+__global__ void cuBroadcastVectorToColumnsAdd(const float* src, float* dst, int size, int batchSize) {
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+
+    if (row < size && col < batchSize) {
+        dst[row + col * size] += src[row];  // column-major offset
+    }
+}
+
+
 void Kernel::relu(cudaStream_t stream, const float* outputs, float* reluActivations, int size) {
     int threadsPerBlock = 256;
     int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
@@ -86,4 +113,31 @@ void Kernel::updateWeights(cudaStream_t stream, float* weights, const float* pri
     dim3 threadsPerBlock(32, 32);
     dim3 numBlocks((cols + 32 - 1) / 32, (rows + 32 - 1) / 32);
     cuUpdateWeights<<<numBlocks, threadsPerBlock, 0, stream>>>(weights, primes, seen, rows, cols, learnRate);
+}
+void Kernel::batchedCopy(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
+    int threadsPerBlock = 256;
+    int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
+
+    dim3 grid(blocksPerRow, batchSize);
+    dim3 block(threadsPerBlock);
+
+    cuBatchedCopy<<<grid, block, 0, stream >>>(src, dst, size, batchSize);
+}
+void Kernel::batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
+    int threadsPerBlock = 256;
+    int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
+
+    dim3 grid(blocksPerRow, batchSize);
+    dim3 block(threadsPerBlock);
+
+    cuBroadcastVectorToColumns<<<grid, block, 0, stream>>>(src, dst, size, batchSize);
+}
+void Kernel::batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
+    int threadsPerBlock = 256;
+    int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
+
+    dim3 grid(blocksPerRow, batchSize);
+    dim3 block(threadsPerBlock);
+
+    cuBroadcastVectorToColumnsAdd << <grid, block, 0, stream >> > (src, dst, size, batchSize);
 }

@@ -24,8 +24,8 @@ int main() {
 	//diag.simpleChat();
 
 	//Cpu::Tensor::example();
-	NetworkLib::Model::modelXOR();
-//	NetworkLib::Gpu::Environment::example();
+	//NetworkLib::Model::modelXOR();
+	NetworkLib::Gpu::Environment::example();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

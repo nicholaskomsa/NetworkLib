@@ -24,3 +24,15 @@ void Environment::updateWeights(const GpuView1& seen, GpuView2& weights, const G
 	Kernel::updateWeights(mStream, weights.mGpu, primes.mGpu, seen.mGpu, rows, cols, learnRate);
 
 }
+void Environment::batchedCopy(const GpuView2& source, GpuView2& dest) {
+	auto batchSize = source.mView.extent(1);
+	Kernel::batchedCopy(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+}
+void Environment::batchedBroadcast(const GpuView1& source, GpuView2& dest) {
+	auto batchSize = dest.mView.extent(1);
+	Kernel::batchedBroadcast(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+}
+void Environment::batchedBroadcastAdd(const GpuView1& source, GpuView2& dest) {
+	auto batchSize = dest.mView.extent(1);
+	Kernel::batchedBroadcastAdd(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+}

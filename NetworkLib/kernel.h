@@ -12,6 +12,11 @@ namespace NetworkLib {
            
 			
 			void diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size);
+	
+			void batchedCopy(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
+			void batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
+			void batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
+
 		}
 	}
 }

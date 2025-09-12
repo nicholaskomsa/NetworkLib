@@ -52,6 +52,7 @@ namespace NetworkLib {
 					inputSize = n;
 				}
 			}
+
 			void destroy() {
 				mGpuFloats.destroy();
 			}
@@ -77,12 +78,8 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 
-						std::size_t inputSize;
-
-						if (l == 0)
-							inputSize = mNetworkTemplate->mInputSize;
-						else
-							inputSize = mLayers[l - 1].mBias.mSize;
+						std::size_t inputSize = (l == 0)? 
+							mNetworkTemplate->mInputSize : mLayers[l - 1].mBias.mSize;
 
 						layer.applyKHScaleUniform(inputSize);
 					}
@@ -200,8 +197,9 @@ namespace NetworkLib {
 					if (backwards)
 						gpuFloats.advance(mPrimes, begin, n);
 				}
+				
 				GpuView2 mWeights;
-				GpuView1 mBias,mOutputs,mActivations, mPrimes;
+				GpuView1 mBias, mOutputs, mActivations, mPrimes;
 				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
 			};
 
@@ -215,7 +213,6 @@ namespace NetworkLib {
 			NetworkTemplate* mNetworkTemplate = nullptr;
 
 			FloatSpace1 mGpuFloats;
-
 
 			Layers mLayers;
 		};
