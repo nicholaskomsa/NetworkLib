@@ -226,6 +226,13 @@ namespace NetworkLib {
 					, v2.mCpu + col * rows
 				};
 			}
+			GpuView1 flatten(const GpuView2& v2) {
+				return {
+					Cpu::Tensor::View1(v2.mCpu, v2.mSize)
+					, v2.mGpu
+					, v2.mCpu
+				};
+			}
 
 			void vecScale( GpuView1& a1, float scale) {
 				auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
@@ -259,7 +266,7 @@ namespace NetworkLib {
 					o1.mGpu, 1);
 				Error::checkBlas(result);
 			}
-			void matMulVecBatch(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+			void batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 
 				int c = w2.mView.extent(1);
 				int k = i2.mView.extent(0);
@@ -276,7 +283,7 @@ namespace NetworkLib {
 					matMulVec(w2, i1, o1);
 				}
 			}
-			void matMulVecBatchStrided(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+			void batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 				
 				float alpha = 1.0f;
 				float beta = 0.0f;
@@ -312,7 +319,7 @@ namespace NetworkLib {
 
 				Error::checkBlas(result);
 			}
-			void matTMulVecBatchedStrided(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+			void batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 				float alpha = 1.0f;
 				float beta = 0.0f;
 
@@ -381,6 +388,8 @@ namespace NetworkLib {
 			void batchedCopy(const GpuView2& source, GpuView2& dest);
 			void batchedBroadcast(const GpuView1& source, GpuView2& dest);
 			void batchedBroadcastAdd(const GpuView1& source, GpuView2& dest);
+			void batchedDiff(const GpuView2& desired2, const GpuView2& sought2, GpuView2& primes2);
+			void batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, const GpuView2& primes, float learnRate);
 
 			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
 				
@@ -412,8 +421,18 @@ namespace NetworkLib {
 				switch (af) {
 				case LayerTemplate::ActivationFunction::None:
 				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
+				default:
 					//softmax-cross-entropy is a diff
 					diff(desired, sought, p1);
+					return;
+				}
+			}
+			void batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2) {
+				switch (af) {
+				case LayerTemplate::ActivationFunction::None:
+				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
+					//softmax-cross-entropy is a diff
+					batchedDiff(desired2, sought2, p2);
 					return;
 				}
 			}
@@ -428,14 +447,14 @@ namespace NetworkLib {
 
 				Gpu::FloatSpace1 fs1;
 				Gpu::GpuView1 b1;
-				Gpu::GpuView2 o2, a2, i2;
+				Gpu::GpuView2 o2, a2, i2, d2, p2;
 				Gpu::GpuView2 w2;
 
 				std::size_t inputSize = 3
 					, biasSize = 2
 					, batchSize = 3;
 
-				fs1.create((inputSize + biasSize*2)*batchSize 
+				fs1.create((inputSize + biasSize*4)*batchSize 
 					+ biasSize 
 					+ biasSize * inputSize);
 
@@ -446,38 +465,53 @@ namespace NetworkLib {
 				fs1.advance(b1, begin, biasSize);
 				fs1.advance(o2, begin, biasSize, batchSize);
 				fs1.advance(a2, begin, biasSize, batchSize);
+				fs1.advance(p2, begin, biasSize, batchSize);
+				fs1.advance(d2, begin, biasSize, batchSize);
 
 				std::fill(w2.begin(), w2.end(), 1);
 				std::fill(i2.begin(), i2.end(), 1);
 				std::fill(b1.begin(), b1.end(), 1);
+				std::fill(d2.begin(), d2.end(), 0.5);
 
 				i2.mView[0, 1] = 0;
+
+				d2.mView[0, 0] = .314;
+				d2.mView[0, 1] = 1;
+				d2.mView[0, 2] = 0;
 
 				fs1.upload();
 
 				gpu.sync();
 
-				auto forward = [&]() {
-					gpu.matMulVecBatchStrided(w2, i2, o2);
-					gpu.batchedBroadcastAdd(b1, o2);
-					gpu.batchedCopy(o2, a2);
+				for (auto generation : std::views::iota(0, 50000)) {
 
-					gpu.matTMulVecBatchedStrided(w2, o2, i2);
+					auto af = LayerTemplate::ActivationFunction::None;
 
-					//gpu.matMulVecBatch(w2, i2, o2);
-					//gpu.matMulVec(w, i, o);
-					//gpu.vecAddVec(b, o);
-				//	gpu.softmax(o, a);
-					};
-				forward();
+					auto forward = [&]() {
 
-				fs1.downloadAsync(gpu);
+						gpu.batchedMatMulVec(w2, i2, o2);
+						gpu.batchedBroadcastAdd(b1, o2);
+						gpu.batchedCopy(o2, a2);
 
-				gpu.sync();
+						};
+					forward();
 
-				for (const auto& f : i2)
+					auto backward = [&]() {
+
+						gpu.batchedErrorFunction(af, d2, a2, p2);
+
+						gpu.batchedUpdateWeights(i2, w2, p2, 0.002);
+						};
+					backward();
+
+					fs1.downloadAsync(gpu);
+
+					gpu.sync();
+				}
+
+				for (const auto& f : o2)
 					std::print("{} ", f);
-
+				std::println("");
 				fs1.destroy();
 
 				gpu.destroy();

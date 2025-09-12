@@ -25,8 +25,10 @@ void Environment::updateWeights(const GpuView1& seen, GpuView2& weights, const G
 
 }
 void Environment::batchedCopy(const GpuView2& source, GpuView2& dest) {
+	auto size = source.mView.extent(0);
 	auto batchSize = source.mView.extent(1);
-	Kernel::batchedCopy(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+
+	Kernel::batchedCopy(mStream, source.mGpu, dest.mGpu, size, batchSize);
 }
 void Environment::batchedBroadcast(const GpuView1& source, GpuView2& dest) {
 	auto batchSize = dest.mView.extent(1);
@@ -35,4 +37,15 @@ void Environment::batchedBroadcast(const GpuView1& source, GpuView2& dest) {
 void Environment::batchedBroadcastAdd(const GpuView1& source, GpuView2& dest) {
 	auto batchSize = dest.mView.extent(1);
 	Kernel::batchedBroadcastAdd(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+}
+void Environment::batchedDiff(const GpuView2& desired2, const GpuView2& sought2,GpuView2& primes2){
+	Kernel::diff(mStream, desired2.mGpu, sought2.mGpu, primes2.mGpu, desired2.mSize);
+}
+void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, const GpuView2& primes, float learnRate) {
+
+	int rows = weights.mView.extent(0);
+	int cols = weights.mView.extent(1);
+	int batchNum = seen.mView.extent(1);
+
+	Kernel::batchedUpdateWeights(mStream, weights.mGpu, primes.mGpu, seen.mGpu, rows, cols, batchNum, learnRate);
 }

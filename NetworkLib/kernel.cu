@@ -72,6 +72,21 @@ __global__ void cuUpdateWeights(float* weights, const float* primes, const float
         weights[index_col_major] -= primes[row] * seen[col] * learnRate;
     }
 }
+__global__ void cuBatchedUpdateWeights(float* weights, const float* primes, const float* seen, int rows, int cols, int batchSize, float learnRate) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int b = blockIdx.z;  // Each block handles one sample
+
+    if (col < cols && row < rows && b < batchSize) {
+        float prime_val = primes[b * rows + row];   // primes[row, b]
+        float seen_val = seen[b * cols + col];     // seen[col, b]
+
+        int index_col_major = row + col * rows;
+
+        atomicAdd(&weights[index_col_major], -learnRate * prime_val * seen_val);
+    }
+
+}
 __global__ void cuBroadcastVectorToColumns(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;
@@ -88,7 +103,6 @@ __global__ void cuBroadcastVectorToColumnsAdd(const float* src, float* dst, int 
         dst[row + col * size] += src[row];  // column-major offset
     }
 }
-
 
 void Kernel::relu(cudaStream_t stream, const float* outputs, float* reluActivations, int size) {
     int threadsPerBlock = 256;
@@ -140,4 +154,10 @@ void Kernel::batchedBroadcastAdd(cudaStream_t stream, const float* src, float* d
     dim3 block(threadsPerBlock);
 
     cuBroadcastVectorToColumnsAdd << <grid, block, 0, stream >> > (src, dst, size, batchSize);
+}
+void Kernel::batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int rows, int cols, int batchSize, float learnRate) {
+    dim3 blockDim(16, 16, 1);  // Threads per block
+    dim3 gridDim((cols + 15) / 16, (rows + 15) / 16, batchSize);  // One block per batch
+    cuBatchedUpdateWeights << <gridDim, blockDim, 0, stream >> >(weights, primes, seen, rows, cols, batchSize, learnRate);
+
 }

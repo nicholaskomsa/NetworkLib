@@ -16,6 +16,7 @@ namespace NetworkLib {
 			void batchedCopy(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
 			void batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
 			void batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
+			void batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int cols, int rows, int batchSize, float learnRate);
 
 		}
 	}
