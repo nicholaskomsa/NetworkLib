@@ -76,8 +76,9 @@ namespace NetworkLib {
 
 			constexpr std::size_t inputSize = 2, outputSize = 2
 				, trainNum = 5000;
-			constexpr float learnRate = 0.002f;
+
 			std::size_t batchSize = 4;
+			float learnRate = 0.002f;
 
 			using ActivationFunction = LayerTemplate::ActivationFunction;
 			NetworkTemplate networkTemplate = { inputSize, batchSize
@@ -93,8 +94,6 @@ namespace NetworkLib {
 			gnn.upload();
 
 			Gpu::FloatSpace1 sampleSpace;
-			//GpuSamples trainingSamples = createXORSamples(sampleSpace);
-
 			GpuBatchedSamples trainingBatchedSamples = createXORBatchedSamples(sampleSpace, batchSize);
 
 			sampleSpace.upload();
