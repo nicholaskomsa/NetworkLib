@@ -14,6 +14,9 @@ namespace NetworkLib {
 		using GpuSamples = std::vector<GpuSample>;
 		using Samples = std::vector<Sample>;
 
+		using GpuBatchedSample = std::pair<Gpu::GpuView2, Gpu::GpuView2>;
+		using GpuBatchedSamples = std::vector<GpuBatchedSample>;
+		
 		GpuSamples createGPUSamples(Gpu::FloatSpace1& gpuSampleSpace
 			, const Samples& samples
 			, std::size_t inputSize, std::size_t outputSize) {
@@ -40,6 +43,44 @@ namespace NetworkLib {
 			return gpuSamples;
 		}
 
+		GpuBatchedSamples createGPUBatchedSamples(Gpu::FloatSpace1& gpuSampleSpace
+			, const Samples& samples
+			, std::size_t inputSize, std::size_t outputSize, std::size_t batchSize = 1) {
+
+			GpuBatchedSamples gpuBatchedSamples;
+
+			auto batchNum = std::ceil(samples.size() / float(batchSize));
+
+			gpuBatchedSamples.resize(batchNum);
+
+			gpuSampleSpace.create( batchNum * batchSize * (inputSize + outputSize));
+			auto begin = gpuSampleSpace.begin();
+			auto currentSample = samples.begin();
+
+			for (auto batch : std::views::iota(0ULL, batchNum)) {
+
+				auto& [seenBatch, desiredBatch] = gpuBatchedSamples[batch];
+
+				gpuSampleSpace.advance(seenBatch, begin, inputSize, batchSize);
+				gpuSampleSpace.advance(desiredBatch, begin, outputSize, batchSize);
+
+				for (auto b : std::views::iota(0ULL, batchSize)) {
+
+					if (currentSample == samples.end()) break;
+					auto& [seen, desired] = *currentSample;
+					++currentSample;
+
+					auto gpuSeen = seenBatch.viewColumn(b);
+					auto gpuDesired = desiredBatch.viewColumn(b);
+
+					std::copy(seen.begin(), seen.end(), gpuSeen.begin());
+					std::copy(desired.begin(), desired.end(), gpuDesired.begin());
+				}
+			}
+
+			return gpuBatchedSamples;
+		}
+		
 		GpuSamples createXORSamples(Gpu::FloatSpace1& gpuSampleSpace) {
 
 			const Samples samples = {
@@ -50,11 +91,22 @@ namespace NetworkLib {
 			};
 
 			return createGPUSamples(gpuSampleSpace, samples, 2, 2);
-			};
+		}
+		GpuBatchedSamples createXORBatchedSamples(Gpu::FloatSpace1& gpuSampleSpace, std::size_t batchSize) {
 
+			const Samples samples = {
+				{{0,0}, {1,0}},
+				{{0,1}, {0,1}},
+				{{1,0}, {0,1}},
+				{{1,1}, {1,0}},
+			};
+			auto inputSize = samples.front().first.size()
+				, outputSize = samples.front().second.size();
+			return createGPUBatchedSamples(gpuSampleSpace, samples, inputSize, outputSize, batchSize);
+		}
 		static void modelXOR() {
 
-			std::mt19937 random;
+			std::mt19937_64 random;
 			Gpu::Environment gpu;
 
 			gpu.create();
@@ -62,7 +114,7 @@ namespace NetworkLib {
 			constexpr std::size_t inputSize = 2, outputSize = 2
 				, trainNum = 5000;
 			constexpr float learnRate = 0.002f;
-			std::size_t batchSize = 1;
+			std::size_t batchSize = 4;
 
 			using ActivationFunction = LayerTemplate::ActivationFunction;
 			NetworkTemplate networkTemplate = { inputSize, batchSize
@@ -78,14 +130,17 @@ namespace NetworkLib {
 			gnn.upload();
 
 			Gpu::FloatSpace1 sampleSpace;
-			GpuSamples trainingSamples = createXORSamples(sampleSpace);
+			//GpuSamples trainingSamples = createXORSamples(sampleSpace);
+
+			GpuBatchedSamples trainingBatchedSamples = createXORBatchedSamples(sampleSpace, batchSize);
+
 			sampleSpace.upload();
 
 			auto calculateConvergence = [&]() {
 
-				for (const auto& [seen, desired] : trainingSamples) {
+				for (const auto& [seen, desired] : trainingBatchedSamples) {
 
-					const auto& sought = gnn.forward(gpu, seen);
+					auto sought = gnn.forward(gpu, seen);
 					sought.downloadAsync(gpu);
 					gpu.sync();
 
@@ -108,12 +163,85 @@ namespace NetworkLib {
 			for (auto generation : std::views::iota(0ULL, trainNum))
 				trainTime.accumulateTime([&]() {
 
-					const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
+					const auto& [seen, desired] = trainingBatchedSamples[generation % trainingBatchedSamples.size()];
 
 					gnn.forward(gpu, seen);
 					gnn.backward(gpu, seen, desired, learnRate);
 
 					printProgress(generation, trainNum);
+
+					});
+
+			calculateConvergence();
+
+			sampleSpace.destroy();
+
+			gnn.destroy();
+
+			gpu.destroy();
+		}
+		static void modelXORBatch() {
+
+			std::mt19937_64 random;
+			Gpu::Environment gpu;
+
+			gpu.create();
+
+			constexpr std::size_t inputSize = 2, outputSize = 2
+				, trainNum = 5000
+				, batchSize = 1;
+			constexpr float learnRate = 0.002f;
+			
+			using ActivationFunction = LayerTemplate::ActivationFunction;
+			NetworkTemplate networkTemplate = { inputSize, batchSize
+				, {{ 7, ActivationFunction::ReLU}
+				, { 4, ActivationFunction::ReLU}
+				, { outputSize, ActivationFunction::None}}
+			};
+
+			Gpu::Network gnn(&networkTemplate);
+			gnn.create();
+
+			gnn.initialize(random);
+			gnn.upload();
+
+			Gpu::FloatSpace1 sampleSpace;
+			GpuSamples trainingSamples = createXORSamples(sampleSpace);
+			sampleSpace.upload();
+
+			auto calculateConvergence = [&]() {
+
+				for (const auto& [seen, desired] : trainingSamples) {
+
+					auto sought = gnn.forward(gpu, seen);
+					sought.downloadAsync(gpu);
+					gpu.sync();
+
+					std::println("\nseen: {}"
+						"\ndesired: {}"
+						"\nsought: {}"
+						, seen
+						, desired
+						, sought
+					);
+				}
+				};
+
+			calculateConvergence();
+
+			TimeAverage<milliseconds> trainTime;
+
+			std::print("Training: ");
+
+			for (auto generation : std::views::iota(0ULL, trainNum))
+				trainTime.accumulateTime([&]() {
+
+				const auto& [seen, desired] = trainingSamples[generation % trainingSamples.size()];
+
+				gnn.forward(gpu, seen);
+				gnn.backward(gpu, seen, desired, 0, learnRate);
+
+				printProgress(generation, trainNum);
 
 					});
 

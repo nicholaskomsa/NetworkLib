@@ -103,6 +103,20 @@ namespace NetworkLib {
 				return result;
 			}
 
+			static View1 viewColumn(const View2& v2, Coordinate col) {
+
+				auto rows = v2.extent(0);
+				auto offset = rows * col;
+				auto cpu = v2.data_handle() + offset;
+
+				return View1(cpu, std::array{ rows });
+			}
+			
+			template<ViewConcept ViewType>
+			View1 flatten(ViewType& v) {
+				return View1(v.data_handle(), std::array{ area(v) });
+			}
+			
 			template<DynamicViewConcept ViewType>
 			class FloatSpace {
 			public:

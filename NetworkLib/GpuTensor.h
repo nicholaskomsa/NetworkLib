@@ -133,10 +133,44 @@ namespace NetworkLib {
 			const float* end() const {
 				return mCpu + mSize;
 			}
+
+			GpuView<Cpu::Tensor::View1> flatten() const {
+				return {
+					Cpu::Tensor::flatten(mView)
+					, mGpu
+					, mCpu
+				};
+			}
+
+			GpuView<Cpu::Tensor::View1> viewColumn( Coordinate col) const{
+
+				Error::checkBounds(col, mView.extent(1));
+
+				auto cpuView = Cpu::Tensor::viewColumn(mView, col);
+
+				int rows = mView.extent(0);
+				std::size_t offset = col * rows;
+				auto gpu = mGpu + offset;
+
+				return {
+					 cpuView
+					, gpu
+					, cpuView.data_handle()
+				};
+
+				return {};
+			}
+
 		};
 
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
+
+
+
+
+
+
 
 		struct FloatSpace1 {
 
@@ -214,25 +248,6 @@ namespace NetworkLib {
 				return mStream;
 			}
 
-			GpuView1 viewColumn(const GpuView2& v2, Coordinate col) {
-			
-				Error::checkBounds(col, v2.mView.extent(1));
-
-				int rows = v2.mView.extent(0);
-
-				return {
-					 Cpu::Tensor::View1(v2.mCpu, rows)
-					, v2.mGpu + col * rows
-					, v2.mCpu + col * rows
-				};
-			}
-			GpuView1 flatten(const GpuView2& v2) {
-				return {
-					Cpu::Tensor::View1(v2.mCpu, v2.mSize)
-					, v2.mGpu
-					, v2.mCpu
-				};
-			}
 
 			void vecScale( GpuView1& a1, float scale) {
 				auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
@@ -277,8 +292,8 @@ namespace NetworkLib {
 
 				for (auto b : std::views::iota(0ULL, batchSize)) {
 
-					GpuView1 i1 = viewColumn(i2, b)
-						, o1 = viewColumn(o2, b);
+					const GpuView1 i1 = i2.viewColumn(b);
+					GpuView1 o1 = o2.viewColumn(b);
 
 					matMulVec(w2, i1, o1);
 				}
