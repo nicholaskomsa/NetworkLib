@@ -54,6 +54,9 @@
     <ClInclude Include="kernel.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="TrainingManager.h">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">

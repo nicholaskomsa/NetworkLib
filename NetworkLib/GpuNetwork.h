@@ -12,18 +12,15 @@ namespace NetworkLib {
 		class Network {
 		public:
 
-			Network(NetworkTemplate* networkTemplate)
-				: mNetworkTemplate(networkTemplate) {
-			}
+			void create(NetworkTemplate* networkTemplate, bool backwards=true) {
 
-			void create(bool backwards=true) {
+				mNetworkTemplate = networkTemplate;
 
-				const auto& networkTemplate = *mNetworkTemplate;
-				auto& layerTemplates = networkTemplate.mLayerTemplates;
+				const auto& nt = *mNetworkTemplate;
+				auto& layerTemplates = nt.mLayerTemplates;
+				auto batchSize = nt.mBatchSize;
 
-				auto batchSize = networkTemplate.mBatchSize;
-
-				auto& firstInputSize = networkTemplate.mInputSize;
+				auto& firstInputSize = nt.mInputSize;
 				std::size_t size = 0, inputSize = firstInputSize;
 				for (auto& layerTemplate : layerTemplates) {
 					const auto n = layerTemplate.mNodeCount;

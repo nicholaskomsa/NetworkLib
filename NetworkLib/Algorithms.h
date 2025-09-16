@@ -66,6 +66,15 @@ namespace NetworkLib {
 
 			return str;
 			};
+
+		template<typename TimeType2>
+		std::string getString() {
+
+			const auto str = std::format("{}x{}={}", average(), count, duration_cast<TimeType2>(sum));
+			reset();
+
+			return str;
+		};
 	};
 
 	void printProgress(std::size_t progress, std::size_t totalSize, float printPercent = 0.10f ) {
