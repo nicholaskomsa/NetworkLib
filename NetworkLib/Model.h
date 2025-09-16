@@ -135,12 +135,17 @@ namespace NetworkLib {
 					});
 
 			calculateConvergence();
+			std::println("\nTraining Took: {}", trainTime.getString());
+
+
 
 			sampleSpace.destroy();
-
 			gnn.destroy();
-
 			gpu.destroy();
+		}
+
+		static void modelMNIST() {
+
 		}
 	};
 
