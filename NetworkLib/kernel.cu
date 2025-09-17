@@ -1,5 +1,7 @@
 ﻿#include <stdio.h>
 
+#include <cfloat>
+
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
@@ -25,28 +27,57 @@ __global__ void cuApplyReluPrime(const float* reluActivations, float* reluPrimes
 }
 
 __global__ void cuSoftmax1024(const float* outputs, float* softmaxActivations, int size) {
-    extern __shared__ float shared_exp[];
+    extern __shared__ float shared_data[]; //[exp_vals[<1024], max_val]
+
+    float* shared_exp = shared_data;
+    float& shared_max = shared_data[size]; // single float for max
 
     int tid = threadIdx.x;
 
-    if (tid < size) 
-        shared_exp[tid] = expf(outputs[tid]);
-    
+    // Step 1: Find max
+    float local_max = -FLT_MAX;
+    if (tid < size) {
+        local_max = outputs[tid];
+    }
+
+    // Reduction to find max
+    shared_exp[tid] = local_max;
     __syncthreads();
 
-    // Block-local reduction
+    for (int stride = size / 2; stride > 0; stride >>= 1) {
+        if (tid < stride && tid + stride < size) {
+            shared_exp[tid] = fmaxf(shared_exp[tid], shared_exp[tid + stride]);
+        }
+        __syncthreads();
+    }
+
+    if (tid == 0) {
+        shared_max = shared_exp[0];
+    }
+    __syncthreads();
+
+    // Step 2: Compute exp(x - max)
+    if (tid < size) {
+        shared_exp[tid] = expf(outputs[tid] - shared_max);
+    }
+    __syncthreads();
+
+    // Step 3: Sum exp values
     float sum = 0.0f;
     if (tid == 0) {
         for (int i = 0; i < size; ++i) {
             sum += shared_exp[i];
         }
-        shared_exp[0] = sum;
+        shared_max = sum; // reuse shared_max as shared_sum
     }
     __syncthreads();
 
-    if (tid < size) 
-        softmaxActivations[tid] = shared_exp[tid] / shared_exp[0];
+    // Step 4: Normalize
+    if (tid < size) {
+        softmaxActivations[tid] = shared_exp[tid] / shared_max;
+    }
 }
+
 __global__ void cuDiff(const float* desired, const float* sought, float* primes, int size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i < size) 
@@ -134,7 +165,6 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
         float batchMse = partialSum[0] / size / batchSize;
         atomicAdd(result, batchMse);
     }
-
 }
 
 void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize) {
@@ -158,7 +188,7 @@ void Kernel::applyReluPrime(cudaStream_t stream, const float* reluActivations, f
     cuApplyReluPrime <<<blocksPerGrid, threadsPerBlock, 0, stream >>> (reluActivations, primes, size);
 }
 void Kernel::softmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size) {
-    cuSoftmax1024 <<<1, size, size * sizeof(float), stream >>>(outputs, softmaxActivations, size);
+    cuSoftmax1024 <<<1, size, (size +1)* sizeof(float), stream >>>(outputs, softmaxActivations, size);
 }
 void Kernel::diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size) {
     int threadsPerBlock = 256;

@@ -58,7 +58,7 @@ namespace NetworkLib {
 				mNetworkTemplate = { mInputSize, mBatchSize
 					, {{ 7, ActivationFunction::ReLU}
 					, { 4, ActivationFunction::ReLU}
-					, { mOutputSize, ActivationFunction::None}}
+					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
 				mNetwork.create(&mNetworkTemplate);

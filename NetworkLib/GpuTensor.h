@@ -402,6 +402,7 @@ namespace NetworkLib {
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
+			void batchedSoftmax(const GpuView2& o2, GpuView2& a2);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
 			void updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
 			void copy(const GpuView1& source, GpuView1& dest) {
@@ -421,11 +422,29 @@ namespace NetworkLib {
 				case ActivationFunction::ReLU:
 					relu(o1, a1);
 					break;
-				case ActivationFunction::SoftmaxCrossEntropy:
+				case ActivationFunction::Softmax:
 					softmax(o1, a1);
 					break;
 				case ActivationFunction::None:
 					copy(o1, a1);
+					break;
+				}
+			}
+			void batchedActivationFunction(LayerTemplate::ActivationFunction af, const GpuView2& o2, GpuView2& a2) {
+
+				using ActivationFunction = LayerTemplate::ActivationFunction;
+				switch (af) {
+				case ActivationFunction::ReLU: {
+					auto o1 = o2.flatten();
+					auto a1 = a2.flatten();
+					relu(o1, a1);
+					break;
+				}
+				case ActivationFunction::Softmax:
+					batchedSoftmax(o2, a2);
+					break;
+				case ActivationFunction::None:
+					batchedCopy(o2, a2);
 					break;
 				}
 			}
@@ -442,19 +461,24 @@ namespace NetworkLib {
 			}
 			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1) {
 				switch (af) {
-				case LayerTemplate::ActivationFunction::None:
-				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
-				default:
+				case LayerTemplate::ActivationFunction::Softmax:
 					//softmax-cross-entropy is a diff
+					[[fallthrouh]];
+				case LayerTemplate::ActivationFunction::None:
+					[[fallthrouh]];
+				default:
 					diff(desired, sought, p1);
 					return;
 				}
 			}
 			void batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2) {
 				switch (af) {
-				case LayerTemplate::ActivationFunction::None:
-				case LayerTemplate::ActivationFunction::SoftmaxCrossEntropy:
+				case LayerTemplate::ActivationFunction::Softmax:
 					//softmax-cross-entropy is a diff
+					[[fallthrouh]];
+				case LayerTemplate::ActivationFunction::None:
+					[[fallthrouh]];
+				default:
 					batchedDiff(desired2, sought2, p2);
 					return;
 				}
@@ -508,13 +532,13 @@ namespace NetworkLib {
 
 				for (auto generation : std::views::iota(0, 50000)) {
 
-					auto af = LayerTemplate::ActivationFunction::None;
+					auto af = LayerTemplate::ActivationFunction::Softmax;
 
 					auto forward = [&]() {
 
 						gpu.batchedMatMulVec(w2, i2, o2);
 						gpu.batchedBroadcastAdd(b1, o2);
-						gpu.batchedCopy(o2, a2);
+						gpu.batchedActivationFunction(af, o2, a2);
 
 						};
 					forward();
@@ -526,13 +550,13 @@ namespace NetworkLib {
 						gpu.batchedUpdateWeights(i2, w2, p2, 0.002);
 						};
 					backward();
-
-					fs1.downloadAsync(gpu);
-
-					gpu.sync();
 				}
 
-				for (const auto& f : o2)
+				fs1.downloadAsync(gpu);
+
+				gpu.sync();
+
+				for (const auto& f : a2)
 					std::print("{} ", f);
 				std::println("");
 				fs1.destroy();

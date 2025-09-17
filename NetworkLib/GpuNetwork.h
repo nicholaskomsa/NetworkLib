@@ -177,11 +177,8 @@ namespace NetworkLib {
 					auto& p2 = back.mPrimes;
 					
 					//output layer makes a comparison between desired and sought
-					auto sought1 = soughtBatch.flatten();
-					auto p1 = p2.flatten();
-					auto desired1 = desiredBatch.flatten();
 
-					env.errorFunction(af, desired1, sought1, p1);
+					env.batchedErrorFunction(af, desiredBatch, soughtBatch, p2);
 					};
 
 				auto hiddenLayers = [&]() {
@@ -274,10 +271,7 @@ namespace NetworkLib {
 					env.batchedMatMulVec(mWeights, input, mOutputs);
 					env.batchedBroadcastAdd(mBias, mOutputs);
 
-					auto outputs1 = mOutputs.flatten();
-					auto activations1 = mActivations.flatten();
-
-					env.activationFunction(mActivationFunction, outputs1, activations1);
+					env.batchedActivationFunction(mActivationFunction, mOutputs, mActivations);
 					return mActivations;
 				}
 				void advance(FloatSpace1& gpuFloats, float*& begin

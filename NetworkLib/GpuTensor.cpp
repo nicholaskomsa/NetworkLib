@@ -19,6 +19,13 @@ void Environment::applyReluPrime(const GpuView1& a1, GpuView1& p1) {
 void Environment::softmax(const GpuView1& o1, GpuView1& a1) {
 	Kernel::softmax(mStream, o1.mGpu, a1.mGpu, o1.mSize);
 }
+void Environment::batchedSoftmax(const GpuView2& o2, GpuView2& a2) {
+	for( auto b : std::views::iota(0ULL, o2.mView.extent(1))) {
+		auto o1 = o2.viewColumn(b);
+		auto a1 = a2.viewColumn(b);
+		softmax(o1, a1);
+	}
+}
 void Environment::diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1) {
 	Kernel::diff(mStream, desired1.mGpu, sought1.mGpu, primes1.mGpu, desired1.mSize);
 }

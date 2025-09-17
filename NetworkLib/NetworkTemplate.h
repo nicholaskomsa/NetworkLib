@@ -13,8 +13,7 @@ namespace NetworkLib {
 			ReLU,
 			Sigmoid,
 			Tanh,
-			Softmax,
-			SoftmaxCrossEntropy,
+			Softmax
 		} mActivationFunction = ActivationFunction::None;
 
 		LayerTemplate(std::size_t nodeCount, ActivationFunction af) : mNodeCount(nodeCount), mActivationFunction(af){}
