@@ -21,7 +21,7 @@ namespace NetworkLib {
 			TrainingManager mTManager;
 
 			std::size_t mInputSize = 2, mOutputSize = 2
-				, mTrainNum = 10000;
+				, mTrainNum = 5000;
 
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
@@ -60,7 +60,7 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 7, ActivationFunction::ReLU}
+					, {{ 9, ActivationFunction::ReLU}
 					, { 4, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};

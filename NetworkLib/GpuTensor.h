@@ -515,7 +515,7 @@ namespace NetworkLib {
 
 				std::size_t inputSize = 3
 					, biasSize = 2
-					, batchSize = 3;
+					, batchSize = 1;
 
 				fs1.create((inputSize + biasSize*4)*batchSize 
 					+ biasSize 
