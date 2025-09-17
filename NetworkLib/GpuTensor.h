@@ -459,6 +459,21 @@ namespace NetworkLib {
 					break;
 				}
 			}
+			void batchedActivationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView2& a2, GpuView2& p2) {
+
+				using ActivationFunction = LayerTemplate::ActivationFunction;
+				switch (af) {
+				case ActivationFunction::ReLU: {
+					auto p1 = p2.flatten();
+					auto a1 = a2.flatten();
+					applyReluPrime(a1, p1);
+					break;
+				}
+				case ActivationFunction::None:
+					break;
+				}
+			}
+			
 			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1) {
 				switch (af) {
 				case LayerTemplate::ActivationFunction::Softmax:
@@ -496,6 +511,7 @@ namespace NetworkLib {
 				Gpu::GpuView1 b1;
 				Gpu::GpuView2 o2, a2, i2, d2, p2;
 				Gpu::GpuView2 w2;
+				Gpu::GpuView2 activations,softmax;
 
 				std::size_t inputSize = 3
 					, biasSize = 2
@@ -503,7 +519,7 @@ namespace NetworkLib {
 
 				fs1.create((inputSize + biasSize*4)*batchSize 
 					+ biasSize 
-					+ biasSize * inputSize);
+					+ biasSize * inputSize + biasSize*2*batchSize);
 
 				auto begin = fs1.begin();
 
@@ -514,6 +530,8 @@ namespace NetworkLib {
 				fs1.advance(a2, begin, biasSize, batchSize);
 				fs1.advance(p2, begin, biasSize, batchSize);
 				fs1.advance(d2, begin, biasSize, batchSize);
+				fs1.advance(softmax, begin, biasSize, batchSize);
+				fs1.advance(activations, begin, biasSize, batchSize);
 
 				std::fill(w2.begin(), w2.end(), 1);
 				std::fill(i2.begin(), i2.end(), 1);
@@ -525,12 +543,18 @@ namespace NetworkLib {
 				d2.mView[0, 0] = .314;
 				d2.mView[0, 1] = 1;
 				d2.mView[0, 2] = 0;
+			
+				activations.mView[0, 0] = 0.3;
+				activations.mView[1, 0] = -0.8;
+
+				activations.mView[0, 1] = 0.9;
+				activations.mView[1, 1] = 0.1;
 
 				fs1.upload();
 
 				gpu.sync();
 
-				for (auto generation : std::views::iota(0, 50000)) {
+				for (auto generation : std::views::iota(0, 5000)) {
 
 					auto af = LayerTemplate::ActivationFunction::Softmax;
 
@@ -551,12 +575,13 @@ namespace NetworkLib {
 						};
 					backward();
 				}
+				gpu.batchedActivationFunction(LayerTemplate::ActivationFunction::Softmax, activations, softmax);
 
 				fs1.downloadAsync(gpu);
 
 				gpu.sync();
 
-				for (const auto& f : a2)
+				for (const auto& f : softmax)
 					std::print("{} ", f);
 				std::println("");
 				fs1.destroy();

@@ -21,7 +21,7 @@ namespace NetworkLib {
 			TrainingManager mTManager;
 
 			std::size_t mInputSize = 2, mOutputSize = 2
-				, mTrainNum = 5000;
+				, mTrainNum = 10000;
 
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
@@ -33,19 +33,23 @@ namespace NetworkLib {
 				for (const auto& [seen, desired] : mBatchedSamples) {
 
 					auto sought = mNetwork.forward(mGpu, seen);
+					auto output = mNetwork.getOutput();
 
 					mGpu.mse(sought, desired);
 
 					sought.downloadAsync(mGpu);
-					
+					output.downloadAsync(mGpu);
+
 					mGpu.sync();
 
 					std::println("\nseen: {}"
 						"\ndesired: {}"
 						"\nsought: {}"
+						"\noutput: {}"
 						, seen
 						, desired
 						, sought
+						, output
 					);
 				}
 				std::println("mse: {}\n", mGpu.getMseResult() );

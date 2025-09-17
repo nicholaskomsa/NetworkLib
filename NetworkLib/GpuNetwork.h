@@ -195,11 +195,9 @@ namespace NetworkLib {
 
 						auto af = layer.mActivationFunction;
 
-						env.batchedMatTMulVec(nw2, np2, p2);
+						env.batchedMatTMulVec(nextLayer.mWeights, np2, p2);
 
-						auto o1 = o2.flatten();
-						auto p1 = p2.flatten();
-						env.activationFunctionPrime(af, o1, p1);
+						env.batchedActivationFunctionPrime(af, o2, p2);
 					}
 					};
 
@@ -227,7 +225,9 @@ namespace NetworkLib {
 			GpuView2 getSought() {
 				return mLayers.back().mActivations;
 			}
-
+			GpuView2 getOutput() {
+				return mLayers.back().mOutputs;
+			}
 			GpuView2 getPrimes() {
 				return mLayers.back().mPrimes;
 			}
