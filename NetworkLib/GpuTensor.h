@@ -166,12 +166,6 @@ namespace NetworkLib {
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
 
-
-
-
-
-
-
 		struct FloatSpace1 {
 
 			GpuView1 mView;
@@ -233,6 +227,10 @@ namespace NetworkLib {
 				Error::checkBlas(cublasCreate(&mHandle));
 				Error::checkCuda(cudaStreamCreate(&mStream));
 				Error::checkBlas(cublasSetStream(mHandle, mStream));
+
+				mFloatSpace1.create(1);
+				auto begin = mFloatSpace1.begin();
+				mFloatSpace1.advance(mMseResult, begin, 1);
 			}
 			void destroy() {
 				Error::checkCuda(cudaStreamDestroy(mStream));
@@ -391,6 +389,16 @@ namespace NetworkLib {
 				Error::checkBlas(result);
 			}
 	
+			void mse(const GpuView2& sought, const GpuView2& desired);
+			float getMseResult() {
+				mMseResult.downloadAsync(mStream);
+				sync();
+				return mMseResult.mView[0];
+			}
+			void resetMseResult() {
+				mMseResult.mView[0] = 0.0f;
+				mMseResult.upload();
+			}
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
@@ -535,6 +543,9 @@ namespace NetworkLib {
 		private:
 			cublasHandle_t mHandle;
 			cudaStream_t mStream;
+
+			FloatSpace1 mFloatSpace1;
+			GpuView1 mMseResult;
 		};
 	}
 }

@@ -227,9 +227,14 @@ namespace NetworkLib {
 			}
 
 			
-			const GpuView2 getSought() {
+			GpuView2 getSought() {
 				return mLayers.back().mActivations;
 			}
+
+			GpuView2 getPrimes() {
+				return mLayers.back().mPrimes;
+			}
+
 			class Layer {
 			public:
 				void generate(std::mt19937_64& random) {
@@ -266,7 +271,7 @@ namespace NetworkLib {
 				}
 				const GpuView2& forward(Environment& env, const GpuView2& input) {
 				
-					env.batchedMatMulVec1(mWeights, input, mOutputs);
+					env.batchedMatMulVec(mWeights, input, mOutputs);
 					env.batchedBroadcastAdd(mBias, mOutputs);
 
 					auto outputs1 = mOutputs.flatten();

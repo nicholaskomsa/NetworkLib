@@ -10,7 +10,8 @@ namespace NetworkLib {
 
 			void softmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size);
            
-			
+			void mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize);
+
 			void diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size);
 	
 			void batchedCopy(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);

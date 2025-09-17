@@ -103,6 +103,49 @@ __global__ void cuBroadcastVectorToColumnsAdd(const float* src, float* dst, int 
         dst[row + col * size] += src[row];  // column-major offset
     }
 }
+__global__ void cuMse(const float* sought, const float* desired, float* result, int size, int batchSize) {
+    extern __shared__ float partialSum[]; // shared memory per block
+
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+    int tid = threadIdx.x;
+
+    float localSum = 0.0f;
+
+    if (row < size && col < batchSize) {
+        int i = row + col * size; // column-major offset
+        float diff = sought[i] - desired[i];
+        localSum = diff * diff;
+    }
+
+    partialSum[tid] = localSum;
+    __syncthreads();
+
+    // Block-level reduction
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride) {
+            partialSum[tid] += partialSum[tid + stride];
+        }
+        __syncthreads();
+    }
+
+    // Accumulate per-batch sum into global result
+    if (tid == 0) {
+        float batchMse = partialSum[0] / size / batchSize;
+        atomicAdd(result, batchMse);
+    }
+
+}
+
+void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize) {
+    int threadsPerBlock = 256;
+    int blocksPerBatch = (size + threadsPerBlock - 1) / threadsPerBlock;
+    dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
+    dim3 block(threadsPerBlock);
+    size_t sharedMemSize = threadsPerBlock * sizeof(float);
+
+    cuMse<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, size, batchSize);
+}
 
 void Kernel::relu(cudaStream_t stream, const float* outputs, float* reluActivations, int size) {
     int threadsPerBlock = 256;

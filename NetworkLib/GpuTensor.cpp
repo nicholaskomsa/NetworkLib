@@ -4,6 +4,12 @@
 
 using namespace NetworkLib::Gpu;
 
+void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
+
+	int size = sought.mView.extent(0);
+	int batchSize = sought.mView.extent(1);
+	Kernel::mse(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, size, batchSize);
+}
 void Environment::relu(const GpuView1& o1, GpuView1& a1) {
 	Kernel::relu(mStream, o1.mGpu, a1.mGpu, o1.mSize);
 }

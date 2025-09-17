@@ -28,10 +28,16 @@ namespace NetworkLib {
 
 			void calculateConvergence() {
 
+				mGpu.resetMseResult();
+
 				for (const auto& [seen, desired] : mBatchedSamples) {
 
 					auto sought = mNetwork.forward(mGpu, seen);
+
+					mGpu.mse(sought, desired);
+
 					sought.downloadAsync(mGpu);
+					
 					mGpu.sync();
 
 					std::println("\nseen: {}"
@@ -42,6 +48,7 @@ namespace NetworkLib {
 						, sought
 					);
 				}
+				std::println("mse: {}\n", mGpu.getMseResult() );
 			}
 			void create() {
 
@@ -74,12 +81,12 @@ namespace NetworkLib {
 				for (auto generation : std::views::iota(0ULL, mTrainNum))
 					trainTime.accumulateTime([&]() {
 
-					const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
+						const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
 
-					mNetwork.forward(mGpu, seen);
-					mNetwork.backward(mGpu, seen, desired, mLearnRate);
+						mNetwork.forward(mGpu, seen);
+						mNetwork.backward(mGpu, seen, desired, mLearnRate);
 
-					printProgress(generation, mTrainNum);
+						printProgress(generation, mTrainNum);
 
 						});
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "GpuTensor.h"
+#include "GpuNetwork.h"
 
 namespace NetworkLib {
 
