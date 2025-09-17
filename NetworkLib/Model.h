@@ -60,7 +60,7 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 9, ActivationFunction::ReLU}
+					, {{ 8, ActivationFunction::ReLU}
 					, { 4, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};

@@ -233,6 +233,9 @@ namespace NetworkLib {
 				mFloatSpace1.advance(mMseResult, begin, 1);
 			}
 			void destroy() {
+
+				mFloatSpace1.destroy();
+
 				Error::checkCuda(cudaStreamDestroy(mStream));
 				Error::checkBlas(cublasDestroy(mHandle));
 			}
