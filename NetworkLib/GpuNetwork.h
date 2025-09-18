@@ -81,9 +81,10 @@ namespace NetworkLib {
 				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 					layer.advanceActivations(mGpuFloats, begin, n, batchSize);
 					});
-				mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.advancePrimes(mGpuFloats, begin, n, batchSize);
-					});
+				if(backwards)
+					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+						layer.advancePrimes(mGpuFloats, begin, n, batchSize);
+						});
 			}
 
 			void destroy() {
