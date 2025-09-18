@@ -60,13 +60,7 @@ namespace NetworkLib {
 					return { view, mGpuFloats.getGpu(view), componentBegin };
 					};
 
-				//setup all at once 
-				//groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-				//	auto af = layerTemplate.mActivationFunction;
-				//	layer.advance(mGpuFloats, begin, n, inputSize, af, batchSize, backwards);
-				//	});
-
-				//setup grouped
+				//mWeights, etc refer to all weights from all layers, they are grouped
 				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 					layer.mActivationFunction = layerTemplate.mActivationFunction;
 					layer.advanceWeights(mGpuFloats, begin, n, inputSize);
@@ -286,20 +280,7 @@ namespace NetworkLib {
 					env.batchedActivationFunction(mActivationFunction, mOutputs, mActivations);
 					return mActivations;
 				}
-				void advance(FloatSpace1& gpuFloats, float*& begin
-					, std::size_t n, std::size_t inputSize
-					, LayerTemplate::ActivationFunction af, std::size_t batchSize, bool backwards) {
-					
-					gpuFloats.advance(mWeights, begin, n, inputSize);
-					gpuFloats.advance(mBias, begin, n);
-					gpuFloats.advance(mOutputs, begin, n, batchSize);
-					gpuFloats.advance(mActivations, begin, n, batchSize);
 
-					mActivationFunction = af;
-
-					if (backwards)
-						gpuFloats.advance(mPrimes, begin, n, batchSize);
-				}
 				void advanceWeights(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t inputSize) {
 					gpuFloats.advance(mWeights, begin, n, inputSize);
 				}
