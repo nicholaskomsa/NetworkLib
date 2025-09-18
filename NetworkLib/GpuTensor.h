@@ -158,7 +158,6 @@ namespace NetworkLib {
 					, cpuView.data_handle()
 				};
 
-				return {};
 			}
 
 		};

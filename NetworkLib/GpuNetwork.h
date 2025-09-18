@@ -40,16 +40,50 @@ namespace NetworkLib {
 				mLayers.resize(layerTemplates.size());
 
 				auto begin = mGpuFloats.begin();
-				inputSize = firstInputSize;
-				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
-					const auto n = layerTemplate.mNodeCount;
-					const auto af = layerTemplate.mActivationFunction;
-					
-					layer.advance(mGpuFloats, begin, n, inputSize, af, batchSize, backwards);
 
-					inputSize = n;
-				}
+				auto groupComponent = [&](auto&& setupFunctor) ->GpuView1 {
+
+					auto componentBegin = begin;
+
+					inputSize = firstInputSize;
+					for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
+
+						const auto n = layerTemplate.mNodeCount;
+
+						setupFunctor( layer, layerTemplate, n, inputSize);
+		
+						inputSize = n;
+					}
+
+					std::size_t size = std::distance(begin, componentBegin);
+					auto view = Cpu::Tensor::View1(componentBegin, std::array{ size });
+					return { view, mGpuFloats.getGpu(view), componentBegin };
+					};
+
+				//setup all at once 
+				//groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+				//	auto af = layerTemplate.mActivationFunction;
+				//	layer.advance(mGpuFloats, begin, n, inputSize, af, batchSize, backwards);
+				//	});
+
+				//setup grouped
+				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+					layer.mActivationFunction = layerTemplate.mActivationFunction;
+					layer.advanceWeights(mGpuFloats, begin, n, inputSize);
+					});
+				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+					layer.advanceBias(mGpuFloats, begin, n);
+					});
+				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+					layer.advanceOutputs(mGpuFloats, begin, n, batchSize);
+					});
+				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+					layer.advanceActivations(mGpuFloats, begin, n, batchSize);
+					});
+				mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
+					layer.advancePrimes(mGpuFloats, begin, n, batchSize);
+					});
 			}
 
 			void destroy() {
@@ -99,15 +133,14 @@ namespace NetworkLib {
 				return i;
 			}
 
-			const GpuView2& forward(Environment& env, const GpuView2& seenBatch) {
+			const GpuView2 forward(Environment& env, const GpuView2& seenBatch) {
 
-
-				const GpuView2* i2 = &seenBatch;
+				GpuView2 i2 = seenBatch;
 
 				for (auto& layer : mLayers)
-					i2 = &layer.forward(env, *i2);
+					i2 = layer.forward(env, i2);
 
-				return *i2;
+				return i2;
 			}
 
 			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, std::size_t batch, float learnRate) {
@@ -288,7 +321,24 @@ namespace NetworkLib {
 					if (backwards)
 						gpuFloats.advance(mPrimes, begin, n, batchSize);
 				}
-				
+				void advanceWeights(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t inputSize) {
+					gpuFloats.advance(mWeights, begin, n, inputSize);
+				}
+				void advanceBias(FloatSpace1& gpuFloats, float*& begin, std::size_t n) {
+					gpuFloats.advance(mBias, begin, n);
+				}
+				void advanceOutputs(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
+					gpuFloats.advance(mOutputs, begin, n, batchSize);
+				}
+				void advanceActivations(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
+					gpuFloats.advance(mActivations, begin, n, batchSize);
+				}
+				void advancePrimes(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
+					gpuFloats.advance(mPrimes, begin, n, batchSize);
+				}
+				void setActivationFunction(LayerTemplate::ActivationFunction af) {
+					mActivationFunction = af;
+				}
 				GpuView2 mWeights;
 				GpuView1 mBias;
 				GpuView2 mOutputs, mActivations, mPrimes;
@@ -306,6 +356,8 @@ namespace NetworkLib {
 			NetworkTemplate* mNetworkTemplate = nullptr;
 
 			FloatSpace1 mGpuFloats;
+
+			GpuView1 mWeights, mBias, mOutputs, mActivations, mPrimes;
 
 			Layers mLayers;
 		};
