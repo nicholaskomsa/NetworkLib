@@ -165,6 +165,34 @@ namespace NetworkLib {
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
 
+		struct Float {
+			float* mGpu = nullptr, * mCpu = nullptr;
+
+			void upload() {
+				Error::checkCuda(cudaMemcpy(
+					mGpu,
+					mCpu,
+					1 * sizeof(float),
+					cudaMemcpyHostToDevice));
+			}
+			void downloadAsync(cudaStream_t stream) const {
+				Error::checkCuda(cudaMemcpyAsync(
+					mCpu,
+					mGpu,
+					1 * sizeof(float),
+					cudaMemcpyDeviceToHost,
+					stream));
+			}
+
+			operator float() const {
+				return *mCpu;
+			}
+			Float& operator=(float v) {
+				*mCpu = v;
+				return *this;
+			}
+		};
+
 		struct FloatSpace1 {
 
 			GpuView1 mView;
@@ -193,12 +221,13 @@ namespace NetworkLib {
 				mView.mGpu = nullptr;
 			}
 
+			float* getGpu(float* cpu) {
+				return mView.mGpu + (cpu - mView.mCpu);
+			}
+
 			template<ViewConcept ViewType>
 			float* getGpu(ViewType& view) {
-				float* phost = mView.mCpu;
-				float* vhost = view.data_handle();
-				float* vgpu = mView.mGpu + (vhost - phost);
-				return vgpu;
+				return getGpu(view.data_handle());
 			}
 
 			float* begin() { return mView.begin(); }
@@ -210,6 +239,11 @@ namespace NetworkLib {
 				auto source = begin;
 				Cpu::Tensor::advance(view, begin, dimensions...);
 				gpuView = { view, getGpu(view), source };
+			}
+			void advance(Float& f, float*& begin) {
+				auto source = begin;
+				f = { getGpu(source), source };
+				++begin;
 			}
 
 			void upload(){
@@ -229,7 +263,7 @@ namespace NetworkLib {
 
 				mFloatSpace1.create(1);
 				auto begin = mFloatSpace1.begin();
-				mFloatSpace1.advance(mMseResult, begin, 1);
+				mFloatSpace1.advance(mMseResult, begin);
 			}
 			void destroy() {
 
@@ -247,7 +281,6 @@ namespace NetworkLib {
 			operator cudaStream_t() {
 				return mStream;
 			}
-
 
 			void vecScale( GpuView1& a1, float scale) {
 				auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
@@ -395,10 +428,10 @@ namespace NetworkLib {
 			float getMseResult() {
 				mMseResult.downloadAsync(mStream);
 				sync();
-				return mMseResult.mView[0];
+				return mMseResult;
 			}
 			void resetMseResult() {
-				mMseResult.mView[0] = 0.0f;
+				mMseResult = 0.0f;
 				mMseResult.upload();
 			}
 			void relu(const GpuView1& o1, GpuView1& a1);
@@ -596,7 +629,7 @@ namespace NetworkLib {
 			cudaStream_t mStream;
 
 			FloatSpace1 mFloatSpace1;
-			GpuView1 mMseResult;
+			Float mMseResult;
 		};
 	}
 }

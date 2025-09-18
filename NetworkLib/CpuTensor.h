@@ -14,6 +14,7 @@ namespace NetworkLib {
 
 			using FloatType = float;
 			using Floats = std::vector<FloatType>;
+			using FloatsView = std::span<FloatType>;
 			using Dimension = std::size_t;
 			using Coordinate = std::size_t;
 
@@ -116,7 +117,12 @@ namespace NetworkLib {
 			View1 flatten(ViewType& v) {
 				return View1(v.data_handle(), std::array{ area(v) });
 			}
-			
+
+			template<ViewConcept ViewType>
+			FloatsView view(ViewType& v) {
+				return FloatsView(v.data_handle(), area(v));
+			}
+
 			template<DynamicViewConcept ViewType>
 			class FloatSpace {
 			public:
