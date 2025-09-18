@@ -90,6 +90,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Algorithms.h" />
+    <ClInclude Include="Environment.h" />
     <ClInclude Include="GpuTensor.h" />
     <ClInclude Include="kernel.h" />
     <ClInclude Include="Model.h" />
@@ -106,6 +107,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
+    <ClCompile Include="Environment.cpp" />
     <ClCompile Include="FloatSpaceConvert.cpp" />
     <ClCompile Include="Gpt2.cpp" />
     <ClCompile Include="Gpt2Backward.cpp" />

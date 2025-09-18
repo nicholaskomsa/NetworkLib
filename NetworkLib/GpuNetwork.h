@@ -3,8 +3,8 @@
 #include <random>
 
 #include "Parallel.h"
-#include "GpuTensor.h"
-#include "NetworkTemplate.h"
+#include "Environment.h"
+
 
 namespace NetworkLib {
 	namespace Gpu {
@@ -63,21 +63,21 @@ namespace NetworkLib {
 				//mWeights, etc refer to all weights from all layers, they are grouped
 				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 					layer.mActivationFunction = layerTemplate.mActivationFunction;
-					layer.advanceWeights(mGpuFloats, begin, n, inputSize);
+					mGpuFloats.advance(layer.mWeights, begin, n, inputSize);
 					});
 				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.advanceBias(mGpuFloats, begin, n);
+					mGpuFloats.advance(layer.mBias, begin, n);
 					});
 				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.advanceOutputs(mGpuFloats, begin, n, batchSize);
+					mGpuFloats.advance(layer.mOutputs, begin, n, batchSize);
 					});
 				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.advanceActivations(mGpuFloats, begin, n, batchSize);
+					mGpuFloats.advance(layer.mActivations, begin, n, batchSize);
 					});
 
 				if(backwards)
 					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-						layer.advancePrimes(mGpuFloats, begin, n, batchSize);
+						mGpuFloats.advance(layer.mPrimes, begin, n, batchSize);
 						});
 			}
 
@@ -118,10 +118,10 @@ namespace NetworkLib {
 					});
 			}
 
-			const GpuView1 forward(Environment& env, GpuView1 seen) {
+			const GpuView1 forward(Environment& env, GpuView1 seen, std::size_t batch = 0) {
 				
 				for( auto& layer : mLayers ) 
-					seen = layer.forward(env, seen);
+					seen = layer.forward(env, seen, batch);
 				
 				return seen;
 			}
@@ -208,17 +208,16 @@ namespace NetworkLib {
 					};
 
 				auto updateWeights = [&]() {
-					for (auto l : std::views::iota(0ULL, mLayers.size())) {
+
+					auto& front = mLayers.front();
+					env.batchedUpdateWeights(seenBatch, front.mWeights, front.mPrimes, learnRate);
+
+					for (auto l : std::views::iota(1ULL, mLayers.size())) {
 
 						auto& layer = mLayers[l];
+						auto& prevLayer = mLayers[l - 1];
 
-						GpuView2 input;
-						if (l == 0)
-							input = seenBatch;
-						else
-							input = mLayers[l - 1].mActivations;
-
-						env.batchedUpdateWeights(input, layer.mWeights, layer.mPrimes, learnRate);
+						env.batchedUpdateWeights(prevLayer.mActivations, layer.mWeights, layer.mPrimes, learnRate);
 					}
 					};
 
@@ -281,24 +280,6 @@ namespace NetworkLib {
 					return mActivations;
 				}
 
-				void advanceWeights(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t inputSize) {
-					gpuFloats.advance(mWeights, begin, n, inputSize);
-				}
-				void advanceBias(FloatSpace1& gpuFloats, float*& begin, std::size_t n) {
-					gpuFloats.advance(mBias, begin, n);
-				}
-				void advanceOutputs(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
-					gpuFloats.advance(mOutputs, begin, n, batchSize);
-				}
-				void advanceActivations(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
-					gpuFloats.advance(mActivations, begin, n, batchSize);
-				}
-				void advancePrimes(FloatSpace1& gpuFloats, float*& begin, std::size_t n, std::size_t batchSize) {
-					gpuFloats.advance(mPrimes, begin, n, batchSize);
-				}
-				void setActivationFunction(LayerTemplate::ActivationFunction af) {
-					mActivationFunction = af;
-				}
 				GpuView2 mWeights;
 				GpuView1 mBias;
 				GpuView2 mOutputs, mActivations, mPrimes;

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <functional>
 
 namespace NetworkLib {
 
@@ -18,6 +17,7 @@ namespace NetworkLib {
 
 		LayerTemplate(std::size_t nodeCount, ActivationFunction af) : mNodeCount(nodeCount), mActivationFunction(af){}
 	};
+
 	using LayerTemplates = std::vector<LayerTemplate>;
 
 	struct NetworkTemplate {

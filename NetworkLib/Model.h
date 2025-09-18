@@ -3,6 +3,7 @@
 
 #include "Algorithms.h"
 
+#include "Environment.h"
 #include "TrainingManager.h"
 #include "GpuNetwork.h"
 

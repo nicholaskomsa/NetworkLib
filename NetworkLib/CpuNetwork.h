@@ -50,7 +50,7 @@ namespace NetworkLib {
 					const auto& [n, af] = layerTemplate;
 					auto& [w, b] = layer;
 
-					Tensor::advance(w, begin, inputSize, n);
+					Tensor::advance(w, begin, n, inputSize);
 					Tensor::advance(b, begin, n);
 
 					inputSize = n;
