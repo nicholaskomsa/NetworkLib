@@ -41,7 +41,6 @@ namespace NetworkLib {
 
 				auto begin = mGpuFloats.begin();
 
-
 				auto groupComponent = [&](auto&& setupFunctor) ->GpuView1 {
 
 					auto componentBegin = begin;
@@ -81,6 +80,7 @@ namespace NetworkLib {
 				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 					layer.advanceActivations(mGpuFloats, begin, n, batchSize);
 					});
+
 				if(backwards)
 					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 						layer.advancePrimes(mGpuFloats, begin, n, batchSize);
@@ -124,38 +124,32 @@ namespace NetworkLib {
 					});
 			}
 
-			const GpuView1 forward(Environment& env, const GpuView1& seen) {
+			const GpuView1 forward(Environment& env, GpuView1 seen) {
 				
-				GpuView1 i = seen;
-
 				for( auto& layer : mLayers ) 
-					i = layer.forward(env, i);
+					seen = layer.forward(env, seen);
 				
-				return i;
+				return seen;
 			}
 
-			const GpuView2 forward(Environment& env, const GpuView2& seenBatch) {
-
-				GpuView2 i2 = seenBatch;
+			const GpuView2 forward(Environment& env, GpuView2 seenBatch) {
 
 				for (auto& layer : mLayers)
-					i2 = layer.forward(env, i2);
+					seenBatch = layer.forward(env, seenBatch);
 
-				return i2;
+				return seenBatch;
 			}
 
-			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, std::size_t batch, float learnRate) {
+			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, float learnRate, std::size_t batch = 0) {
 
 				auto backLayer = [&]() {
+
 					auto& back = mLayers.back();
-
-					auto af = back.mActivationFunction;
-
 					const auto sought = back.mActivations.viewColumn(batch);
 					auto p1 = back.mPrimes.viewColumn(batch);
 
 					//output layer makes a comparison between desired and sought
-					env.errorFunction(af, desired, sought, p1);
+					env.errorFunction(back.mActivationFunction, desired, sought, p1);
 					};
 
 				auto hiddenLayers = [&]() {
@@ -169,12 +163,8 @@ namespace NetworkLib {
 						auto o1 = layer.mOutputs.viewColumn(batch);
 						auto np1 = nextLayer.mPrimes.viewColumn(batch);
 
-						auto& nw2 = nextLayer.mWeights;
-
-						auto af = layer.mActivationFunction;
-
-						env.matTMulVec(nw2, np1, p1);
-						env.activationFunctionPrime(af, o1, p1);
+						env.matTMulVec(nextLayer.mWeights, np1, p1);
+						env.activationFunctionPrime(layer.mActivationFunction, o1, p1);
 					}
 					};
 
@@ -203,16 +193,12 @@ namespace NetworkLib {
 			void backward(Environment& env, const GpuView2& seenBatch, const GpuView2& desiredBatch, float learnRate) {
 
 				auto backLayer = [&]() {
+
 					auto& back = mLayers.back();
+					const auto soughtBatch = back.mActivations;
 
-					auto af = back.mActivationFunction;
-
-					const auto& soughtBatch = back.mActivations;
-					auto& p2 = back.mPrimes;
-					
 					//output layer makes a comparison between desired and sought
-
-					env.batchedErrorFunction(af, desiredBatch, soughtBatch, p2);
+					env.batchedErrorFunction(back.mActivationFunction, desiredBatch, soughtBatch, back.mPrimes);
 					};
 
 				auto hiddenLayers = [&]() {
@@ -222,16 +208,8 @@ namespace NetworkLib {
 						auto& layer = mLayers[l];
 						auto& nextLayer = mLayers[l + 1];
 
-						auto& p2 = layer.mPrimes;
-						auto& o2 = layer.mOutputs;
-						auto& np2 = nextLayer.mPrimes;
-						auto& nw2 = nextLayer.mWeights;
-
-						auto af = layer.mActivationFunction;
-
-						env.batchedMatTMulVec(nextLayer.mWeights, np2, p2);
-
-						env.batchedActivationFunctionPrime(af, o2, p2);
+						env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+						env.batchedActivationFunctionPrime(layer.mActivationFunction, layer.mOutputs, layer.mPrimes);
 					}
 					};
 
@@ -240,13 +218,13 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 
-						const GpuView2* input = nullptr;
+						GpuView2 input;
 						if (l == 0)
-							input = &seenBatch;
+							input = seenBatch;
 						else
-							input = &mLayers[l - 1].mActivations;
+							input = mLayers[l - 1].mActivations;
 
-						env.batchedUpdateWeights(*input, layer.mWeights, layer.mPrimes, learnRate);
+						env.batchedUpdateWeights(input, layer.mWeights, layer.mPrimes, learnRate);
 					}
 					};
 
