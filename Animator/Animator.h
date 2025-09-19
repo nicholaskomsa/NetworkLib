@@ -2,6 +2,7 @@
 
 #include <SDL3/SDL.h>
 #include <GL/glew.h>
+#include <freetype/freetype.h>
 
 #include <FloatSpaceConvert.h>
 
@@ -49,6 +50,8 @@ private:
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
     GLuint mTexture = 0, mShaderProgram = 0, mVao = 0, mVbo = 0;
+	static constexpr auto mFontName = "./minecraft.ttf";
+	FT_UInt mFontSize = 12;
 
     bool mRunning = false, mPaused = false;
 
@@ -56,6 +59,32 @@ private:
     void doEvents();
 
     FloatSpaceConvert::Rect mFloatRect;
+
+    void setFont(std::size_t fontSize = 12 ) {
+        FT_Library ft;
+        FT_Init_FreeType(&ft);
+        FT_Face face;
+        FT_New_Face(ft, mFontName, 0, &face);
+        FT_Set_Pixel_Sizes(face, 0, fontSize);
+        FT_Load_Char(face, 'A', FT_LOAD_RENDER);
+        FT_Bitmap bitmap = face->glyph->bitmap;
+
+        int width = bitmap.width;
+        int height = bitmap.rows;
+        int pitch = bitmap.pitch;
+        unsigned char* src = bitmap.buffer;
+
+        std::vector<unsigned char> texBuffer(width * height); // tightly packed
+
+        for (int y = 0; y < height; ++y) {
+            memcpy(&texBuffer[y * width], &src[y * pitch], width);
+        }
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, texBuffer.data());
+
+
+
+    }
 
     void resizeTexture(){
         if( mTexture)
