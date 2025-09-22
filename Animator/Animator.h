@@ -59,7 +59,6 @@ private:
 
     QuadManager mQuadManager;
     QuadManager::QuadReference mViewerQuad;
-    Text mTextBox;
     TextManager mTextManager;
     TextManager::CaptionValueReference mTicksValueRef;
 

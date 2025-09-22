@@ -141,6 +141,15 @@ public:
 
 		FT_Done_Face(mFontFace);       // Destroys the font face
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
+
+		for (auto& label : mLabels)
+			label.destroy();
+
+		for (auto& [ caption,value] : mCaptionValues) {
+
+			caption.destroy();
+			value.destroy();
+		}
 	}
 
 	void raiseYInsert(float distance) {

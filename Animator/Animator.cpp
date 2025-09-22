@@ -328,7 +328,6 @@ void Animator::shutdown() {
 
         glDeleteTextures(1, &mTexture);
 
-        mTextBox.destroy();
         mTextManager.destroy();
         mQuadManager.destroy();
 
@@ -340,7 +339,7 @@ void Animator::shutdown() {
         SDL_Quit();
 
         };
-
+    
     shutdownGL();
 }
 
