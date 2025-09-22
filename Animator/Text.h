@@ -115,7 +115,9 @@ public:
 	FT_Library mFreeType;
 	FT_Face mFontFace;
 
-	std::vector<Text> mStaticTexts;
+	std::vector<Text> mLabels;
+	using LabelReference = std::size_t;
+
 	using CaptionValue = std::pair<Text, Text>;
 	std::vector<CaptionValue> mCaptionValues;
 	using CaptionValueReference = std::size_t;
@@ -145,14 +147,15 @@ public:
 		mInsertY += distance;
 	}
 
-	void addLabel(const std::string& text) {
+	LabelReference addLabel(const std::string& text) {
 		Text t;
 		t.create(text, mFontFace);
 		t.mQuadReference = mQuadManager->add(-1.0, mInsertY, t.getAspectRatio(), mScale);
 
-		raiseYInsert(2.0f * mScale);
+		mLabels.push_back(std::move(t));
 
-		mStaticTexts.push_back(std::move(t));
+		raiseYInsert(2.0f * mScale);
+		return mLabels.size() - 1;
 	}
 
 	CaptionValueReference addLabeledValue(const std::string& text, const std::string& valueText) {
@@ -169,8 +172,9 @@ public:
 		value.create(valueText, mFontFace);
 		value.mQuadReference = mQuadManager->add(insertX, mInsertY, value.getAspectRatio(), mScale);
 
-		raiseYInsert(2.0f * mScale);
 		mCaptionValues.push_back({ std::move(caption), std::move(value) });
+
+		raiseYInsert(2.0f * mScale);
 
 		return mCaptionValues.size() - 1;
 	}
@@ -178,6 +182,10 @@ public:
 	void updateCaptionValue(CaptionValueReference captionValueRef, const std::string& valueText) {
 		auto& value = mCaptionValues[captionValueRef].second;
 		value.create(valueText, mFontFace);
+	}
+	void updateLabel(LabelReference labelRef, const std::string& labelText) {
+		auto& label = mLabels[labelRef];
+		label.create(labelText, mFontFace);
 	}
 
 	void render() {
@@ -187,7 +195,7 @@ public:
 		//glEnable(GL_BLEND);
 		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		for (auto& text : mStaticTexts) {
+		for (auto& text : mLabels) {
 
 			glBindTexture(GL_TEXTURE_2D, text.mTexture);
 			qm.render(text.mQuadReference);
