@@ -61,7 +61,8 @@ private:
     QuadManager::QuadReference mViewerQuad;
     Text mTextBox;
     TextManager mTextManager;
- 
+    TextManager::CaptionValueReference mTicksValueRef;
+
     bool mRunning = false, mPaused = false;
 
     void render();

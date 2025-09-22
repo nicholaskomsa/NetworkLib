@@ -15,12 +15,12 @@ public:
 	QuadManager::QuadReference mQuadReference;
 
 	GLuint mTexture = 0;
-	FT_Int mTotalWidth = 0, mTotalHeight = 0, mMaxAscent = 0, mMaxDescent = 0;
-	std::vector<std::uint32_t> mTextBuffer;
+	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0, mMaxAscent = 0, mMaxDescent = 0;
+	std::vector<std::uint32_t> mTextPixelsBuffer;
 
 	void create( const std::string& text, const FT_Face& face) {
 
-		mTotalWidth = 0;
+		mTotalPixelsWidth = 0;
 		mMaxAscent = 0;
 		mMaxDescent = 0;
 		
@@ -29,19 +29,20 @@ public:
 			FT_Load_Char(face, c, FT_LOAD_RENDER);
 			FT_GlyphSlot g = face->glyph;
 
-			mTotalWidth += g->advance.x >> 6; // advance in pixels
+			mTotalPixelsWidth += g->advance.x >> 6; // advance in pixels
 			mMaxAscent = std::max(mMaxAscent, g->bitmap_top);
 			mMaxDescent = std::max(mMaxDescent, FT_Int(g->bitmap.rows - g->bitmap_top));
 		}
-		mTotalHeight = mMaxAscent + mMaxDescent;
+		mTotalPixelsHeight = mMaxAscent + mMaxDescent;
 
 		std::uint32_t greyColor = 0xFFFFFFFF;//opaque with white background with grey forground/text
 		std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&greyColor);
 
 		//add spaces between glyphs and padding of line and bottom of line
-		mTotalWidth += text.size();
-		mTotalHeight += 2;
-		mTextBuffer.resize(mTotalWidth * mTotalHeight, greyColor);
+		mTotalPixelsWidth += text.size()*2 +2 ;
+		mTotalPixelsHeight += 2;
+		mTextPixelsBuffer.clear();
+		mTextPixelsBuffer.resize(mTotalPixelsWidth * mTotalPixelsHeight, greyColor);
 
 		int penX = 0;
 		for (std::size_t i : std::views::iota(0ULL, text.size())) {
@@ -57,11 +58,11 @@ public:
 
 			for (int row = 0; row < bmp.rows; ++row) {
 				for (int col = 0; col < bmp.width; ++col) {
-					int x = 1 + xOffset + col + i; //+i/1 == space between glyphs
+					int x = 1 + xOffset + col + i*2; //+i/1 == space between glyphs
 					int y = 1 + yOffset + row;
 
 					float greyScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
-					std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextBuffer[y * mTotalWidth + x]);
+					std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextPixelsBuffer[y * mTotalPixelsWidth + x]);
 
 					savedColor[0] = bytes[0] * greyScale; // R
 					savedColor[1] = bytes[1] * greyScale;   // G
@@ -81,7 +82,7 @@ public:
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, mTexture);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTotalWidth, mTotalHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mTextBuffer.data());
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTotalPixelsWidth, mTotalPixelsHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mTextPixelsBuffer.data());
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -96,12 +97,12 @@ public:
 			glDeleteTextures(1, &mTexture);
 			mTexture = 0;
 		}
-		mTextBuffer.clear();
-		mTextBuffer.shrink_to_fit();
+		mTextPixelsBuffer.clear();
+		mTextPixelsBuffer.shrink_to_fit();
 	}
 	
 	float getAspectRatio() {
-		return mTotalWidth / float(mTotalHeight);
+		return mTotalPixelsWidth / float(mTotalPixelsHeight);
 	}
 };
 
@@ -114,7 +115,11 @@ public:
 	FT_Library mFreeType;
 	FT_Face mFontFace;
 
-	std::vector<Text> mStaticText;
+	std::vector<Text> mStaticTexts;
+	using CaptionValue = std::pair<Text, Text>;
+	std::vector<CaptionValue> mCaptionValues;
+	using CaptionValueReference = std::size_t;
+
 	float mScale = 0.01f;
 
 	float mInsertY = -1.0f; //start at bottom
@@ -136,29 +141,66 @@ public:
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
 	}
 
-	void addStaticText(const std::string& text) {
+	void raiseYInsert(float distance) {
+		mInsertY += distance;
+	}
+
+	void addLabel(const std::string& text) {
 		Text t;
 		t.create(text, mFontFace);
 		t.mQuadReference = mQuadManager->add(-1.0, mInsertY, t.getAspectRatio(), mScale);
 
-		auto yHalfHeight = mScale;
-		mInsertY += 2.0f * yHalfHeight;
+		raiseYInsert(2.0f * mScale);
 
-		mStaticText.push_back(std::move(t));
+		mStaticTexts.push_back(std::move(t));
+	}
+
+	CaptionValueReference addLabeledValue(const std::string& text, const std::string& valueText) {
+
+		float insertX = -1;
+
+		Text caption;
+		caption.create(text, mFontFace);
+		caption.mQuadReference = mQuadManager->add(insertX, mInsertY, caption.getAspectRatio(), mScale);
+
+		insertX += 2.0 * caption.getAspectRatio() * mScale;
+
+		Text value;
+		value.create(valueText, mFontFace);
+		value.mQuadReference = mQuadManager->add(insertX, mInsertY, value.getAspectRatio(), mScale);
+
+		raiseYInsert(2.0f * mScale);
+		mCaptionValues.push_back({ std::move(caption), std::move(value) });
+
+		return mCaptionValues.size() - 1;
+	}
+	
+	void updateCaptionValue(CaptionValueReference captionValueRef, const std::string& valueText) {
+		auto& value = mCaptionValues[captionValueRef].second;
+		value.create(valueText, mFontFace);
 	}
 
 	void render() {
 
 		auto& qm = *mQuadManager;
+		 
+		//glEnable(GL_BLEND);
+		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		for (auto& text : mStaticText) {
-
-			//glEnable(GL_BLEND);
-			//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		for (auto& text : mStaticTexts) {
 
 			glBindTexture(GL_TEXTURE_2D, text.mTexture);
-
 			qm.render(text.mQuadReference);
 		}
+
+		for (auto& [text, value] : mCaptionValues) {
+
+			glBindTexture(GL_TEXTURE_2D, text.mTexture);
+			qm.render(text.mQuadReference);
+
+			glBindTexture(GL_TEXTURE_2D, value.mTexture);
+			qm.render(value.mQuadReference);
+		}
+
 	} 
 };

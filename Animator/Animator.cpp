@@ -31,12 +31,18 @@ void Animator::render() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glBindVertexArray(mQuadManager.mVao);
 
-    glBindTexture(GL_TEXTURE_2D, mTexture);
-    const auto& [coord,dims] = mFloatRect;
-    auto& [width, height] = dims;
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+    auto renderViewer = [&]() {
 
-    mQuadManager.render(mViewerQuad);
+        glBindTexture(GL_TEXTURE_2D, mTexture);
+        const auto& [coord, dims] = mFloatRect;
+        auto& [width, height] = dims;
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
+
+        mQuadManager.render(mViewerQuad);
+        };
+
+    renderViewer();
+
     mTextManager.render();
 
     SDL_GL_SwapWindow(mWindow);
@@ -290,16 +296,14 @@ void Animator::setup(FloatsView floats = {}) {
 
         auto setupQuads= [&](){
 
-            auto quadNum = 1 + 3;
-            mQuadManager.reserve(quadNum);
-
             mViewerQuad = mQuadManager.addIdentity();
 
             mTextManager.create(&mQuadManager, mFontName, 12, 0.01f);
 
-            mTextManager.addStaticText("Nick");
-            mTextManager.addStaticText("Jason");
-            mTextManager.addStaticText("Mark");
+            mTicksValueRef = mTextManager.addLabeledValue("Ticks:", "0");
+            mTextManager.addLabel("Nick");
+            mTextManager.addLabel("Jason");
+            mTextManager.addLabel("Mark");
 
             mQuadManager.generate(); 
         };
@@ -357,6 +361,8 @@ void Animator::run(StepFunction&& step) {
 
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
+
+            mTextManager.updateCaptionValue(mTicksValueRef, std::to_string(tickCount));
 
             if (!mPaused && step(mFloats) )
                 floatSpaceConvert();
