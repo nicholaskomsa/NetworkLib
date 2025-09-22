@@ -53,9 +53,10 @@ private:
 
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
-    GLuint mTexture = 0, mShaderProgram = 0;
+    GLuint mViewerTexture = 0, mShaderProgram = 0;
 	static constexpr auto mFontName = "./minecraft.ttf";
 	FT_UInt mFontSize = 12;
+    float mTextScale = 0.05;
 
     QuadManager mQuadManager;
     QuadManager::QuadReference mViewerQuad;
@@ -70,13 +71,13 @@ private:
     FloatSpaceConvert::Rect mFloatRect;
 
     void resizeTexture(){
-        if( mTexture)
-            glDeleteTextures(1, &mTexture);
+        if(mViewerTexture)
+            glDeleteTextures(1, &mViewerTexture);
 
-        glGenTextures(1, &mTexture);
+        glGenTextures(1, &mViewerTexture);
 
         glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, mTexture);
+        glBindTexture(GL_TEXTURE_2D, mViewerTexture);
 
         auto& [coord, dims] = mFloatRect;
         auto& [width, height] = dims;

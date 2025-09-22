@@ -1,7 +1,6 @@
 #pragma once
 
 #include <GL/glew.h>
-#include <span>
 #include <vector>
 #include <array>
 
@@ -52,8 +51,8 @@ public:
 
         Quad quad = { //this quad is a triangle strip
             //vertex = X, Y, U, V
-              centerToTopLeftX - xHalfWidth,  centerToTopLeftY + yHalfHeight,    0.0f, 0.0f  // Top-left
-            , centerToTopLeftX + xHalfWidth,  centerToTopLeftY + yHalfHeight,    1.0f, 0.0f  // Top-right
+              centerToTopLeftX - xHalfWidth,  centerToTopLeftY + yHalfHeight,   0.0f, 0.0f  // Top-left
+            , centerToTopLeftX + xHalfWidth,  centerToTopLeftY + yHalfHeight,   1.0f, 0.0f  // Top-right
             , centerToTopLeftX - xHalfWidth,  centerToTopLeftY - yHalfHeight,   0.0f, 1.0f  // Bottom-left
             , centerToTopLeftX + xHalfWidth,  centerToTopLeftY - yHalfHeight,   1.0f, 1.0f };   // Bottom-right
 

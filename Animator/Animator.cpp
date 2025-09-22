@@ -33,7 +33,7 @@ void Animator::render() {
 
     auto renderViewer = [&]() {
 
-        glBindTexture(GL_TEXTURE_2D, mTexture);
+        glBindTexture(GL_TEXTURE_2D, mViewerTexture);
         const auto& [coord, dims] = mFloatRect;
         auto& [width, height] = dims;
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
@@ -300,7 +300,7 @@ void Animator::setup(FloatsView floats = {}) {
 
             mViewerQuad = mQuadManager.addIdentity();
 
-            mTextManager.create(&mQuadManager, mFontName, mFontSize, 0.01f);
+            mTextManager.create(&mQuadManager, mFontName, mFontSize, mTextScale);
 
             mTicksValueRef = mTextManager.addLabeledValue("Ticks:", "0");
             mTextManager.addLabel("Nick");
@@ -328,7 +328,7 @@ void Animator::shutdown() {
 
     auto shutdownGL = [&]() {
 
-        glDeleteTextures(1, &mTexture);
+        glDeleteTextures(1, &mViewerTexture);
 
         mTextManager.destroy();
         mQuadManager.destroy();
