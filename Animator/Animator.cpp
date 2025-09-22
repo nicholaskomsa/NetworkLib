@@ -155,6 +155,9 @@ void Animator::doEvents() {
                 case SDLK_SPACE:
                     mPaused = !mPaused;
                     break;
+                case SDLK_BACKSPACE:
+                    mTextManager.toggleVisibility();
+                    break;
                 }
 
                 if (doChangeDimensions)
@@ -164,7 +167,6 @@ void Animator::doEvents() {
                     floatSpaceConvert();
                 
                 });
-
         }
     }
 }
@@ -298,7 +300,7 @@ void Animator::setup(FloatsView floats = {}) {
 
             mViewerQuad = mQuadManager.addIdentity();
 
-            mTextManager.create(&mQuadManager, mFontName, 12, 0.01f);
+            mTextManager.create(&mQuadManager, mFontName, mFontSize, 0.01f);
 
             mTicksValueRef = mTextManager.addLabeledValue("Ticks:", "0");
             mTextManager.addLabel("Nick");

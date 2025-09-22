@@ -125,6 +125,7 @@ public:
 	float mScale = 0.01f;
 
 	float mInsertY = -1.0f; //start at bottom
+	bool mVisible = true;
 
 	void create(QuadManager* quadManager, const std::string& fontName, FT_UInt fontSize, float scale = 0.01f) {
 
@@ -199,6 +200,8 @@ public:
 
 	void render() {
 
+		if (!mVisible) return;
+
 		auto& qm = *mQuadManager;
 		 
 		//glEnable(GL_BLEND);
@@ -218,6 +221,15 @@ public:
 			glBindTexture(GL_TEXTURE_2D, value.mTexture);
 			qm.render(value.mQuadReference);
 		}
-
+		glBindTexture(GL_TEXTURE_2D, 0);
 	} 
+	void show() {
+		mVisible = true;
+	}
+	void hide() {
+		mVisible = false;
+	}
+	void toggleVisibility() {
+		mVisible = !mVisible;
+	}
 };
