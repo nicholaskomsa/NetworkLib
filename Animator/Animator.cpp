@@ -28,14 +28,17 @@ void Animator::Error::glCompilationError(auto shaderProgram) {
 
 void Animator::render() {
 
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glBindVertexArray(mQuadManager.mVao);
+
     glBindTexture(GL_TEXTURE_2D, mTexture);
     const auto& [coord,dims] = mFloatRect;
     auto& [width, height] = dims;
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
-    glBindVertexArray(mVao);
-   
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    mQuadManager.render(mViewerQuad);
+    mTextManager.render();
+
     SDL_GL_SwapWindow(mWindow);
 }
 void Animator::doEvents() {
@@ -285,36 +288,24 @@ void Animator::setup(FloatsView floats = {}) {
             setOrthoProjection();
             };
 
-            auto createQuad = [&]() {
+        auto setupQuads= [&](){
 
-                std::array<float, 16> vertices = {
-                    //vertex = X, Y, U, V
-                    -1.0f, 1.0f,    0.0f, 0.0f  // Top-left
-                    , 1.0f, 1.0f,     1.0f, 0.0f  // Top-right
-                    , -1.0f, -1.0f,   0.0f, 1.0f  // Bottom-left
-                    , 1.0f, -1.0f,    1.0f, 1.0f };   // Bottom-right
+            auto quadNum = 1 + 3;
+            mQuadManager.reserve(quadNum);
 
-                glGenVertexArrays(1, &mVao);
-                glGenBuffers(1, &mVbo);
+            mViewerQuad = mQuadManager.addIdentity();
 
-                glBindVertexArray(mVao);
-                glBindBuffer(GL_ARRAY_BUFFER, mVbo);
-                glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+            mTextManager.create(&mQuadManager, mFontName, 12, 0.01f);
 
-                // Position Attribute
-                glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
-                glEnableVertexAttribArray(0);
+            mTextManager.addStaticText("Nick");
+            mTextManager.addStaticText("Jason");
+            mTextManager.addStaticText("Mark");
 
-                // Texture Coordinate Attribute
-                glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-                glEnableVertexAttribArray(1);
-
-                glBindBuffer(GL_ARRAY_BUFFER, 0);
-                glBindVertexArray(0);
-                };
+            mQuadManager.generate(); 
+        };
 
         setupModernGL();
-        createQuad();
+        setupQuads();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
@@ -333,9 +324,9 @@ void Animator::shutdown() {
 
         glDeleteTextures(1, &mTexture);
 
-        glDeleteBuffers(1, &mVbo); // Delete Vertex Buffer Object
-
-        glDeleteVertexArrays(1, &mVao); // Delete Vertex Array Object
+        mTextBox.destroy();
+        mTextManager.destroy();
+        mQuadManager.destroy();
 
         glDeleteProgram(mShaderProgram);
 

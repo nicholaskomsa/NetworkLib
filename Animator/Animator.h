@@ -12,6 +12,10 @@
 #include <functional>
 #include <algorithm>
 
+#include "Geometry.h"
+#include "Text.h"
+
+
 using namespace std::chrono;
 using namespace std::chrono_literals;
 
@@ -49,10 +53,15 @@ private:
 
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
-    GLuint mTexture = 0, mShaderProgram = 0, mVao = 0, mVbo = 0;
+    GLuint mTexture = 0, mShaderProgram = 0;
 	static constexpr auto mFontName = "./minecraft.ttf";
 	FT_UInt mFontSize = 12;
 
+    QuadManager mQuadManager;
+    QuadManager::QuadReference mViewerQuad;
+    Text mTextBox;
+    TextManager mTextManager;
+ 
     bool mRunning = false, mPaused = false;
 
     void render();
@@ -122,5 +131,6 @@ public:
             oldDimensions = dimensions;
         }
     }
+  
     std::size_t getSize();
 };
