@@ -306,14 +306,13 @@ void Animator::setup(FloatsView floats = {}) {
             mTextAreaRef = mTextManager.addTextArea();
             auto& textArea = mTextManager.getTextArea(mTextAreaRef);
             
-            mTicksValueRef = textArea.addLabeledValue(minecraft, "ticks:", "0000");
-            textArea.addLabel(minecraft, "Nick");
-            textArea.addLabel(minecraft, "Jason");
-            textArea.addLabel(minecraft, "Mark");
-
+            mTicksValueRef = textArea.addLabeledValue(minecraft, "ticks:", "0");
+            mColorModeValueRef = textArea.addLabeledValue(minecraft, "Color Mode:", FloatSpaceConvert::getColorNames()[mColorizeMode]);
 
             textArea.create(mQuadManager, mTextScale);
             mQuadManager.generate(); 
+
+            textArea.render(mQuadManager, true);
         };
 
         setupModernGL();

@@ -21,64 +21,92 @@ public:
 
 	bool create( const std::string& text, const FT_Face& face) {
 
-		FT_Int oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
+		if (text.empty()) return false;
 
-		mTotalPixelsWidth = 0;
-		mMaxAscent = 0;
-		mMaxDescent = 0;
-		
+		FT_Int totalPixelsWidth = 0
+			, maxAscent = 0
+			, maxDescent = 0
+			, totalPixelsHeight = 0;
+
+		FT_GlyphSlot glyph;
 		for (auto c: text ){
 
-			FT_Load_Char(face, c, FT_LOAD_RENDER);
-			FT_GlyphSlot g = face->glyph;
-
-			mTotalPixelsWidth += g->advance.x >> 6; // advance in pixels
-			mMaxAscent = std::max(mMaxAscent, g->bitmap_top);
-			mMaxDescent = std::max(mMaxDescent, FT_Int(g->bitmap.rows - g->bitmap_top));
+			if (std::isspace(c)) 
+				FT_Load_Char(face, '_', FT_LOAD_RENDER);
+			else 
+				FT_Load_Char(face, c, FT_LOAD_RENDER);
+				
+			glyph = face->glyph;
+			maxAscent = std::max(maxAscent, glyph->bitmap_top);
+			maxDescent = std::max(maxDescent, FT_Int(glyph->bitmap.rows - glyph->bitmap_top));
+			totalPixelsWidth += glyph->advance.x >> 6;
 		}
-		mTotalPixelsHeight = mMaxAscent + mMaxDescent;
+		totalPixelsHeight = maxAscent + maxDescent;
 
 		std::uint32_t greyColor = 0xFFFFFFFF;//opaque with white background with grey forground/text
 		std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&greyColor);
 
 		//add spaces between glyphs and padding of line and bottom of line
-		mTotalPixelsWidth += text.size()*2 +2 ;
-		mTotalPixelsHeight += 2;
+		totalPixelsWidth += text.size()*2 +2;
+		totalPixelsHeight += 2;
+
+		bool resized =   totalPixelsWidth > mTotalPixelsWidth || totalPixelsHeight > mTotalPixelsHeight;
+
+		mTotalPixelsWidth = std::max(mTotalPixelsWidth, totalPixelsWidth);
+		mTotalPixelsHeight = std::max(mTotalPixelsHeight, totalPixelsHeight);
+
+		mMaxAscent = maxAscent;
+		mMaxDescent = maxDescent;
+		
 		mTextPixelsBuffer.clear();
 		mTextPixelsBuffer.resize(mTotalPixelsWidth * mTotalPixelsHeight, greyColor);
+		std::fill(mTextPixelsBuffer.begin(), mTextPixelsBuffer.end(), greyColor);
 
-		int penX = 0;
-		for (std::size_t i : std::views::iota(0ULL, text.size())) {
+		auto drawText = [&]() {
 
-			char c = text[i];
+			int penX = 0;
+			FT_GlyphSlot glyph;
 
-			FT_Load_Char(face, c, FT_LOAD_RENDER);
-			FT_GlyphSlot g = face->glyph;
-			FT_Bitmap& bmp = g->bitmap;
+			for (std::size_t i : std::views::iota(0ULL, text.size())) {
 
-			int xOffset = penX + g->bitmap_left;
-			int yOffset = mMaxAscent - g->bitmap_top;
+				char c = text[i];
 
-			for (int row = 0; row < bmp.rows; ++row) {
-				for (int col = 0; col < bmp.width; ++col) {
-					int x = 1 + xOffset + col + i*2; //+i/1 == space between glyphs
-					int y = 1 + yOffset + row;
+				if (std::isspace(c)) {
+					FT_Load_Char(face, '_', FT_LOAD_RENDER);
+					glyph = face->glyph;
+				} else {
 
-					float greyScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
-					std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextPixelsBuffer[y * mTotalPixelsWidth + x]);
+					FT_Load_Char(face, c, FT_LOAD_RENDER);
+					glyph = face->glyph;
+					FT_Bitmap& bmp = glyph->bitmap;
 
-					savedColor[0] = bytes[0] * greyScale; // R
-					savedColor[1] = bytes[1] * greyScale;   // G
-					savedColor[2] = bytes[2] * greyScale; // B
-					savedColor[3] = bytes[3]; // A
+					int xOffset = penX + glyph->bitmap_left;
+					int yOffset = mMaxAscent - glyph->bitmap_top;
+
+					for (int row = 0; row < bmp.rows; ++row) 
+						for (int col = 0; col < bmp.width; ++col) {
+							int x = 1 + xOffset + col + i * 2; //+i/1 == space between glyphs
+							int y = 1 + yOffset + row;
+
+							float greyScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
+							std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextPixelsBuffer[y * mTotalPixelsWidth + x]);
+
+							savedColor[0] = bytes[0] * greyScale; // R
+							savedColor[1] = bytes[1] * greyScale;   // G
+							savedColor[2] = bytes[2] * greyScale; // B
+							savedColor[3] = bytes[3]; // A
+						}
 				}
+
+				penX += glyph->advance.x >> 6;
 			}
 
-			penX += g->advance.x >> 6;
-		}
+			};
+
+		drawText();
 
 		//return if size increased
-		return oldWidth < mTotalPixelsWidth || oldHeight < mTotalPixelsHeight;
+		return resized;
 	} 
 	void destroy() {
 		mTextPixelsBuffer.clear();
@@ -103,9 +131,10 @@ public:
 	GLuint mTexture = 0;
 	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0;
 
-	std::size_t mInsertY = 0; //start at bottom
+	std::size_t mInsertY = 0; //start at top
 
 	float mScale = 0.01f;
+	bool mUpdateLabels = true;
 
 	void create(QuadManager& qm, float scale = 1.0) {
 		mScale = scale;
@@ -165,10 +194,10 @@ public:
 
 		FT_Int oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
 
-		for (auto& label : mLabels)
+		for (const auto& label : mLabels)
 			unionDimensions(label);
 
-		for (auto& [label, caption] : mLabeledValues) {
+		for (const auto& [label, caption] : mLabeledValues) {
 			unionDimensions(label);
 			unionDimensions(caption);
 		}
@@ -176,8 +205,10 @@ public:
 		if (mTotalPixelsWidth == oldWidth && mTotalPixelsHeight == oldHeight) return;
 
 		createTexture(mTotalPixelsWidth, mTotalPixelsHeight);
+
+		mUpdateLabels = true;
 	}
-	void render(QuadManager& qm, bool updateLabels = true) {
+	void render(QuadManager& qm, bool updateLabels = false) {
 
 		glBindTexture(GL_TEXTURE_2D, mTexture);
 
@@ -185,14 +216,18 @@ public:
 			glTexSubImage2D(GL_TEXTURE_2D, 0, text.mX, text.mY, text.mTotalPixelsWidth, text.mTotalPixelsHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, text.mTextPixelsBuffer.data());
 			};
 		
+		updateLabels |= mUpdateLabels;
+
 		if (updateLabels) {
-			for (auto& label : mLabels)
+			for (const auto& label : mLabels)
 				updateTexture(label);
 
-			for (auto& [label, value] : mLabeledValues)
+			for (const auto& [label, value] : mLabeledValues)
 				updateTexture(label);
+
+			mUpdateLabels = false;
 		}
-		for (auto& [label, value] : mLabeledValues)
+		for (const auto& [label, value] : mLabeledValues)
 			updateTexture(value);
 
 		qm.render(mQuadReference);
@@ -237,7 +272,7 @@ public:
 		auto& value = mLabeledValues[labeledValueRef].second;
 		auto resized = value.create(valueText, fontFace);
 		if (resized) calculateDimensions();
-
+		
 	}
 	void updateLabel(LabelReference labelRef, const std::string& labelText, const FT_Face& fontFace) {
 		auto& label = mLabels[labelRef];
@@ -257,7 +292,6 @@ public:
 	using TextAreaReference = std::size_t;
 	std::vector<TextArea> mTextAreas;
 
-	float mInsertY = -1.0f; //start at bottom
 	bool mVisible = true;
 
 	void create(QuadManager* quadManager, const std::string& fontName, FT_UInt fontSize, float scale = 0.01f) {
@@ -283,7 +317,7 @@ public:
 	TextArea& getTextArea(TextAreaReference ref) {
 		return mTextAreas[ref];
 	}
-	void render() {
+	void render(bool updateLabels = false) {
 
 		if (!mVisible) return;
 
@@ -293,7 +327,7 @@ public:
 		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		for (auto& txtArea : mTextAreas)
-			txtArea.render(qm);
+			txtArea.render(qm, updateLabels);
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 	} 

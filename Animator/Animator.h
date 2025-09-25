@@ -56,13 +56,13 @@ private:
     GLuint mViewerTexture = 0, mShaderProgram = 0;
 	static constexpr auto mFontName = "./minecraft.ttf";
 	FT_UInt mFontSize = 12;
-    float mTextScale = 0.01;
+    float mTextScale = 0.02;
 
     QuadManager mQuadManager;
     QuadManager::QuadReference mViewerQuadRef;
     TextManager mTextManager;
     TextManager::TextAreaReference mTextAreaRef;
-    TextArea::LabeledValueReference mTicksValueRef;
+    TextArea::LabeledValueReference mTicksValueRef, mColorModeValueRef, mStripeNumValueRef;
 
     bool mRunning = false, mPaused = false;
 
@@ -115,6 +115,9 @@ public:
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
             , mFloatRect, mFrameWidth
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+
+        auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+        textArea.updateLabeledValue(mColorModeValueRef, FloatSpaceConvert::getColorNames()[mColorizeMode], mTextManager.mFontFace);
     }
     void setDimensions() {
 
