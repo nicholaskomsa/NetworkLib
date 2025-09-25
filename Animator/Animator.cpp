@@ -301,14 +301,15 @@ void Animator::setup(FloatsView floats = {}) {
             mViewerQuad = mQuadManager.addIdentity();
 
             mTextManager.create(&mQuadManager, mFontName, mFontSize, mTextScale);
+            auto& minecraft = mTextManager.mFontFace;
 
             mTextArea = mTextManager.addTextArea();
             auto& textArea = mTextManager.getTextArea(mTextArea);
             
-            mTicksValueRef = textArea.addLabeledValue(mTextManager.mFontFace, "ticks:", "0000");
-            textArea.addLabel(mTextManager.mFontFace, "Nick");
-            textArea.addLabel(mTextManager.mFontFace, "Jason");
-            textArea.addLabel(mTextManager.mFontFace, "Mark");
+            mTicksValueRef = textArea.addLabeledValue(minecraft, "ticks:", "0000");
+            textArea.addLabel(minecraft, "Nick");
+            textArea.addLabel(minecraft, "Jason");
+            textArea.addLabel(minecraft, "Mark");
 
 
             textArea.create(mQuadManager, mTextScale);
