@@ -23,7 +23,6 @@ public:
 
 		FT_Int oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
 
-		
 		mTotalPixelsWidth = 0;
 		mMaxAscent = 0;
 		mMaxDescent = 0;
@@ -112,7 +111,6 @@ public:
 		mScale = scale;
 
 		calculateDimensions();
-		//.mQuadReference = qm.addIdentity();
 
 		auto YLineNum = mLabeledValues.size() + mLabels.size();
 		mQuadReference = qm.add(-1.0, -1.0, mTotalPixelsWidth / float(mTotalPixelsHeight), scale * YLineNum);
@@ -165,7 +163,7 @@ public:
 
 		//loop through all text components and get the bounding rectangle including the old one, get bigger not smaller
 
-		std::size_t oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
+		FT_Int oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
 
 		for (auto& label : mLabels)
 			unionDimensions(label);
@@ -188,13 +186,13 @@ public:
 			};
 		
 		if (updateLabels) {
-			for (auto label : mLabels)
+			for (auto& label : mLabels)
 				updateTexture(label);
 
-			for (auto [label, value] : mLabeledValues)
+			for (auto& [label, value] : mLabeledValues)
 				updateTexture(label);
 		}
-		for (auto [label, value] : mLabeledValues)
+		for (auto& [label, value] : mLabeledValues)
 			updateTexture(value);
 
 		qm.render(mQuadReference);
@@ -276,7 +274,6 @@ public:
 
 		FT_Done_Face(mFontFace);       // Destroys the font face
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
-
 	}
 
 	TextAreaReference addTextArea() {
