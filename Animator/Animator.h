@@ -59,9 +59,9 @@ private:
     float mTextScale = 0.01;
 
     QuadManager mQuadManager;
-    QuadManager::QuadReference mViewerQuad;
+    QuadManager::QuadReference mViewerQuadRef;
     TextManager mTextManager;
-    TextManager::TextAreaReference mTextArea;
+    TextManager::TextAreaReference mTextAreaRef;
     TextArea::LabeledValueReference mTicksValueRef;
 
     bool mRunning = false, mPaused = false;

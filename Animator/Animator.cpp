@@ -38,7 +38,7 @@ void Animator::render() {
         auto& [width, height] = dims;
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mPixels.data());
 
-        mQuadManager.render(mViewerQuad);
+        mQuadManager.render(mViewerQuadRef);
         };
 
     renderViewer();
@@ -298,13 +298,13 @@ void Animator::setup(FloatsView floats = {}) {
 
         auto setupQuads= [&](){
 
-            mViewerQuad = mQuadManager.addIdentity();
+            mViewerQuadRef = mQuadManager.addIdentity();
 
             mTextManager.create(&mQuadManager, mFontName, mFontSize, mTextScale);
             auto& minecraft = mTextManager.mFontFace;
 
-            mTextArea = mTextManager.addTextArea();
-            auto& textArea = mTextManager.getTextArea(mTextArea);
+            mTextAreaRef = mTextManager.addTextArea();
+            auto& textArea = mTextManager.getTextArea(mTextAreaRef);
             
             mTicksValueRef = textArea.addLabeledValue(minecraft, "ticks:", "0000");
             textArea.addLabel(minecraft, "Nick");
@@ -361,7 +361,8 @@ void Animator::run(StepFunction&& step) {
     clock::time_point nowTime, oldTime = clock::now() - mLengthOfStep;
     std::uint32_t tickCount = 0;
 
-    auto& textArea = mTextManager.getTextArea(mTextArea);
+    auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+    auto& minecraft = mTextManager.mFontFace;
 
     do {
         nowTime = clock::now();
@@ -371,7 +372,7 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount), mTextManager.mFontFace);
+            textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount), minecraft);
 
             if (!mPaused && step(mFloats) )
                 floatSpaceConvert();
