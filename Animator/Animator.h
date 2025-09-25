@@ -56,12 +56,13 @@ private:
     GLuint mViewerTexture = 0, mShaderProgram = 0;
 	static constexpr auto mFontName = "./minecraft.ttf";
 	FT_UInt mFontSize = 12;
-    float mTextScale = 0.05;
+    float mTextScale = 0.01;
 
     QuadManager mQuadManager;
     QuadManager::QuadReference mViewerQuad;
     TextManager mTextManager;
-    TextManager::CaptionValueReference mTicksValueRef;
+    TextManager::TextAreaReference mTextArea;
+    TextArea::LabeledValueReference mTicksValueRef;
 
     bool mRunning = false, mPaused = false;
 

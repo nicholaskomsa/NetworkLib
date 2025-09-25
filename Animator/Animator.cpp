@@ -302,11 +302,16 @@ void Animator::setup(FloatsView floats = {}) {
 
             mTextManager.create(&mQuadManager, mFontName, mFontSize, mTextScale);
 
-            mTicksValueRef = mTextManager.addLabeledValue("Ticks:", "0");
-            mTextManager.addLabel("Nick");
-            mTextManager.addLabel("Jason");
-            mTextManager.addLabel("Mark");
+            mTextArea = mTextManager.addTextArea();
+            auto& textArea = mTextManager.getTextArea(mTextArea);
+            
+            mTicksValueRef = textArea.addLabeledValue(mTextManager.mFontFace, "ticks:", "0000");
+            textArea.addLabel(mTextManager.mFontFace, "Nick");
+            textArea.addLabel(mTextManager.mFontFace, "Jason");
+            textArea.addLabel(mTextManager.mFontFace, "Mark");
 
+
+            textArea.create(mQuadManager, mTextScale);
             mQuadManager.generate(); 
         };
 
@@ -355,6 +360,8 @@ void Animator::run(StepFunction&& step) {
     clock::time_point nowTime, oldTime = clock::now() - mLengthOfStep;
     std::uint32_t tickCount = 0;
 
+    auto& textArea = mTextManager.getTextArea(mTextArea);
+
     do {
         nowTime = clock::now();
         elapsedTime = nowTime - oldTime;
@@ -363,7 +370,7 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            mTextManager.updateCaptionValue(mTicksValueRef, std::to_string(tickCount));
+            textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount), mTextManager.mFontFace);
 
             if (!mPaused && step(mFloats) )
                 floatSpaceConvert();

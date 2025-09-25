@@ -6,20 +6,24 @@
 #include <string>
 #include <vector>
 #include <ranges>
+#include <algorithm>
+#include <numeric>
 
 #include "Geometry.h"
 
 class Text {
 public:
-	
-	QuadManager::QuadReference mQuadReference;
 
-	GLuint mTexture = 0;
+	std::size_t mX = 0, mY = 0;
+
 	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0, mMaxAscent = 0, mMaxDescent = 0;
 	std::vector<std::uint32_t> mTextPixelsBuffer;
 
-	void create( const std::string& text, const FT_Face& face) {
+	bool create( const std::string& text, const FT_Face& face) {
 
+		FT_Int oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
+
+		
 		mTotalPixelsWidth = 0;
 		mMaxAscent = 0;
 		mMaxDescent = 0;
@@ -73,7 +77,49 @@ public:
 
 			penX += g->advance.x >> 6;
 		}
-	
+
+		//return if size increased
+		return oldWidth < mTotalPixelsWidth || oldHeight < mTotalPixelsHeight;
+	} 
+	void destroy() {
+		mTextPixelsBuffer.clear();
+		mTextPixelsBuffer.shrink_to_fit();
+	}
+	float getAspectRatio() {
+		return mTotalPixelsWidth / float(mTotalPixelsHeight);
+	}
+};
+
+class TextArea {
+public:
+	std::vector<Text> mLabels;
+	using LabelReference = std::size_t;
+
+	using LabeledValue = std::pair<Text, Text>;
+	std::vector<LabeledValue> mLabeledValues;
+	using LabeledValueReference = std::size_t;
+
+	QuadManager::QuadReference mQuadReference;
+
+	GLuint mTexture = 0;
+	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0;
+
+	std::size_t mInsertY = 0; //start at bottom
+
+	float mScale = 0.01f;
+
+	void create(QuadManager& qm, float scale = 1.0) {
+		mScale = scale;
+
+		calculateDimensions();
+		//.mQuadReference = qm.addIdentity();
+
+		auto YLineNum = mLabeledValues.size() + mLabels.size();
+		mQuadReference = qm.add(-1.0, -1.0, mTotalPixelsWidth / float(mTotalPixelsHeight), scale * YLineNum);
+	}
+
+	void createTexture(std::size_t width, std::size_t height) {
+
 		if (mTexture)
 			glDeleteTextures(1, &mTexture);
 
@@ -82,7 +128,10 @@ public:
 		glEnable(GL_TEXTURE_2D);
 		glBindTexture(GL_TEXTURE_2D, mTexture);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTotalPixelsWidth, mTotalPixelsHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, mTextPixelsBuffer.data());
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mTotalPixelsWidth, mTotalPixelsHeight, 0, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, nullptr);
+
+		GLubyte color[4] = { 255,255,255,255 };
+		glClearTexImage(mTexture, 0, GL_RGBA, GL_UNSIGNED_BYTE, color);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -91,21 +140,113 @@ public:
 
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
+	void destroy() {
 
-	void destroy(){
+		for (auto& label : mLabels)
+			label.destroy();
+
+		for (auto& [caption, value] : mLabeledValues) {
+
+			caption.destroy();
+			value.destroy();
+		}
+
 		if (mTexture) {
 			glDeleteTextures(1, &mTexture);
 			mTexture = 0;
 		}
-		mTextPixelsBuffer.clear();
-		mTextPixelsBuffer.shrink_to_fit();
 	}
-	
-	float getAspectRatio() {
-		return mTotalPixelsWidth / float(mTotalPixelsHeight);
+
+	void unionDimensions(const Text& text) {
+		mTotalPixelsWidth = std::max(mTotalPixelsWidth, FT_Int( text.mX + text.mTotalPixelsWidth));
+		mTotalPixelsHeight = std::max(mTotalPixelsHeight, FT_Int( text.mY + text.mTotalPixelsHeight));
+	}
+	void calculateDimensions() {
+
+		//loop through all text components and get the bounding rectangle including the old one, get bigger not smaller
+
+		std::size_t oldWidth = mTotalPixelsWidth, oldHeight = mTotalPixelsHeight;
+
+		for (auto& label : mLabels)
+			unionDimensions(label);
+
+		for (auto& [label, caption] : mLabeledValues) {
+			unionDimensions(label);
+			unionDimensions(caption);
+		}
+
+		if (mTotalPixelsWidth == oldWidth && mTotalPixelsHeight == oldHeight) return;
+
+		createTexture(mTotalPixelsWidth, mTotalPixelsHeight);
+	}
+	void render(QuadManager& qm, bool updateLabels = true) {
+
+		glBindTexture(GL_TEXTURE_2D, mTexture);
+
+		auto updateTexture = [&](auto& text) {
+			glTexSubImage2D(GL_TEXTURE_2D, 0, text.mX, text.mY, text.mTotalPixelsWidth, text.mTotalPixelsHeight, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, text.mTextPixelsBuffer.data());
+			};
+		
+		if (updateLabels) {
+			for (auto label : mLabels)
+				updateTexture(label);
+
+			for (auto [label, value] : mLabeledValues)
+				updateTexture(label);
+		}
+		for (auto [label, value] : mLabeledValues)
+			updateTexture(value);
+
+		qm.render(mQuadReference);
+	} 
+
+	LabelReference addLabel(FT_Face& fontFace, const std::string& text) {
+		Text t;
+		t.create(text, fontFace);
+		t.mX = 0;
+		t.mY = mInsertY;
+		mInsertY += t.mTotalPixelsHeight;
+
+		mLabels.push_back(std::move(t));
+
+		return mLabels.size() - 1;
+	}
+
+	LabeledValueReference addLabeledValue(FT_Face& fontFace, const std::string& text, const std::string& valueText) {
+		
+		std::size_t insertX = 0;
+
+		Text caption;
+		caption.create(text, fontFace);
+		caption.mX = 0; 
+		caption.mY = mInsertY;
+
+		insertX = caption.mTotalPixelsWidth;
+
+		Text value;
+		value.create(valueText, fontFace);
+		value.mY = mInsertY;
+		value.mX = insertX;
+
+		mLabeledValues.push_back({ std::move(caption), std::move(value) });
+		                 
+		mInsertY += value.mTotalPixelsHeight;
+
+		return mLabeledValues.size() - 1;
+	}
+
+	void updateLabeledValue(LabeledValueReference labeledValueRef, const std::string& valueText, const FT_Face& fontFace) {
+		auto& value = mLabeledValues[labeledValueRef].second;
+		auto resized = value.create(valueText, fontFace);
+		if (resized) calculateDimensions();
+
+	}
+	void updateLabel(LabelReference labelRef, const std::string& labelText, const FT_Face& fontFace) {
+		auto& label = mLabels[labelRef];
+		auto resized = label.create(labelText, fontFace);
+		if (resized) calculateDimensions();
 	}
 };
-
 class TextManager {
 
 public:
@@ -115,14 +256,8 @@ public:
 	FT_Library mFreeType;
 	FT_Face mFontFace;
 
-	std::vector<Text> mLabels;
-	using LabelReference = std::size_t;
-
-	using CaptionValue = std::pair<Text, Text>;
-	std::vector<CaptionValue> mCaptionValues;
-	using CaptionValueReference = std::size_t;
-
-	float mScale = 0.01f;
+	using TextAreaReference = std::size_t;
+	std::vector<TextArea> mTextAreas;
 
 	float mInsertY = -1.0f; //start at bottom
 	bool mVisible = true;
@@ -130,8 +265,7 @@ public:
 	void create(QuadManager* quadManager, const std::string& fontName, FT_UInt fontSize, float scale = 0.01f) {
 
 		mQuadManager = quadManager;
-		mScale = scale;
-
+		
 		FT_Init_FreeType(&mFreeType);
 
 		FT_New_Face(mFreeType, fontName.c_str(), 0, &mFontFace);
@@ -143,61 +277,15 @@ public:
 		FT_Done_Face(mFontFace);       // Destroys the font face
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
 
-		for (auto& label : mLabels)
-			label.destroy();
-
-		for (auto& [ caption,value] : mCaptionValues) {
-
-			caption.destroy();
-			value.destroy();
-		}
 	}
 
-	void raiseYInsert(float distance) {
-		mInsertY += distance;
+	TextAreaReference addTextArea() {
+		mTextAreas.push_back({});
+		return mTextAreas.size()-1;
 	}
-
-	LabelReference addLabel(const std::string& text) {
-		Text t;
-		t.create(text, mFontFace);
-		t.mQuadReference = mQuadManager->add(-1.0, mInsertY, t.getAspectRatio(), mScale);
-
-		mLabels.push_back(std::move(t));
-
-		raiseYInsert(2.0f * mScale);
-		return mLabels.size() - 1;
+	TextArea& getTextArea(TextAreaReference ref) {
+		return mTextAreas[ref];
 	}
-
-	CaptionValueReference addLabeledValue(const std::string& text, const std::string& valueText) {
-
-		float insertX = -1;
-
-		Text caption;
-		caption.create(text, mFontFace);
-		caption.mQuadReference = mQuadManager->add(insertX, mInsertY, caption.getAspectRatio(), mScale);
-
-		insertX += 2.0 * caption.getAspectRatio() * mScale;
-
-		Text value;
-		value.create(valueText, mFontFace);
-		value.mQuadReference = mQuadManager->add(insertX, mInsertY, value.getAspectRatio(), mScale);
-
-		mCaptionValues.push_back({ std::move(caption), std::move(value) });
-
-		raiseYInsert(2.0f * mScale);
-
-		return mCaptionValues.size() - 1;
-	}
-	
-	void updateCaptionValue(CaptionValueReference captionValueRef, const std::string& valueText) {
-		auto& value = mCaptionValues[captionValueRef].second;
-		value.create(valueText, mFontFace);
-	}
-	void updateLabel(LabelReference labelRef, const std::string& labelText) {
-		auto& label = mLabels[labelRef];
-		label.create(labelText, mFontFace);
-	}
-
 	void render() {
 
 		if (!mVisible) return;
@@ -207,20 +295,9 @@ public:
 		//glEnable(GL_BLEND);
 		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		for (auto& text : mLabels) {
+		for (auto& txtArea : mTextAreas)
+			txtArea.render(qm);
 
-			glBindTexture(GL_TEXTURE_2D, text.mTexture);
-			qm.render(text.mQuadReference);
-		}
-
-		for (auto& [text, value] : mCaptionValues) {
-
-			glBindTexture(GL_TEXTURE_2D, text.mTexture);
-			qm.render(text.mQuadReference);
-
-			glBindTexture(GL_TEXTURE_2D, value.mTexture);
-			qm.render(value.mQuadReference);
-		}
 		glBindTexture(GL_TEXTURE_2D, 0);
 	} 
 	void show() {
