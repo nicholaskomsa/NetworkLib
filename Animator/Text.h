@@ -16,10 +16,15 @@ public:
 
 	std::size_t mX = 0, mY = 0;
 
-	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0, mMaxAscent = 0, mMaxDescent = 0;
+	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0;
 	std::vector<std::uint32_t> mTextPixelsBuffer;
 
-	bool create( const std::string& text, const FT_Face& face) {
+	void setPosition(std::size_t x, std::size_t y) {
+		mX = x;
+		mY = y;
+	}
+
+	bool setText( const std::string& text, const FT_Face& face) {
 
 		if (text.empty()) return false;
 
@@ -28,23 +33,27 @@ public:
 			, maxDescent = 0
 			, totalPixelsHeight = 0;
 
-		FT_GlyphSlot glyph;
-		for (auto c: text ){
+		auto getTextDimensions = [&]() {
+			FT_GlyphSlot glyph;
+			for (auto c : text) {
 
-			if (std::isspace(c)) 
-				FT_Load_Char(face, '_', FT_LOAD_RENDER);
-			else 
-				FT_Load_Char(face, c, FT_LOAD_RENDER);
-				
-			glyph = face->glyph;
-			maxAscent = std::max(maxAscent, glyph->bitmap_top);
-			maxDescent = std::max(maxDescent, FT_Int(glyph->bitmap.rows - glyph->bitmap_top));
-			totalPixelsWidth += glyph->advance.x >> 6;
-		}
-		totalPixelsHeight = maxAscent + maxDescent;
+				if (std::isspace(c))
+					FT_Load_Char(face, '_', FT_LOAD_RENDER);
+				else
+					FT_Load_Char(face, c, FT_LOAD_RENDER);
 
-		std::uint32_t greyColor = 0xFFFFFFFF;//opaque with white background with grey forground/text
-		std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&greyColor);
+				glyph = face->glyph;
+				maxAscent = std::max(maxAscent, glyph->bitmap_top);
+				maxDescent = std::max(maxDescent, FT_Int(glyph->bitmap.rows - glyph->bitmap_top));
+				totalPixelsWidth += glyph->advance.x >> 6;
+			}
+			totalPixelsHeight = maxAscent + maxDescent;
+			};
+		
+		getTextDimensions();
+
+		std::uint32_t whiteColor = 0xFFFFFFFF;//opaque with white background with grey forground/text
+		std::uint8_t* whiteBytes = reinterpret_cast<std::uint8_t*>(&whiteColor);
 
 		//add spaces between glyphs and padding of line and bottom of line
 		totalPixelsWidth += text.size()*2 +2;
@@ -54,15 +63,18 @@ public:
 
 		mTotalPixelsWidth = std::max(mTotalPixelsWidth, totalPixelsWidth);
 		mTotalPixelsHeight = std::max(mTotalPixelsHeight, totalPixelsHeight);
-
-		mMaxAscent = maxAscent;
-		mMaxDescent = maxDescent;
 		
 		mTextPixelsBuffer.clear();
-		mTextPixelsBuffer.resize(mTotalPixelsWidth * mTotalPixelsHeight, greyColor);
-		std::fill(mTextPixelsBuffer.begin(), mTextPixelsBuffer.end(), greyColor);
+		mTextPixelsBuffer.resize(mTotalPixelsWidth * mTotalPixelsHeight, whiteColor);
 
 		auto drawText = [&]() {
+
+			auto darkenPixel = [&](auto savedColor, float darkenScale) {
+				savedColor[0] = whiteBytes[0] * darkenScale; // R
+				savedColor[1] = whiteBytes[1] * darkenScale;   // G
+				savedColor[2] = whiteBytes[2] * darkenScale; // B
+				savedColor[3] = whiteBytes[3]; // A
+				};
 
 			int penX = 0;
 			FT_GlyphSlot glyph;
@@ -81,7 +93,7 @@ public:
 					FT_Bitmap& bmp = glyph->bitmap;
 
 					int xOffset = penX + glyph->bitmap_left;
-					int yOffset = mMaxAscent - glyph->bitmap_top;
+					int yOffset = maxAscent - glyph->bitmap_top;
 
 					for (int row = 0; row < bmp.rows; ++row) 
 						for (int col = 0; col < bmp.width; ++col) {
@@ -91,10 +103,7 @@ public:
 							float greyScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
 							std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextPixelsBuffer[y * mTotalPixelsWidth + x]);
 
-							savedColor[0] = bytes[0] * greyScale; // R
-							savedColor[1] = bytes[1] * greyScale;   // G
-							savedColor[2] = bytes[2] * greyScale; // B
-							savedColor[3] = bytes[3]; // A
+							darkenPixel(savedColor, greyScale);
 						}
 				}
 
@@ -234,13 +243,13 @@ public:
 	} 
 
 	LabelReference addLabel(FT_Face& fontFace, const std::string& text) {
-		Text t;
-		t.create(text, fontFace);
-		t.mX = 0;
-		t.mY = mInsertY;
-		mInsertY += t.mTotalPixelsHeight;
+		Text label;
+		label.setText(text, fontFace);
+		label.setPosition(0, mInsertY);
 
-		mLabels.push_back(std::move(t));
+		mInsertY += label.mTotalPixelsHeight;
+
+		mLabels.push_back(std::move(label));
 
 		return mLabels.size() - 1;
 	}
@@ -249,19 +258,17 @@ public:
 		
 		std::size_t insertX = 0;
 
-		Text caption;
-		caption.create(text, fontFace);
-		caption.mX = 0; 
-		caption.mY = mInsertY;
+		Text label;
+		label.setText(text, fontFace);
+		label.setPosition(insertX, mInsertY);
 
-		insertX = caption.mTotalPixelsWidth;
+		insertX = label.mTotalPixelsWidth;
 
 		Text value;
-		value.create(valueText, fontFace);
-		value.mY = mInsertY;
-		value.mX = insertX;
+		value.setText(valueText, fontFace);
+		value.setPosition(insertX, mInsertY);
 
-		mLabeledValues.push_back({ std::move(caption), std::move(value) });
+		mLabeledValues.push_back({ std::move(label), std::move(value) });
 		                 
 		mInsertY += value.mTotalPixelsHeight;
 
@@ -270,13 +277,13 @@ public:
 
 	void updateLabeledValue(LabeledValueReference labeledValueRef, const std::string& valueText, const FT_Face& fontFace) {
 		auto& value = mLabeledValues[labeledValueRef].second;
-		auto resized = value.create(valueText, fontFace);
+		auto resized = value.setText(valueText, fontFace);
 		if (resized) calculateDimensions();
 		
 	}
 	void updateLabel(LabelReference labelRef, const std::string& labelText, const FT_Face& fontFace) {
 		auto& label = mLabels[labelRef];
-		auto resized = label.create(labelText, fontFace);
+		auto resized = label.setText(labelText, fontFace);
 		if (resized) calculateDimensions();
 	}
 };
