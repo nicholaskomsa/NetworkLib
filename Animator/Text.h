@@ -16,15 +16,16 @@ public:
 
 	std::size_t mX = 0, mY = 0;
 
+	FT_Face mFontFace;
+
 	FT_Int mTotalPixelsWidth = 0, mTotalPixelsHeight = 0;
 	std::vector<std::uint32_t> mTextPixelsBuffer;
 
-	void setPosition(std::size_t x, std::size_t y) {
-		mX = x;
-		mY = y;
-	}
+	Text(std::size_t x, std::size_t y, const FT_Face& fontFace)
+		: mX(x), mY(y), mFontFace(fontFace)
+	{}
 
-	bool setText( const std::string& text, const FT_Face& face) {
+	bool setText( const std::string& text) {
 
 		if (text.empty()) return false;
 
@@ -38,11 +39,11 @@ public:
 			for (auto c : text) {
 
 				if (std::isspace(c))
-					FT_Load_Char(face, '_', FT_LOAD_RENDER);
+					FT_Load_Char(mFontFace, '_', FT_LOAD_RENDER);
 				else
-					FT_Load_Char(face, c, FT_LOAD_RENDER);
+					FT_Load_Char(mFontFace, c, FT_LOAD_RENDER);
 
-				glyph = face->glyph;
+				glyph = mFontFace->glyph;
 				maxAscent = std::max(maxAscent, glyph->bitmap_top);
 				maxDescent = std::max(maxDescent, FT_Int(glyph->bitmap.rows - glyph->bitmap_top));
 				totalPixelsWidth += glyph->advance.x >> 6;
@@ -84,12 +85,12 @@ public:
 				char c = text[i];
 
 				if (std::isspace(c)) {
-					FT_Load_Char(face, '_', FT_LOAD_RENDER);
-					glyph = face->glyph;
+					FT_Load_Char(mFontFace, '_', FT_LOAD_RENDER);
+					glyph = mFontFace->glyph;
 				} else {
 
-					FT_Load_Char(face, c, FT_LOAD_RENDER);
-					glyph = face->glyph;
+					FT_Load_Char(mFontFace, c, FT_LOAD_RENDER);
+					glyph = mFontFace->glyph;
 					FT_Bitmap& bmp = glyph->bitmap;
 
 					int xOffset = penX + glyph->bitmap_left;
@@ -100,10 +101,10 @@ public:
 							int x = 1 + xOffset + col + i * 2; //+i/1 == space between glyphs
 							int y = 1 + yOffset + row;
 
-							float greyScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
+							float darkenScale = 1.0f - bmp.buffer[row * bmp.pitch + col] / 255.0f;
 							std::uint8_t* savedColor = reinterpret_cast<std::uint8_t*>(&mTextPixelsBuffer[y * mTotalPixelsWidth + x]);
 
-							darkenPixel(savedColor, greyScale);
+							darkenPixel(savedColor, darkenScale);
 						}
 				}
 
@@ -242,10 +243,10 @@ public:
 		qm.render(mQuadReference);
 	} 
 
-	LabelReference addLabel(FT_Face& fontFace, const std::string& text) {
-		Text label;
-		label.setText(text, fontFace);
-		label.setPosition(0, mInsertY);
+	LabelReference addLabel(const FT_Face& fontFace, const std::string& text) {
+		
+		Text label(0, mInsertY, fontFace);
+		label.setText(text);
 
 		mInsertY += label.mTotalPixelsHeight;
 
@@ -254,19 +255,17 @@ public:
 		return mLabels.size() - 1;
 	}
 
-	LabeledValueReference addLabeledValue(FT_Face& fontFace, const std::string& text, const std::string& valueText) {
+	LabeledValueReference addLabeledValue(const FT_Face& fontFace, const std::string& text, const std::string& valueText) {
 		
 		std::size_t insertX = 0;
 
-		Text label;
-		label.setText(text, fontFace);
-		label.setPosition(insertX, mInsertY);
+		Text label(insertX, mInsertY, fontFace);
+		label.setText(text);
 
 		insertX = label.mTotalPixelsWidth;
 
-		Text value;
-		value.setText(valueText, fontFace);
-		value.setPosition(insertX, mInsertY);
+		Text value(insertX, mInsertY, fontFace);
+		value.setText(valueText);
 
 		mLabeledValues.push_back({ std::move(label), std::move(value) });
 		                 
@@ -275,15 +274,15 @@ public:
 		return mLabeledValues.size() - 1;
 	}
 
-	void updateLabeledValue(LabeledValueReference labeledValueRef, const std::string& valueText, const FT_Face& fontFace) {
+	void updateLabeledValue(LabeledValueReference labeledValueRef, const std::string& valueText) {
 		auto& value = mLabeledValues[labeledValueRef].second;
-		auto resized = value.setText(valueText, fontFace);
+		auto resized = value.setText(valueText);
 		if (resized) calculateDimensions();
 		
 	}
-	void updateLabel(LabelReference labelRef, const std::string& labelText, const FT_Face& fontFace) {
+	void updateLabel(LabelReference labelRef, const std::string& labelText) {
 		auto& label = mLabels[labelRef];
-		auto resized = label.setText(labelText, fontFace);
+		auto resized = label.setText(labelText);
 		if (resized) calculateDimensions();
 	}
 };
@@ -291,29 +290,33 @@ class TextManager {
 
 public:
 
+	static constexpr auto mMinecraftFontName = "./minecraft.ttf";
+
+	FT_UInt mFontSize = 12;
+
 	QuadManager* mQuadManager;
 
 	FT_Library mFreeType;
-	FT_Face mFontFace;
+	FT_Face mMinscraftFontFace;
 
 	using TextAreaReference = std::size_t;
 	std::vector<TextArea> mTextAreas;
 
 	bool mVisible = true;
 
-	void create(QuadManager* quadManager, const std::string& fontName, FT_UInt fontSize, float scale = 0.01f) {
+	void create(QuadManager* quadManager, float scale = 0.01f) {
 
 		mQuadManager = quadManager;
 		
 		FT_Init_FreeType(&mFreeType);
 
-		FT_New_Face(mFreeType, fontName.c_str(), 0, &mFontFace);
-		FT_Set_Pixel_Sizes(mFontFace, 0, fontSize);
+		FT_New_Face(mFreeType, mMinecraftFontName, 0, &mMinscraftFontFace);
+		FT_Set_Pixel_Sizes(mMinscraftFontFace, 0, mFontSize);
 	}
 
 	void destroy() {
 
-		FT_Done_Face(mFontFace);       // Destroys the font face
+		FT_Done_Face(mMinscraftFontFace);       // Destroys the font face
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
 	}
 

@@ -116,7 +116,6 @@ __global__ void cuBatchedUpdateWeights(float* weights, const float* primes, cons
 
         atomicAdd(&weights[index_col_major], -learnRate * prime_val * seen_val);
     }
-
 }
 __global__ void cuBroadcastVectorToColumns(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;

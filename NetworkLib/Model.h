@@ -27,7 +27,7 @@ namespace NetworkLib {
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
 
-			void calculateConvergence() {
+			void calculateConvergence(bool print=false) {
 
 				mGpu.resetMseResult();
 
@@ -38,22 +38,28 @@ namespace NetworkLib {
 
 					mGpu.mse(sought, desired);
 
-					sought.downloadAsync(mGpu);
-					output.downloadAsync(mGpu);
+					if (print) {
 
-					mGpu.sync();
+						sought.downloadAsync(mGpu);
+						output.downloadAsync(mGpu);
 
-					std::println("\nseen: {}"
-						"\ndesired: {}"
-						"\nsought: {}"
-						"\noutput: {}"
-						, seen
-						, desired
-						, sought
-						, output
-					);
+						mGpu.sync();
+
+						std::println("\nseen: {}"
+							"\ndesired: {}"
+							"\nsought: {}"
+							"\noutput: {}"
+							, seen
+							, desired
+							, sought
+							, output
+						);
+					}
+						
 				}
-				std::println("mse: {}\n", mGpu.getMseResult() );
+
+				if(print)
+					std::println("mse: {}\n", mGpu.getMseResult() );
 			}
 			void create() {
 
@@ -77,21 +83,35 @@ namespace NetworkLib {
 				mNetwork.destroy();
 				mGpu.destroy();
 			}
-			void train() {
+
+			void trainOne(std::size_t generation) {
 
 				TimeAverage<microseconds> trainTime;
 
-				std::print("Training: ");
+				trainTime.accumulateTime([&]() {
+
+					const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
+
+					mNetwork.forward(mGpu, seen);
+					mNetwork.backward(mGpu, seen, desired, mLearnRate);
+
+					});
+			}
+
+			void train(bool print=false) {
+
+				TimeAverage<microseconds> trainTime;
+
+				if( print)
+					std::print("Training: ");
 
 				for (auto generation : std::views::iota(0ULL, mTrainNum))
 					trainTime.accumulateTime([&]() {
 
-						const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
-
-						mNetwork.forward(mGpu, seen);
-						mNetwork.backward(mGpu, seen, desired, mLearnRate);
-
-						printProgress(generation, mTrainNum);
+						trainOne(generation);
+						
+						if( print)
+							printProgress(generation, mTrainNum);
 
 						});
 
@@ -99,9 +119,9 @@ namespace NetworkLib {
 
 			void run() {
 				create();
-				calculateConvergence();
+				calculateConvergence(true);
 				train();
-				calculateConvergence();
+				calculateConvergence(true);
 				destroy();
 			}
 		};

@@ -55,7 +55,7 @@ namespace NetworkLib {
 						inputSize = n;
 					}
 
-					std::size_t size = std::distance(begin, componentBegin);
+					std::size_t size = std::distance(componentBegin, begin);
 					auto view = Cpu::Tensor::View1(componentBegin, std::array{ size });
 					return { view, mGpuFloats.getGpu(view), componentBegin };
 					};
@@ -293,7 +293,7 @@ namespace NetworkLib {
 				return mLayers[i];
 			}
 
-		private:
+		public:
 			NetworkTemplate* mNetworkTemplate = nullptr;
 
 			FloatSpace1 mGpuFloats;

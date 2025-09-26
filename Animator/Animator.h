@@ -54,8 +54,7 @@ private:
     SDL_GLContext mGLContext = nullptr;
     SDL_Window* mWindow = nullptr;
     GLuint mViewerTexture = 0, mShaderProgram = 0;
-	static constexpr auto mFontName = "./minecraft.ttf";
-	FT_UInt mFontSize = 12;
+
     float mTextScale = 0.02;
 
     QuadManager mQuadManager;
@@ -98,6 +97,9 @@ public:
     Animator(std::size_t width, std::size_t height);
     ~Animator();
 
+    std::function<void(void)> mCreateCustomGui, mCustomGuiRender;
+    std::function<void(bool&, bool&)> mCustomGuiEvents;
+
     void setup(FloatsView floats);
     void shutdown();
 
@@ -107,6 +109,7 @@ public:
     void animateMT19937(std::size_t floatCount=100000);
     void viewChatGPT2();
     void animateChatGPT2();
+    void animateXORNetwork();
 
     void floatSpaceConvert() {
 
@@ -117,7 +120,10 @@ public:
             , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
 
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
-        textArea.updateLabeledValue(mColorModeValueRef, FloatSpaceConvert::getColorNames()[mColorizeMode], mTextManager.mFontFace);
+        textArea.updateLabeledValue(mColorModeValueRef
+            , std::format("{}x{}"
+                , FloatSpaceConvert::getColorNames()[mColorizeMode]
+                , *mSelectedStripes));
     }
     void setDimensions() {
 

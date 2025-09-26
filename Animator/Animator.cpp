@@ -9,6 +9,7 @@
 
 #include <Gpt2.h>
 #include <Serializer.h>
+#include <Model.h>
 
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}
@@ -160,7 +161,10 @@ void Animator::doEvents() {
                     break;
                 }
 
-                if (doChangeDimensions)
+                if (mCustomGuiEvents)
+                    mCustomGuiEvents(doChangeDimensions, doConvert);
+
+                if (doChangeDimensions )
                     setDimensions();
                 
                 if (doConvert)
@@ -181,6 +185,7 @@ Animator::~Animator() {
 void Animator::setup(FloatsView floats = {}) {
 
     mFloats = floats;
+    mSelectedStripes = mStripes.begin();
 
     auto initGL = [&]() {
         // Initialize SDL3
@@ -300,14 +305,20 @@ void Animator::setup(FloatsView floats = {}) {
 
             mViewerQuadRef = mQuadManager.addIdentity();
 
-            mTextManager.create(&mQuadManager, mFontName, mFontSize, mTextScale);
-            auto& minecraft = mTextManager.mFontFace;
+            mTextManager.create(&mQuadManager, mTextScale);
+            auto& minecraftFont = mTextManager.mMinscraftFontFace;
 
             mTextAreaRef = mTextManager.addTextArea();
             auto& textArea = mTextManager.getTextArea(mTextAreaRef);
             
-            mTicksValueRef = textArea.addLabeledValue(minecraft, "ticks:", "0");
-            mColorModeValueRef = textArea.addLabeledValue(minecraft, "Color Mode:", FloatSpaceConvert::getColorNames()[mColorizeMode]);
+            mTicksValueRef = textArea.addLabeledValue(minecraftFont, "Ticks:", "0");
+            mColorModeValueRef = textArea.addLabeledValue(minecraftFont, "Color Mode:", 
+                std::format("{}x{}"
+                , FloatSpaceConvert::getColorNames()[mColorizeMode]
+                , *mSelectedStripes));
+
+            if (mCreateCustomGui)
+                mCreateCustomGui();
 
             textArea.create(mQuadManager, mTextScale);
             mQuadManager.generate(); 
@@ -323,8 +334,6 @@ void Animator::setup(FloatsView floats = {}) {
         };
 
     initGL();
-
-    mSelectedStripes = mStripes.begin();
 
     setDimensions();
     floatSpaceConvert();
@@ -361,7 +370,6 @@ void Animator::run(StepFunction&& step) {
     std::uint32_t tickCount = 0;
 
     auto& textArea = mTextManager.getTextArea(mTextAreaRef);
-    auto& minecraft = mTextManager.mFontFace;
 
     do {
         nowTime = clock::now();
@@ -371,7 +379,8 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount), minecraft);
+            textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount));
+            if (mCustomGuiRender) mCustomGuiRender();
 
             if (!mPaused && step(mFloats) )
                 floatSpaceConvert();
@@ -465,4 +474,55 @@ void Animator::animateChatGPT2() {
 
 
     run(step);
+}
+void Animator::animateXORNetwork() {
+
+    NetworkLib::Model::XOR xorModel;
+    xorModel.create();
+
+    std::size_t generation = 0;
+
+    auto selectedNetworkView = xorModel.mNetwork.mGpuFloats.mView;
+
+    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedNetworkView.mSize, Animator::mAspectRatio);
+    mFrameWidth = frameWidth;
+    mFrameHeight = frameHeight;
+
+    TextArea::LabeledValueReference mMseValueRef;
+
+    mCreateCustomGui = [&]() {
+
+        auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+
+        mMseValueRef = textArea.addLabeledValue(mTextManager.mMinscraftFontFace, "Mse:", "    ");
+        };
+
+    mCustomGuiEvents = [&](bool& changeDimensions, bool& doConvert){
+
+
+        };
+
+    float mse = 0.0f;
+    mCustomGuiRender = [&]() {
+        auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+        textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
+        };
+
+    setup(selectedNetworkView);
+
+    auto step = [&](auto floats) {
+
+        xorModel.trainOne(generation++);
+
+        selectedNetworkView.downloadAsync(xorModel.mGpu);
+     //   xorModel.mNetwork.mWeights.downloadAsync(xorModel.mGpu);
+        xorModel.calculateConvergence();
+        mse = xorModel.mGpu.getMseResult();
+
+        return true;
+        };
+
+    run(step);
+
+    xorModel.destroy();
 }
