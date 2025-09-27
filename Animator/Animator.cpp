@@ -482,7 +482,7 @@ void Animator::animateXORNetwork() {
 
     std::size_t generation = 0;
 
-    auto selectedNetworkView = xorModel.mNetwork.mGpuFloats.mView;
+    auto selectedNetworkView = xorModel.mNetwork.mWeights;
 
     auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedNetworkView.mSize, Animator::mAspectRatio);
     mFrameWidth = frameWidth;

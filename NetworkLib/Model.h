@@ -27,7 +27,9 @@ namespace NetworkLib {
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
 
-			void calculateConvergence(bool print=false) {
+			bool mPrintConsole = false;
+
+			void calculateConvergence() {
 
 				mGpu.resetMseResult();
 
@@ -38,7 +40,7 @@ namespace NetworkLib {
 
 					mGpu.mse(sought, desired);
 
-					if (print) {
+					if (mPrintConsole) {
 
 						sought.downloadAsync(mGpu);
 						output.downloadAsync(mGpu);
@@ -58,7 +60,7 @@ namespace NetworkLib {
 						
 				}
 
-				if(print)
+				if(mPrintConsole)
 					std::println("mse: {}\n", mGpu.getMseResult() );
 			}
 			void create() {
@@ -102,7 +104,7 @@ namespace NetworkLib {
 
 				TimeAverage<microseconds> trainTime;
 
-				if( print)
+				if(mPrintConsole)
 					std::print("Training: ");
 
 				for (auto generation : std::views::iota(0ULL, mTrainNum))
@@ -110,18 +112,21 @@ namespace NetworkLib {
 
 						trainOne(generation);
 						
-						if( print)
+						if(mPrintConsole)
 							printProgress(generation, mTrainNum);
 
 						});
 
 			}
 
-			void run() {
+			void run(bool print=true) {
+
+				mPrintConsole = print;
+
 				create();
-				calculateConvergence(true);
+				calculateConvergence();
 				train();
-				calculateConvergence(true);
+				calculateConvergence();
 				destroy();
 			}
 		};
