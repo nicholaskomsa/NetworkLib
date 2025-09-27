@@ -9,7 +9,8 @@ namespace NetworkLib {
 			void updateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int cols, int rows, float learnRate);
 
 			void softmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size);
-           
+			void batchedSoftmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size, int batchSize);
+
 			void mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize);
 
 			void diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size);

@@ -9,6 +9,8 @@ void Environment::create() {
 	Error::checkCuda(cudaStreamCreate(&mStream));
 	Error::checkBlas(cublasSetStream(mHandle, mStream));
 
+	commandQueueSync(3);
+
 	mEnvironmentSpace.create(1);
 	auto begin = mEnvironmentSpace.begin();
 	mEnvironmentSpace.advance(mMseResult, begin);
@@ -32,13 +34,16 @@ Environment::operator cudaStream_t() {
 
 
 void Environment::vecScale(GpuView1& a1, float scale) {
+
 	auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 void Environment::vecAddVec(const GpuView1& a1, GpuView1& o1) {
 	float alpha = 1.0f;
 	auto result = cublasSaxpy(mHandle, o1.mSize, &alpha, a1.mGpu, 1, o1.mGpu, 1);
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 void Environment::matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
 	//cuda is in C++ style of row-major
@@ -62,6 +67,7 @@ void Environment::matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1
 		&beta,
 		o1.mGpu, 1);
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 void Environment::batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 
@@ -79,28 +85,28 @@ void Environment::batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuV
 
 		matMulVec(w2, i1, o1);
 	}
+	commandQueueSync();
 }
 void Environment::batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 
-	float alpha = 1.0f;
-	float beta = 0.0f;
+	float alpha = 1.0f, beta = 0.0f;
 
-	int r = w2.mView.extent(0);       // rows of matrix
-	int c = w2.mView.extent(1);       // cols of matrix
-	int batchSize = i2.mView.extent(1);
+	int r = w2.mView.extent(0)       // rows of matrix
+		, c = w2.mView.extent(1)       // cols of matrix
+		, batchSize = i2.mView.extent(1);
 
 	Error::checkMissMatch(c, i2.mView.extent(0));
 	Error::checkMissMatch(batchSize, o2.mView.extent(1));
 
 	// Leading dimensions
-	int lda = r;  // w2: (r × c)
-	int ldb = c;  // i2: (c × 1)
-	int ldc = r;  // o2: (r × 1)
+	int lda = r  // w2: (r × c)
+		, ldb = c  // i2: (c × 1)
+		, ldc = r;  // o2: (r × 1)
 
 	// Strides
-	long long strideA = 0;                  // w2 is shared across batches
-	long long strideB = static_cast<long long>(c);  // each vector is c × 1
-	long long strideC = static_cast<long long>(r);  // each output is r × 1
+	long long strideA = 0                  // w2 is shared across batches
+		, strideB = static_cast<long long>(c)  // each vector is c × 1
+		, strideC = static_cast<long long>(r);  // each output is r × 1
 
 	auto result = cublasSgemmStridedBatched(
 		mHandle,
@@ -115,6 +121,7 @@ void Environment::batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuVi
 	);
 
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 void Environment::batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
 	float alpha = 1.0f;
@@ -150,6 +157,7 @@ void Environment::batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuV
 	);
 
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 
 void Environment::matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
@@ -171,6 +179,7 @@ void Environment::matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o
 		&beta,
 		o1.mGpu, 1);
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 
 void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
@@ -178,6 +187,7 @@ void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
 	int size = sought.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
 	Kernel::mse(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, size, batchSize);
+	commandQueueSync();
 }
 float Environment::getMseResult() {
 	mMseResult.downloadAsync(mStream);
@@ -190,22 +200,35 @@ void Environment::resetMseResult() {
 }
 void Environment::relu(const GpuView1& o1, GpuView1& a1) {
 	Kernel::relu(mStream, o1.mGpu, a1.mGpu, o1.mSize);
+	commandQueueSync();
 }
 void Environment::applyReluPrime(const GpuView1& a1, GpuView1& p1) {
 	Kernel::applyReluPrime(mStream, a1.mGpu, p1.mGpu, a1.mSize);
+	commandQueueSync();
 }
 void Environment::softmax(const GpuView1& o1, GpuView1& a1) {
 	Kernel::softmax(mStream, o1.mGpu, a1.mGpu, o1.mSize);
+	commandQueueSync();
 }
-void Environment::batchedSoftmax(const GpuView2& o2, GpuView2& a2) {
+void Environment::batchedSoftmax1(const GpuView2& o2, GpuView2& a2) {
 	for (auto b : std::views::iota(0ULL, o2.mView.extent(1))) {
 		auto o1 = o2.viewColumn(b);
 		auto a1 = a2.viewColumn(b);
 		softmax(o1, a1);
 	}
+	commandQueueSync();
+}
+void Environment::batchedSoftmax(const GpuView2& o2, GpuView2& a2) {
+
+	auto size = o2.mView.extent(0);
+	auto batchSize = o2.mView.extent(1);
+
+	Kernel::batchedSoftmax(mStream, o2.mGpu, a2.mGpu, size, batchSize );
+	commandQueueSync();
 }
 void Environment::diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1) {
 	Kernel::diff(mStream, desired1.mGpu, sought1.mGpu, primes1.mGpu, desired1.mSize);
+	commandQueueSync();
 }
 void Environment::updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate) {
 
@@ -213,28 +236,33 @@ void Environment::updateWeights(const GpuView1& seen, GpuView2& weights, const G
 	int cols = weights.mView.extent(1);
 
 	Kernel::updateWeights(mStream, weights.mGpu, primes.mGpu, seen.mGpu, rows, cols, learnRate);
-
+	commandQueueSync();
 }
 void Environment::copy(const GpuView1& source, GpuView1& dest) {
 	auto result = cublasScopy(mHandle, source.mSize, source.mGpu, 1, dest.mGpu, 1);
 	Error::checkBlas(result);
+	commandQueueSync();
 }
 void Environment::batchedCopy(const GpuView2& source, GpuView2& dest) {
 	auto size = source.mView.extent(0);
 	auto batchSize = source.mView.extent(1);
 
 	Kernel::batchedCopy(mStream, source.mGpu, dest.mGpu, size, batchSize);
+	commandQueueSync();
 }
 void Environment::batchedBroadcast(const GpuView1& source, GpuView2& dest) {
 	auto batchSize = dest.mView.extent(1);
 	Kernel::batchedBroadcast(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+	commandQueueSync();
 }
 void Environment::batchedBroadcastAdd(const GpuView1& source, GpuView2& dest) {
 	auto batchSize = dest.mView.extent(1);
 	Kernel::batchedBroadcastAdd(mStream, source.mGpu, dest.mGpu, source.mSize, batchSize);
+	commandQueueSync();
 }
 void Environment::batchedDiff(const GpuView2& desired2, const GpuView2& sought2, GpuView2& primes2) {
 	Kernel::diff(mStream, desired2.mGpu, sought2.mGpu, primes2.mGpu, desired2.mSize);
+	commandQueueSync();
 }
 void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, const GpuView2& primes, float learnRate) {
 
@@ -243,6 +271,7 @@ void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, 
 	int batchNum = seen.mView.extent(1);
 
 	Kernel::batchedUpdateWeights(mStream, weights.mGpu, primes.mGpu, seen.mGpu, rows, cols, batchNum, learnRate);
+	commandQueueSync();
 }
 
 void Environment::activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1) {
@@ -259,6 +288,7 @@ void Environment::activationFunction(LayerTemplate::ActivationFunction af, const
 		copy(o1, a1);
 		break;
 	}
+	commandQueueSync();
 }
 void Environment::batchedActivationFunction(LayerTemplate::ActivationFunction af, const GpuView2& o2, GpuView2& a2) {
 
@@ -277,6 +307,7 @@ void Environment::batchedActivationFunction(LayerTemplate::ActivationFunction af
 		batchedCopy(o2, a2);
 		break;
 	}
+	commandQueueSync();
 }
 void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
 
@@ -288,6 +319,7 @@ void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, 
 	case ActivationFunction::None:
 		break;
 	}
+	commandQueueSync();
 }
 void Environment::batchedActivationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView2& a2, GpuView2& p2) {
 
@@ -302,6 +334,7 @@ void Environment::batchedActivationFunctionPrime(LayerTemplate::ActivationFuncti
 	case ActivationFunction::None:
 		break;
 	}
+	commandQueueSync();
 }
 
 void Environment::errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1) {
@@ -315,6 +348,7 @@ void Environment::errorFunction(LayerTemplate::ActivationFunction af, const GpuV
 		diff(desired, sought, p1);
 		return;
 	}
+	commandQueueSync();
 }
 void Environment::batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2) {
 	switch (af) {
@@ -327,11 +361,21 @@ void Environment::batchedErrorFunction(LayerTemplate::ActivationFunction af, con
 		batchedDiff(desired2, sought2, p2);
 		return;
 	}
+	commandQueueSync();
 }
-void Environment::sync() {
+void Environment::deviceSync() {
 	Error::checkCuda(cudaDeviceSynchronize());
 }
-
+void Environment::sync() {
+	Error::checkCuda(cudaStreamSynchronize(mStream));
+}
+void Environment::commandQueueSync(std::size_t commandCount) {
+	mCommandCounter += commandCount;
+	if (mCommandCounter >= mMaxQueuedCommands) {
+		mCommandCounter = 0;
+		sync();
+	}
+}
 
 void Environment::example() {
 
@@ -346,7 +390,7 @@ void Environment::example() {
 
 	std::size_t inputSize = 3
 		, biasSize = 2
-		, batchSize = 1;
+		, batchSize = 3;
 
 	fs1.create((inputSize + biasSize * 4) * batchSize
 		+ biasSize

@@ -36,46 +36,95 @@ __global__ void cuSoftmax1024(const float* outputs, float* softmaxActivations, i
 
     // Step 1: Find max
     float local_max = -FLT_MAX;
-    if (tid < size) {
+    if (tid < size) 
         local_max = outputs[tid];
-    }
+    
 
     // Reduction to find max
     shared_exp[tid] = local_max;
     __syncthreads();
 
     for (int stride = size / 2; stride > 0; stride >>= 1) {
-        if (tid < stride && tid + stride < size) {
+
+        if (tid < stride && tid + stride < size) 
             shared_exp[tid] = fmaxf(shared_exp[tid], shared_exp[tid + stride]);
-        }
+        
         __syncthreads();
     }
 
-    if (tid == 0) {
+    if (tid == 0) 
         shared_max = shared_exp[0];
-    }
+    
     __syncthreads();
 
     // Step 2: Compute exp(x - max)
-    if (tid < size) {
+    if (tid < size) 
         shared_exp[tid] = expf(outputs[tid] - shared_max);
-    }
+    
     __syncthreads();
 
     // Step 3: Sum exp values
     float sum = 0.0f;
     if (tid == 0) {
-        for (int i = 0; i < size; ++i) {
+        for (int i = 0; i < size; ++i) 
             sum += shared_exp[i];
-        }
+        
         shared_max = sum; // reuse shared_max as shared_sum
     }
     __syncthreads();
 
     // Step 4: Normalize
-    if (tid < size) {
+    if (tid < size) 
         softmaxActivations[tid] = shared_exp[tid] / shared_max;
+}
+__global__ void cuSoftmaxBatch1024(const float* outputs, float* softmaxActivations, int size) {
+    extern __shared__ float shared_data[]; // [exp_vals[<1024], max_val]
+
+    int tid = threadIdx.x;
+    int batchIdx = blockIdx.x;
+
+    // Offset for this batch vector
+    const float* input = outputs + batchIdx * size;
+    float* output = softmaxActivations + batchIdx * size;
+
+    float* shared_exp = shared_data;
+    float& shared_max = shared_data[size]; // single float for max
+
+    // Step 1: Find max
+    float local_max = -FLT_MAX;
+    if (tid < size)
+        local_max = input[tid];
+
+    shared_exp[tid] = local_max;
+    __syncthreads();
+
+    for (int stride = size / 2; stride > 0; stride >>= 1) {
+        if (tid < stride && tid + stride < size)
+            shared_exp[tid] = fmaxf(shared_exp[tid], shared_exp[tid + stride]);
+        __syncthreads();
     }
+
+    if (tid == 0)
+        shared_max = shared_exp[0];
+    __syncthreads();
+
+    // Step 2: Compute exp(x - max)
+    if (tid < size)
+        shared_exp[tid] = expf(input[tid] - shared_max);
+    __syncthreads();
+
+    // Step 3: Sum exp values
+    float sum = 0.0f;
+    if (tid == 0) {
+        for (int i = 0; i < size; ++i)
+            sum += shared_exp[i];
+        shared_max = sum; // reuse shared_max as shared_sum
+    }
+    __syncthreads();
+
+    // Step 4: Normalize
+    if (tid < size)
+        output[tid] = shared_exp[tid] / shared_max;
 }
 
 __global__ void cuDiff(const float* desired, const float* sought, float* primes, int size) {
@@ -153,9 +202,9 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
 
     // Block-level reduction
     for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) {
+        if (tid < stride)
             partialSum[tid] += partialSum[tid + stride];
-        }
+        
         __syncthreads();
     }
 
@@ -188,6 +237,10 @@ void Kernel::applyReluPrime(cudaStream_t stream, const float* reluActivations, f
 }
 void Kernel::softmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size) {
     cuSoftmax1024 <<<1, size, (size +1)* sizeof(float), stream >>>(outputs, softmaxActivations, size);
+}
+void Kernel::batchedSoftmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size, int batchSize) {
+    int sharedMemSize = sizeof(float) * (size + 1);
+    cuSoftmaxBatch1024 << <batchSize, size, sharedMemSize, stream >> > (outputs, softmaxActivations, size);
 }
 void Kernel::diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size) {
     int threadsPerBlock = 256;

@@ -28,6 +28,7 @@ namespace NetworkLib {
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
+			void batchedSoftmax1(const GpuView2& o2, GpuView2& a2);
 			void batchedSoftmax(const GpuView2& o2, GpuView2& a2);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
 			void updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
@@ -45,12 +46,16 @@ namespace NetworkLib {
 			void batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2);
 		
 			void sync();
-
-			void example();
+			void deviceSync();
+			void commandQueueSync(std::size_t commandCount=1);
+			
+			static void example();
 
 		private:
 			cublasHandle_t mHandle;
 			cudaStream_t mStream;
+
+			std::size_t mMaxQueuedCommands = 1000, mCommandCounter = 0;
 
 			FloatSpace1 mEnvironmentSpace;
 			Float mMseResult;
