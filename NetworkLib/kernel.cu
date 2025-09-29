@@ -215,8 +215,47 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
     }
 }
 
+
+__global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
+
+    int batch = blockIdx.x * blockDim.x + threadIdx.x;
+    if (batch >= batchSize) return;
+
+    const float* sought = soughtBatch + batch * size;
+    const float* desired = desiredBatch + batch * size;
+
+    int maxSoughtIdx = 0;
+    int maxDesiredIdx = 0;
+    float maxSoughtVal = sought[0];
+    float maxDesiredVal = desired[0];
+
+    for (int i = 1; i < size; ++i) {
+        if (sought[i] > maxSoughtVal) {
+            maxSoughtVal = sought[i];
+            maxSoughtIdx = i;
+        }
+        if (desired[i] > maxDesiredVal) {
+            maxDesiredVal = desired[i];
+            maxDesiredIdx = i;
+        }
+    }
+
+    if (maxSoughtIdx != maxDesiredIdx) {
+        atomicAdd(misses, 1);
+    }
+}
+
+
+void Kernel::score(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
+
+    int threadsPerBlock = std::min(256, size);
+    int blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+
+    cuScore << <blocks, threadsPerBlock, 0, stream >> > (soughtBatch, desiredBatch, misses, size, batchSize);
+}
 void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize) {
-    int threadsPerBlock = 256;
+
+    int threadsPerBlock = std::min(256, size);;
     int blocksPerBatch = (size + threadsPerBlock - 1) / threadsPerBlock;
     dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
     dim3 block(threadsPerBlock);
@@ -226,35 +265,39 @@ void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired,
 }
 
 void Kernel::relu(cudaStream_t stream, const float* outputs, float* reluActivations, int size) {
-    int threadsPerBlock = 256;
+    int threadsPerBlock = std::min(size, 256);
     int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     cuRelu <<<blocksPerGrid, threadsPerBlock, 0, stream >>>(outputs, reluActivations, size);
 }
 void Kernel::applyReluPrime(cudaStream_t stream, const float* reluActivations, float* primes, int size) {
-    int threadsPerBlock = 256;
+    int threadsPerBlock = std::min(size, 256);
     int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     cuApplyReluPrime <<<blocksPerGrid, threadsPerBlock, 0, stream >>> (reluActivations, primes, size);
 }
 void Kernel::softmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size) {
-    cuSoftmax1024 <<<1, size, (size +1)* sizeof(float), stream >>>(outputs, softmaxActivations, size);
+    int threadsPerBlock = std::min(256, size);
+    cuSoftmax1024 <<<1, threadsPerBlock, (size +1)* sizeof(float), stream >>>(outputs, softmaxActivations, size);
 }
 void Kernel::batchedSoftmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size, int batchSize) {
     int sharedMemSize = sizeof(float) * (size + 1);
+    
     cuSoftmaxBatch1024 << <batchSize, size, sharedMemSize, stream >> > (outputs, softmaxActivations, size);
 }
 void Kernel::diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size) {
-    int threadsPerBlock = 256;
-    int blocksPerGrid = (size + threadsPerBlock - 1) / threadsPerBlock;
     cuDiff <<<1, size, 0, stream >>> (desired, sought, primes, size);
 }
 void Kernel::updateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int rows, int cols, float learnRate) {
 
-    dim3 threadsPerBlock(32, 32);
-    dim3 numBlocks((cols + 32 - 1) / 32, (rows + 32 - 1) / 32);
+    int tx = std::min(32, cols);
+    int ty = std::min(32, rows);
+    dim3 threadsPerBlock(tx, ty);
+    dim3 numBlocks((cols + tx - 1) / tx, (rows + ty - 1) / ty);
+
     cuUpdateWeights<<<numBlocks, threadsPerBlock, 0, stream>>>(weights, primes, seen, rows, cols, learnRate);
 }
 void Kernel::batchedCopy(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
-    int threadsPerBlock = 256;
+   
+    int threadsPerBlock = std::min(size, 256);
     int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
 
     dim3 grid(blocksPerRow, batchSize);
@@ -263,7 +306,7 @@ void Kernel::batchedCopy(cudaStream_t stream, const float* src, float* dst, int 
     cuBatchedCopy<<<grid, block, 0, stream >>>(src, dst, size, batchSize);
 }
 void Kernel::batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
-    int threadsPerBlock = 256;
+    int threadsPerBlock = std::min(size, 256);
     int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
 
     dim3 grid(blocksPerRow, batchSize);
@@ -272,7 +315,7 @@ void Kernel::batchedBroadcast(cudaStream_t stream, const float* src, float* dst,
     cuBroadcastVectorToColumns<<<grid, block, 0, stream>>>(src, dst, size, batchSize);
 }
 void Kernel::batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
-    int threadsPerBlock = 256;
+    int threadsPerBlock = std::min(size, 256);;
     int blocksPerRow = (size + threadsPerBlock - 1) / threadsPerBlock;
 
     dim3 grid(blocksPerRow, batchSize);
@@ -281,8 +324,14 @@ void Kernel::batchedBroadcastAdd(cudaStream_t stream, const float* src, float* d
     cuBroadcastVectorToColumnsAdd << <grid, block, 0, stream >> > (src, dst, size, batchSize);
 }
 void Kernel::batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int rows, int cols, int batchSize, float learnRate) {
-    dim3 blockDim(16, 16, 1);  // Threads per block
-    dim3 gridDim((cols + 15) / 16, (rows + 15) / 16, batchSize);  // One block per batch
+   
+    int tx = std::min(32, cols);
+    int ty = std::min(32, rows);
+    dim3 threadsPerBlock(tx, ty);
+
+    dim3 blockDim(tx, ty, 1);  // Threads per block
+    dim3 gridDim((cols + tx-1) / tx, (rows + ty-1) / ty, batchSize);  // One block per batch
+    
     cuBatchedUpdateWeights << <gridDim, blockDim, 0, stream >> >(weights, primes, seen, rows, cols, batchSize, learnRate);
 
 }

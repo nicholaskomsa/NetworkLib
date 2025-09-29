@@ -4,6 +4,8 @@
 
 using namespace NetworkLib::Gpu;
 
+std::atomic<std::size_t> Environment::mCommandCounter;
+
 void Environment::create() {
 	Error::checkBlas(cublasCreate(&mHandle));
 	Error::checkCuda(cudaStreamCreate(&mStream));
@@ -11,13 +13,18 @@ void Environment::create() {
 
 	commandQueueSync(3);
 
-	mEnvironmentSpace.create(1);
-	auto begin = mEnvironmentSpace.begin();
-	mEnvironmentSpace.advance(mMseResult, begin);
+	mLinkedFloatSpace.create(2);
+
+	auto& gpuSpace = mLinkedFloatSpace.mGpuSpace;
+
+	auto begin = gpuSpace.begin();
+	gpuSpace.advance(mMseResult, begin);
+	gpuSpace.advance(mMissesResult, begin);
+
 }
 void Environment::destroy() {
 
-	mEnvironmentSpace.destroy();
+	mLinkedFloatSpace.destroy();
 
 	Error::checkCuda(cudaStreamDestroy(mStream));
 	Error::checkBlas(cublasDestroy(mHandle));
@@ -182,6 +189,12 @@ void Environment::matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o
 	commandQueueSync();
 }
 
+void Environment::score(const GpuView2& sought, const GpuView2& desired) {
+	int size = sought.mView.extent(0);
+	int batchSize = sought.mView.extent(1);
+	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
+	commandQueueSync();
+}
 void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
 
 	int size = sought.mView.extent(0);
@@ -190,13 +203,23 @@ void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
 	commandQueueSync();
 }
 float Environment::getMseResult() {
-	mMseResult.downloadAsync(mStream);
-	sync();
 	return mMseResult;
 }
 void Environment::resetMseResult() {
 	mMseResult = 0.0f;
 	mMseResult.upload();
+}
+void Environment::resetMissesResult() {
+	mMissesResult = 0;;
+	mMissesResult.upload();
+}
+int Environment::getMissesResult() {
+	return mMissesResult;
+}
+
+void Environment::downloadConvergenceResults() {
+	mMissesResult.downloadAsync(mStream);
+	mMseResult.downloadAsync(mStream);
 }
 void Environment::relu(const GpuView1& o1, GpuView1& a1) {
 	Kernel::relu(mStream, o1.mGpu, a1.mGpu, o1.mSize);
@@ -216,7 +239,6 @@ void Environment::batchedSoftmax1(const GpuView2& o2, GpuView2& a2) {
 		auto a1 = a2.viewColumn(b);
 		softmax(o1, a1);
 	}
-	commandQueueSync();
 }
 void Environment::batchedSoftmax(const GpuView2& o2, GpuView2& a2) {
 
@@ -288,7 +310,6 @@ void Environment::activationFunction(LayerTemplate::ActivationFunction af, const
 		copy(o1, a1);
 		break;
 	}
-	commandQueueSync();
 }
 void Environment::batchedActivationFunction(LayerTemplate::ActivationFunction af, const GpuView2& o2, GpuView2& a2) {
 
@@ -307,7 +328,6 @@ void Environment::batchedActivationFunction(LayerTemplate::ActivationFunction af
 		batchedCopy(o2, a2);
 		break;
 	}
-	commandQueueSync();
 }
 void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
 
@@ -319,7 +339,6 @@ void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, 
 	case ActivationFunction::None:
 		break;
 	}
-	commandQueueSync();
 }
 void Environment::batchedActivationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView2& a2, GpuView2& p2) {
 
@@ -334,7 +353,6 @@ void Environment::batchedActivationFunctionPrime(LayerTemplate::ActivationFuncti
 	case ActivationFunction::None:
 		break;
 	}
-	commandQueueSync();
 }
 
 void Environment::errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1) {
@@ -348,7 +366,6 @@ void Environment::errorFunction(LayerTemplate::ActivationFunction af, const GpuV
 		diff(desired, sought, p1);
 		return;
 	}
-	commandQueueSync();
 }
 void Environment::batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2) {
 	switch (af) {
@@ -361,10 +378,10 @@ void Environment::batchedErrorFunction(LayerTemplate::ActivationFunction af, con
 		batchedDiff(desired2, sought2, p2);
 		return;
 	}
-	commandQueueSync();
 }
 void Environment::deviceSync() {
 	Error::checkCuda(cudaDeviceSynchronize());
+	mCommandCounter = 0;
 }
 void Environment::sync() {
 	Error::checkCuda(cudaStreamSynchronize(mStream));
@@ -373,7 +390,7 @@ void Environment::commandQueueSync(std::size_t commandCount) {
 	mCommandCounter += commandCount;
 	if (mCommandCounter >= mMaxQueuedCommands) {
 		mCommandCounter = 0;
-		sync();
+		deviceSync();
 	}
 }
 
@@ -382,7 +399,9 @@ void Environment::example() {
 	Environment gpu;
 	gpu.create();
 
-	Gpu::FloatSpace1 fs1;
+	LinkedFloatSpace linkedSpace;
+	auto& [cpuSpace, gpuSpace] = linkedSpace;
+
 	Gpu::GpuView1 b1;
 	Gpu::GpuView2 o2, a2, i2, d2, p2;
 	Gpu::GpuView2 w2;
@@ -392,21 +411,21 @@ void Environment::example() {
 		, biasSize = 2
 		, batchSize = 3;
 
-	fs1.create((inputSize + biasSize * 4) * batchSize
+	linkedSpace.create((inputSize + biasSize * 4) * batchSize
 		+ biasSize
 		+ biasSize * inputSize + biasSize * 2 * batchSize);
 
-	auto begin = fs1.begin();
+	auto begin = gpuSpace.begin();
 
-	fs1.advance(i2, begin, inputSize, batchSize);
-	fs1.advance(w2, begin, biasSize, inputSize);
-	fs1.advance(b1, begin, biasSize);
-	fs1.advance(o2, begin, biasSize, batchSize);
-	fs1.advance(a2, begin, biasSize, batchSize);
-	fs1.advance(p2, begin, biasSize, batchSize);
-	fs1.advance(d2, begin, biasSize, batchSize);
-	fs1.advance(softmax, begin, biasSize, batchSize);
-	fs1.advance(activations, begin, biasSize, batchSize);
+	gpuSpace.advance(i2, begin, inputSize, batchSize);
+	gpuSpace.advance(w2, begin, biasSize, inputSize);
+	gpuSpace.advance(b1, begin, biasSize);
+	gpuSpace.advance(o2, begin, biasSize, batchSize);
+	gpuSpace.advance(a2, begin, biasSize, batchSize);
+	gpuSpace.advance(p2, begin, biasSize, batchSize);
+	gpuSpace.advance(d2, begin, biasSize, batchSize);
+	gpuSpace.advance(softmax, begin, biasSize, batchSize);
+	gpuSpace.advance(activations, begin, biasSize, batchSize);
 
 	std::fill(w2.begin(), w2.end(), 1);
 	std::fill(i2.begin(), i2.end(), 1);
@@ -425,7 +444,7 @@ void Environment::example() {
 	activations.mView[0, 1] = 0.9;
 	activations.mView[1, 1] = 0.1;
 
-	fs1.upload();
+	gpuSpace.upload();
 
 	gpu.sync();
 
@@ -452,14 +471,15 @@ void Environment::example() {
 	}
 	gpu.batchedActivationFunction(LayerTemplate::ActivationFunction::Softmax, activations, softmax);
 
-	fs1.downloadAsync(gpu);
+	gpuSpace.downloadAsync(gpu);
 
 	gpu.sync();
 
 	for (const auto& f : softmax)
 		std::print("{} ", f);
 	std::println("");
-	fs1.destroy();
+	
+	linkedSpace.destroy();
 
 	gpu.destroy();
 }

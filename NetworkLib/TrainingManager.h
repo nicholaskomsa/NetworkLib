@@ -15,20 +15,28 @@ namespace NetworkLib {
 		using GpuBatchedSamples = std::vector<GpuBatchedSample>;
 
 		void destroy() {
-			mXORSampleSpace.destroy();
+
+			auto destroyLinkedSpace = [](Gpu::LinkedFloatSpace& linkedSpace) {
+				auto& [cpuSpace, gpuSpace] = linkedSpace;
+				gpuSpace.destroy();
+				cpuSpace.destroy();
+				};
+
+			destroyLinkedSpace(mXORSampleSpace);
+
 		}
 
-		GpuBatchedSamples createGPUBatchedSamples(Gpu::FloatSpace1& gpuSampleSpace
+	GpuBatchedSamples createGpuBatchedSamples(Gpu::LinkedFloatSpace& linkedSampleSpace
 			, const Samples& samples
 			, std::size_t inputSize, std::size_t outputSize, std::size_t batchSize = 1) {
 
 			GpuBatchedSamples gpuBatchedSamples;
-
 			auto batchNum = std::ceil(samples.size() / float(batchSize));
-
 			gpuBatchedSamples.resize(batchNum);
 
-			gpuSampleSpace.create(batchNum * batchSize * (inputSize + outputSize));
+			linkedSampleSpace.create(batchNum * batchSize * (inputSize + outputSize));
+			auto& gpuSampleSpace = linkedSampleSpace.mGpuSpace;
+
 			auto begin = gpuSampleSpace.begin();
 			auto currentSample = samples.begin();
 
@@ -69,10 +77,10 @@ namespace NetworkLib {
 			auto inputSize = samples.front().first.size()
 				, outputSize = samples.front().second.size();
 			
-			return createGPUBatchedSamples(mXORSampleSpace, samples, inputSize, outputSize, batchSize);
+			return createGpuBatchedSamples(mXORSampleSpace, samples, inputSize, outputSize, batchSize);
 		}
 
-		Gpu::FloatSpace1 mXORSampleSpace;
+		Gpu::LinkedFloatSpace mXORSampleSpace;
 	};
 	
 }

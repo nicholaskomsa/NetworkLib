@@ -7,6 +7,7 @@
 #include <CpuTensor.h>
 #include <Model.h>
 
+#include <CpuNetwork.h>
 #include <GpuNetwork.h>
 
 int main() {
@@ -23,9 +24,13 @@ int main() {
 	//diag.serializeTest();
 	//diag.simpleChat();
 
-	//Cpu::Tensor::example();
-	NetworkLib::Model::XOR xorModel;
-	xorModel.run();
+	//NetworkLib::Cpu::example();
+	//NetworkLib::Cpu::networkExample();
+
+//	NetworkLib::Model::XOR xorModel;
+//xorModel.run();
+	NetworkLib::Model::XORLottery xorLotteryModel;
+	xorLotteryModel.run();
 
 	//NetworkLib::Gpu::Environment::example();
 

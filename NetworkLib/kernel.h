@@ -12,6 +12,7 @@ namespace NetworkLib {
 			void batchedSoftmax(cudaStream_t stream, const float* outputs, float* softmaxActivations, int size, int batchSize);
 
 			void mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize);
+			void score(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize);
 
 			void diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size);
 	

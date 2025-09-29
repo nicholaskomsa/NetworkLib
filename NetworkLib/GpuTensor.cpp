@@ -6,55 +6,6 @@
 
 using namespace NetworkLib::Gpu;
 
-Error::Error(std::errc code, const std::string& message)
-	: std::system_error(int(code), std::generic_category(), message) {}
-
-void Error::checkCuda(cudaError_t result, const std::source_location& location) {
-	if (result == cudaSuccess) return;
-
-	auto message = std::format(
-		"Cuda Error ={}:\n{}"
-		"\n{}\n{}\n{}\n"
-		, int(result), cudaGetErrorString(result)
-		, location.file_name(), location.line(), location.function_name());
-
-	throw Error(std::errc::operation_canceled, message);
-}
-void Error::checkBlas(cublasStatus_t result, const std::source_location& location) {
-	if (result == CUBLAS_STATUS_SUCCESS) return;
-
-	auto getBLASString = [&]() {
-		switch (result) {
-		case CUBLAS_STATUS_SUCCESS:          return "Success";
-		case CUBLAS_STATUS_NOT_INITIALIZED:  return "cuBLAS not initialized";
-		case CUBLAS_STATUS_ALLOC_FAILED:     return "Resource allocation failed";
-		case CUBLAS_STATUS_INVALID_VALUE:    return "Invalid value";
-		case CUBLAS_STATUS_ARCH_MISMATCH:    return "Architecture mismatch";
-		case CUBLAS_STATUS_MAPPING_ERROR:    return "Memory mapping error";
-		case CUBLAS_STATUS_EXECUTION_FAILED: return "Execution failed";
-		case CUBLAS_STATUS_INTERNAL_ERROR:   return "Internal error";
-		default:                             return "Unknown cuBLAS error";
-		}
-		};
-
-	auto message = std::format(
-		"BLAS Error ={}:\n{}"
-		"\n{}\n{}\n{}\n"
-		, int(result), getBLASString()
-		, location.file_name(), location.line(), location.function_name());
-
-	throw Error(std::errc::operation_canceled, message);
-}
-void Error::checkMissMatch(Dimension a, Dimension b, const std::source_location& location) {
-	if (a == b) return;
-	auto message = std::format("{}x{} mismatch\n{}\n{}\n{}\n", a, b, location.file_name(), location.line(), location.function_name());
-	throw Error(std::errc::invalid_argument, message);
-}
-void Error::checkBounds(Coordinate a, Dimension b, const std::source_location& location) {
-	if (a < b) return;
-	auto message = std::format("{}, {} out of bounds\n{}\n{}\n{}\n", a, b, location.file_name(), location.line(), location.function_name());
-	throw Error(std::errc::invalid_argument, message);
-}
 
 void Float::upload() {
 	Error::checkCuda(cudaMemcpy(
@@ -80,25 +31,45 @@ Float& Float::operator=(float v) {
 	return *this;
 }
 
-void FloatSpace1::create(std::size_t size) {
+void Int::upload() {
+	Error::checkCuda(cudaMemcpy(
+		mGpu,
+		mCpu,
+		1 * sizeof(float),
+		cudaMemcpyHostToDevice));
 
-	float* cpu, * gpu;
-	Error::checkCuda(cudaMallocHost(&cpu, size * sizeof(float)));
+}
+void Int::downloadAsync(cudaStream_t stream) const {
+	Error::checkCuda(cudaMemcpyAsync(
+		mCpu,
+		mGpu,
+		1 * sizeof(float),
+		cudaMemcpyDeviceToHost,
+		stream));
+}
+Int::operator int() const {
+	return *mCpu;
+}
+
+Int& Int::operator=(int v){
+	*mCpu = v;
+	return *this;
+}
+
+void FloatSpace1::create(const Cpu::FloatSpace1& cpuSpace) {
+
+	float* cpu = cpuSpace.mCpu, * gpu=nullptr;
+	std::size_t size = cpuSpace.mView.extent(0);
+
+	if( size != mView.mSize )
+		destroy();
+
 	Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&gpu), size * sizeof(float)));
-	mView = { Cpu::Tensor::View1(cpu, size), gpu, cpu };
+
+	mView = { cpuSpace.mView, gpu, cpu };
 }
 
 void FloatSpace1::destroy() {
-	freeHost();
-	freeGpu();
-}
-
-void FloatSpace1::freeHost() {
-	if (mView.mCpu)
-		Error::checkCuda(cudaFreeHost(mView.mCpu));
-	mView.mCpu = nullptr;
-}
-void FloatSpace1::freeGpu() {
 	if (mView.mGpu)
 		Error::checkCuda(cudaFree(mView.mGpu));
 	mView.mGpu = nullptr;
@@ -116,7 +87,13 @@ void FloatSpace1::advance(Float& f, float*& begin) {
 	f = { getGpu(source), source };
 	++begin;
 }
-
+void FloatSpace1::advance(Int& i, float*& begin) {
+	//float and int are same size so just reinterpret
+	int* cpu = reinterpret_cast<int*>(begin);
+	int* gpu = reinterpret_cast<int*>(getGpu(begin));
+	i = { gpu, cpu };
+	++begin;
+}
 void FloatSpace1::upload() {
 	mView.upload();
 }

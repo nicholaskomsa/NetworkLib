@@ -4,7 +4,7 @@
 
 #include "Parallel.h"
 #include "Environment.h"
-
+#include "CpuNetwork.h"
 
 namespace NetworkLib {
 	namespace Gpu {
@@ -12,40 +12,27 @@ namespace NetworkLib {
 		class Network {
 		public:
 
-			void create(NetworkTemplate* networkTemplate, bool backwards=true) {
+			void mirror(Cpu::Network& cpuNetwork) {
 
-				mNetworkTemplate = networkTemplate;
+				mNetworkTemplate = cpuNetwork.mNetworkTemplate;
 
 				const auto& nt = *mNetworkTemplate;
 				auto& layerTemplates = nt.mLayerTemplates;
 				auto batchSize = nt.mBatchSize;
+				auto firstInputSize = nt.mInputSize;
+				bool backwards = cpuNetwork.mPrimes.size() > 0;
 
-				auto& firstInputSize = nt.mInputSize;
-				std::size_t size = 0, inputSize = firstInputSize;
-				for (auto& layerTemplate : layerTemplates) {
-					const auto n = layerTemplate.mNodeCount;
-					//weights + bias + batchSize * (outputs + activations)
-					size += n * inputSize + n  + batchSize * 2 * n;
-					inputSize = n;
-				}
+ 				mGpuFloats.create(cpuNetwork.mFloats);
 
-				if (backwards)
-					for (auto& layerTemplate : layerTemplates) {
-						const auto n = layerTemplate.mNodeCount;
-						size += batchSize * n; //batchSize * primes
-					}
-
-				mGpuFloats.create(size);
-
-				mLayers.resize(layerTemplates.size());
+				mLayers.resize(cpuNetwork.mLayers.size());
 
 				auto begin = mGpuFloats.begin();
-
+				
 				auto groupComponent = [&](auto&& setupFunctor) ->GpuView1 {
 
 					auto componentBegin = begin;
 
-					inputSize = firstInputSize;
+					auto inputSize = firstInputSize;
 					for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
 
 						const auto n = layerTemplate.mNodeCount;
@@ -79,57 +66,30 @@ namespace NetworkLib {
 					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
 						mGpuFloats.advance(layer.mPrimes, begin, n, batchSize);
 						});
+
+				upload();
 			}
 
 			void destroy() {
 				mGpuFloats.destroy();
 			}
 
-			void intializeId( std::size_t id ){
-				std::mt19937_64 random(id);
-				initialize(random);
-			}
-			void initialize(std::mt19937_64& random) {
-
-				for (auto& layer : mLayers) 
-					layer.generate(random);
-				
-				applyKHScales();
-			}
-
 			void upload() {
 				mGpuFloats.upload();
 			}
 
-			void applyKHScales() {
-
-				Parallel parallel(mLayers.size());
-				parallel([&](auto& section) {
-
-					for (auto l : section.mIotaView) {
-
-						auto& layer = mLayers[l];
-
-						std::size_t inputSize = (l == 0)? 
-							mNetworkTemplate->mInputSize : mLayers[l - 1].mBias.mSize;
-
-						layer.applyKHScaleUniform(inputSize);
-					}
-					});
-			}
-
-			const GpuView1 forward(Environment& env, GpuView1 seen, std::size_t batch = 0) {
+			const GpuView1 forward(Environment& gpu, GpuView1 seen, std::size_t batch = 0) {
 				
 				for( auto& layer : mLayers ) 
-					seen = layer.forward(env, seen, batch);
+					seen = layer.forward(gpu, seen, batch);
 				
 				return seen;
 			}
 
-			const GpuView2 forward(Environment& env, GpuView2 seenBatch) {
+			const GpuView2 forward(Environment& gpu, GpuView2 seenBatch) {
 
 				for (auto& layer : mLayers)
-					seenBatch = layer.forward(env, seenBatch);
+					seenBatch = layer.forward(gpu, seenBatch);
 
 				return seenBatch;
 			}
@@ -239,26 +199,6 @@ namespace NetworkLib {
 
 			class Layer {
 			public:
-				void generate(std::mt19937_64& random) {
-
-					std::uniform_real_distribution<float> reals(-1.0f, 1.0f);
-
-					std::generate(mWeights.begin(), mWeights.end(), [&]() {
-						return reals(random);
-						});
-
-					std::generate(mBias.begin(), mBias.end(), [&]() {
-						return reals(random);
-						});
-				}
-
-				void applyKHScaleUniform(std::size_t inputSize) {
-
-					auto scale = std::sqrtf(6.0f / (inputSize + mBias.mSize));
-
-					for (auto& w : mWeights)
-						w *= scale;
-				}
 
 				const GpuView1 forward(Environment& env, const GpuView1& input, std::size_t batch = 0) {
 
@@ -302,6 +242,9 @@ namespace NetworkLib {
 
 			Layers mLayers;
 		};
-
+	
+		using NetworksView = std::span<Network>;
 	}
+
+
 }

@@ -135,5 +135,13 @@ namespace NetworkLib {
 			operator()(std::move(functor), single);
 			operator()(std::move(finale), true);
 		}
+		//single threaded setup, parallel, single threaded finale
+		void operator()(SectionsFunctor&& setup, SectionFunctor&& functor, SectionFunctor&& finale=nullptr, bool single = false) {
+
+			setup(mSectionsView);
+			operator()(std::move(functor), single);
+			if( finale )
+				operator()(std::move(finale), true);
+		}
 	};
 }

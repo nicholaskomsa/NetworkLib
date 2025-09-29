@@ -1,5 +1,11 @@
 #pragma once
 
+
+#include <cublas_v2.h>
+#include <cuda_runtime.h>
+#include <cuda_profiler_api.h>
+
+#include <source_location>
 #include <ranges>
 #include <print>
 #include <vector>
@@ -17,6 +23,21 @@ namespace NetworkLib {
 			using FloatsView = std::span<FloatType>;
 			using Dimension = std::size_t;
 			using Coordinate = std::size_t;
+		}
+	}
+
+	struct Error : public std::system_error {
+
+		Error(std::errc code, const std::string& message);
+		static void checkCuda(cudaError_t result, const std::source_location& location = std::source_location::current());
+		static void checkBlas(cublasStatus_t result, const std::source_location& location = std::source_location::current());
+		static void checkMissMatch(Cpu::Tensor::Dimension a, Cpu::Tensor::Dimension b, const std::source_location& location = std::source_location::current());
+		static void checkBounds(Cpu::Tensor::Coordinate a, Cpu::Tensor::Dimension b, const std::source_location& location = std::source_location::current());
+	};
+
+	namespace Cpu {
+
+		namespace Tensor {
 
 			template<typename... Dimensions>
 			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, std::layout_left>;
@@ -69,28 +90,20 @@ namespace NetworkLib {
 			}
 
 			template<DynamicViewConcept ViewType, typename... Dimensions>
-			void advance(ViewType& view, Floats::iterator& begin, Dimensions ...dimensions) {
-
-				view = ViewType(&*begin, std::array{ dimensions... });
-				std::advance(begin, area(view));
-			}
-			template<FixedViewConcept ViewType>
-			void advance(ViewType& view, Floats::iterator& begin) {
-
-				view = ViewType(&*begin);
-				std::advance(begin, area(view));
-			}
-			template<DynamicViewConcept ViewType, typename... Dimensions>
 			void advance(ViewType& view, float*& begin, Dimensions ...dimensions) {
 
 				view = ViewType(&*begin, std::array{ dimensions... });
-				begin+= area(view);
+				begin += area(view);
 			}
 			template<FixedViewConcept ViewType>
 			void advance(ViewType& view, float*& begin) {
 
 				view = ViewType(&*begin);
-				begin+= area(view);
+				begin += area(view);
+			}
+
+			static void advance(float*& f, float*& begin) {
+				f = begin++;
 			}
 
 			template<ViewConcept ViewType>
@@ -112,7 +125,7 @@ namespace NetworkLib {
 
 				return View1(cpu, std::array{ rows });
 			}
-			
+
 			template<ViewConcept ViewType>
 			View1 flatten(ViewType& v) {
 				return View1(v.data_handle(), std::array{ area(v) });
@@ -122,58 +135,68 @@ namespace NetworkLib {
 			FloatsView view(ViewType& v) {
 				return FloatsView(v.data_handle(), area(v));
 			}
+		}
 
-			template<DynamicViewConcept ViewType>
-			class FloatSpace {
-			public:
-				Floats mFloats;
-				ViewType mView;
+		using View1 = Tensor::View1;
+		using View2 = Tensor::View2;
 
-				template<DimensionsConcept... Dimensions>
-				void resize(Dimensions&& ...dimensions) {
-					mFloats.resize(area(dimensions...));
-					mView = ViewType(mFloats.data(), std::array{ dimensions... });
-				}
-			};
+		class FloatSpace1 {
+		public:
+			float* mCpu = nullptr;
+			Tensor::View1 mView;
 
-			using FloatSpace1 = FloatSpace<View1>;
-			using FloatSpace2 = FloatSpace<View2>;
-			using FloatSpace3 = FloatSpace<View3>;
+			void create(std::size_t size) {
 
-			static void example() {
+				Error::checkCuda(cudaMallocHost(&mCpu, size * sizeof(float)));
 
-				//namespace CpuTensor = NetworkLib::Cpu::Tensor;
-
-				FloatSpace1 floatSpace1;
-				constexpr Dimension a = 4, b = 5;
-				Dimension c = 6;
-				floatSpace1.resize(a + b * c + a * b + a * b * c);
-
-				auto begin = floatSpace1.mFloats.begin();
-				View1 v1;
-				View2 v2;
-
-				using width = DimensionConstant<a>;
-				using height = DimensionConstant<b>;
-				View<width, height> fv2(nullptr);
-				View<width, Dynamic, Dynamic> fv3;
-
-				advance(v1, begin, a);
-				advance(v2, begin, b, c);
-				advance(fv2, begin);
-				advance(fv3, begin, b, c);
-
-				v2[b - 1, c - 1] = 6.5f;
-				floatSpace1.mView[2] = 7;
-				fv2[0, 2] = 9;
-				fv3[3, 3, 3] = 4.3;
-
-				std::println("{} {} {} {}", v2[b - 1, c - 1], v1[2], floatSpace1.mView[30], fv2[0, 2]);
-
-				auto v2Shape = getShape(v2);
-				for (auto d : v2Shape)
-					std::print("{} ", d);
+				mView = Cpu::Tensor::View1(mCpu, size);
 			}
+
+			void destroy() {
+				if (mCpu)
+					Error::checkCuda(cudaFreeHost(mCpu));
+				mCpu = nullptr;
+			}
+
+			float* begin() {
+				return mCpu;
+			}
+			float* end() {
+				return mCpu + mView.extent(0);
+			}
+		};
+			
+		static void example() {
+
+			FloatSpace1 floatSpace;
+			constexpr Tensor::Dimension a = 4, b = 5;
+			Tensor::Dimension c = 6;
+			floatSpace.create(a + b * c + a * b + a * b * c);
+
+			auto begin = floatSpace.begin();
+			Tensor::View1 v1;
+			Tensor::View2 v2;
+
+			using width = Tensor::DimensionConstant<a>;
+			using height = Tensor::DimensionConstant<b>;
+			Tensor::View<width, height> fv2(nullptr);
+			Tensor::View<width, Tensor::Dynamic, Tensor::Dynamic> fv3;
+
+			Tensor::advance(v1, begin, a);
+			Tensor::advance(v2, begin, b, c);
+			Tensor::advance(fv2, begin);
+			Tensor::advance(fv3, begin, b, c);
+
+			v2[b - 1, c - 1] = 6.5f;
+			floatSpace.mView[2] = 7;
+			fv2[0, 2] = 9;
+			fv3[3, 3, 3] = 4.3;
+
+			std::println("{} {} {} {}", v2[b - 1, c - 1], v1[2], floatSpace.mView[30], fv2[0, 2]);
+
+			auto v2Shape = Tensor::getShape(v2);
+			for (auto d : v2Shape)
+				std::print("{} ", d);
 		}
 	}
 }

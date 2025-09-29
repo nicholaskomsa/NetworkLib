@@ -99,6 +99,7 @@
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
     <ClInclude Include="GpuNetwork.h" />
+    <ClInclude Include="NetworkSorter.h" />
     <ClInclude Include="NetworkTemplate.h" />
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="Serializer.h" />
@@ -107,6 +108,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp" />
+    <ClCompile Include="CpuTensor.cpp" />
     <ClCompile Include="Environment.cpp" />
     <ClCompile Include="FloatSpaceConvert.cpp" />
     <ClCompile Include="Gpt2.cpp" />

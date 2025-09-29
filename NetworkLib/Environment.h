@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "GpuTensor.h"
 
 namespace NetworkLib {
@@ -22,9 +24,15 @@ namespace NetworkLib {
 			void batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2);
 			void matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1);
 
+			void score(const GpuView2& sought, const GpuView2& desired);
+			void resetMissesResult();
+			int getMissesResult();
+
 			void mse(const GpuView2& sought, const GpuView2& desired);
 			float getMseResult();
 			void resetMseResult();
+			void downloadConvergenceResults();
+
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);
 			void softmax(const GpuView1& o1, GpuView1& a1);
@@ -55,10 +63,12 @@ namespace NetworkLib {
 			cublasHandle_t mHandle;
 			cudaStream_t mStream;
 
-			std::size_t mMaxQueuedCommands = 1000, mCommandCounter = 0;
+			static constexpr std::size_t mMaxQueuedCommands = 50000;
+			static std::atomic<std::size_t> mCommandCounter;
 
-			FloatSpace1 mEnvironmentSpace;
+			Gpu::LinkedFloatSpace mLinkedFloatSpace;
 			Float mMseResult;
+			Int mMissesResult;
 		};
 	}
 }

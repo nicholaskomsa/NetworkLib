@@ -1,10 +1,5 @@
 #pragma once
 
-#include <cublas_v2.h>
-#include <cuda_runtime.h>
-#include <cuda_profiler_api.h>
-#include <source_location>
-
 #include "CpuTensor.h"
 #include "NetworkTemplate.h"
 
@@ -15,14 +10,6 @@ namespace NetworkLib {
 		using Dimension = Cpu::Tensor::Dimension;
 		using Coordinate = Cpu::Tensor::Coordinate;
 
-		struct Error : public std::system_error {
-
-			Error(std::errc code, const std::string& message);
-			static void checkCuda(cudaError_t result, const std::source_location& location = std::source_location::current());
-			static void checkBlas(cublasStatus_t result, const std::source_location& location = std::source_location::current());
-			static void checkMissMatch(Dimension a, Dimension b, const std::source_location& location = std::source_location::current());
-			static void checkBounds(Coordinate a, Dimension b, const std::source_location& location = std::source_location::current());
-		};
 
 		template<typename T>
 		concept ViewConcept = Cpu::Tensor::ViewConcept<T>;
@@ -111,17 +98,22 @@ namespace NetworkLib {
 			operator float() const;
 			Float& operator=(float v);
 		};
+		struct Int {
+			int* mGpu = nullptr, *mCpu = nullptr;
 
+			void upload();
+			void downloadAsync(cudaStream_t stream) const;
+
+			operator int() const;
+			Int& operator=(int v);
+		};
 		struct FloatSpace1 {
-
+			
 			GpuView1 mView;
 
-			void create(std::size_t size);
+			void create(const Cpu::FloatSpace1& cpuSpace);
 
 			void destroy();
-
-			void freeHost();
-			void freeGpu();
 
 			float* getGpu(float* cpu);
 
@@ -141,10 +133,25 @@ namespace NetworkLib {
 				gpuView = { view, getGpu(view), source };
 			}
 			void advance(Float& f, float*& begin);
+			void advance(Int& i, float*& begin);
 
 			void upload();
 			void downloadAsync(cudaStream_t stream);
 		};
 
+		class LinkedFloatSpace {
+		public:
+			Cpu::FloatSpace1 mCpuSpace;
+			Gpu::FloatSpace1 mGpuSpace;
+			
+			void create(std::size_t size) {
+				mCpuSpace.create(size);
+				mGpuSpace.create(mCpuSpace);
+			}
+			void destroy() {
+				mGpuSpace.destroy();
+				mCpuSpace.destroy();
+			}
+		};
 	}
 }
