@@ -1,5 +1,6 @@
 xor lottery parallel tests
 gpu num time best
-1	100	85s Mse: 0.16740175 Misses: 1
-2	100 74
-4	100	121s Mse: 0.16740175 Misses: 1
+
+1 1000 1055s
+2 1000 887s 853s 881
+3 1000 1036

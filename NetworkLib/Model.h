@@ -35,6 +35,7 @@ namespace NetworkLib {
 			void calculateConvergence() {
 
 				mGpu.resetMseResult();
+				mGpu.resetMissesResult();
 
 				for (const auto& [seen, desired] : mBatchedSamples) {
 
@@ -42,6 +43,7 @@ namespace NetworkLib {
 					auto output = mGpuNetwork.getOutput();
 
 					mGpu.mse(sought, desired);
+					mGpu.score(sought, desired);
 
 					if (mPrintConsole) {
 
@@ -72,13 +74,12 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 8, ActivationFunction::ReLU}
-					, { 4, ActivationFunction::ReLU}
+					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
 				mCpuNetwork.create(&mNetworkTemplate);
-				mCpuNetwork.initialize(mRandom);
+				mCpuNetwork.intializeId(981);
 
 				mGpuNetwork.mirror(mCpuNetwork);
 				mGpuNetwork.upload();
@@ -127,6 +128,7 @@ namespace NetworkLib {
 
 			void run(bool print=true) {
 
+
 				mPrintConsole = print;
 
 				create();
@@ -163,11 +165,10 @@ namespace NetworkLib {
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
 
-			std::size_t mMaxGpus = 2, mMaxNetworks = 100;
+			std::size_t mMaxGpus = 2, mMaxNetworks = 1000;
 			bool mPrintConsole = false;
 			
 			void calculateConvergence(Gpu::Environment& gpu, Gpu::Network& gpuNetwork, Cpu::Network& cpuNetwork, bool print=false) {
-
 
 				gpuNetwork.mirror(cpuNetwork);
 
@@ -207,10 +208,14 @@ namespace NetworkLib {
 
 				if (print) {
 
+					auto sampleNum = mBatchedSamples.size() * mBatchSize;
+
 					std::println("\nMse: {}"
 						"\nMisses: {}"
+						"\nAccuracy: {}"
 						, cpuNetwork.mMse
 						, cpuNetwork.mMisses
+						,  sampleNum - cpuNetwork.mMisses / float(sampleNum)
 					);
 				}
 			}
@@ -249,10 +254,9 @@ namespace NetworkLib {
 				
 				auto& bestNetwork = mNetworksSorter.getBest();
 				auto bestNetworkIdx = mNetworksSorter.getBestIdx();
-				std::println("Rank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkIdx, bestNetwork.mMisses, bestNetwork.mMse);
+				std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkIdx, bestNetwork.mMisses, bestNetwork.mMse);
 
 				auto& [gpu, gpuNetwork, cpuNetworks] = mGpuTasks.front();
-				gpuNetwork.mirror(bestNetwork);
 				calculateConvergence(gpu, gpuNetwork, bestNetwork, true);
 			}
 			void create() {
@@ -266,13 +270,8 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				//assign networks ids, but assign the last network the known convergent id
-				std::mt19937_64 mRandom;
-				auto knownId = mRandom.default_seed;
-
 				mGpuTasks.resize(mMaxGpus);
 				mParallelGpuTasks.section(mGpuTasks.size(), mGpuTasks.size());
-
 
 				mNetworks.resize(mMaxNetworks);
 				mNetworksSorter.create(mNetworks);
@@ -361,8 +360,8 @@ namespace NetworkLib {
 								gpuNetwork.mBias.downloadAsync(gpu);
 
 								gpu.sync();
-								++progress;
-								printProgress(progress, mNetworks.size());
+
+								printProgress(++progress, mNetworks.size());
 							}
 						}
 						});

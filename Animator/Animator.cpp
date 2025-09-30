@@ -481,20 +481,21 @@ void Animator::animateXORNetwork() {
     xorModel.create();
 
     std::size_t generation = 0;
+    auto selectedView = xorModel.mGpuNetwork.mWeights;
+    auto selectedFloatsView = NetworkLib::Cpu::Tensor::view(selectedView.mView);
 
-    auto selectedNetworkView = xorModel.mNetwork.mWeights;
-
-    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedNetworkView.mSize, Animator::mAspectRatio);
+    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedFloatsView.size(), Animator::mAspectRatio);
     mFrameWidth = frameWidth;
     mFrameHeight = frameHeight;
 
-    TextArea::LabeledValueReference mMseValueRef;
+    TextArea::LabeledValueReference mMseValueRef, mAccuracyValueRef;
 
     mCreateCustomGui = [&]() {
 
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
 
         mMseValueRef = textArea.addLabeledValue(mTextManager.mMinscraftFontFace, "Mse:", "    ");
+        mAccuracyValueRef = textArea.addLabeledValue(mTextManager.mMinscraftFontFace, "Accuracy:", "000" );
         };
 
     mCustomGuiEvents = [&](bool& changeDimensions, bool& doConvert){
@@ -503,21 +504,30 @@ void Animator::animateXORNetwork() {
         };
 
     float mse = 0.0f;
+    std::size_t misses = 0;
+
     mCustomGuiRender = [&]() {
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
+
+        auto sampleNum = xorModel.mBatchedSamples.size() * xorModel.mBatchSize;
+        float accuracy = (sampleNum - misses) / float(sampleNum) * 100.0f;
+        textArea.updateLabeledValue(mAccuracyValueRef, std::format("{:.2}", accuracy));
         };
 
-    setup(selectedNetworkView);
+    setup(selectedFloatsView);
 
     auto step = [&](auto floats) {
 
         xorModel.trainOne(generation++);
 
-        selectedNetworkView.downloadAsync(xorModel.mGpu);
+        selectedView.downloadAsync(xorModel.mGpu);
      //   xorModel.mNetwork.mWeights.downloadAsync(xorModel.mGpu);
         xorModel.calculateConvergence();
+        xorModel.mGpu.downloadConvergenceResults();
+        xorModel.mGpu.sync();
         mse = xorModel.mGpu.getMseResult();
+		misses = xorModel.mGpu.getMissesResult();
 
         return true;
         };

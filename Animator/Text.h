@@ -269,7 +269,7 @@ public:
 
 		mLabeledValues.push_back({ std::move(label), std::move(value) });
 		                 
-		mInsertY += value.mTotalPixelsHeight;
+		mInsertY += std::max(label.mTotalPixelsHeight, value.mTotalPixelsHeight);
 
 		return mLabeledValues.size() - 1;
 	}
