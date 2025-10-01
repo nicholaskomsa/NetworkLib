@@ -74,12 +74,14 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 2, ActivationFunction::ReLU}
+					, {{ 100, ActivationFunction::ReLU}
+					, { 50, ActivationFunction::ReLU}
+					, { 25, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
 				mCpuNetwork.create(&mNetworkTemplate);
-				mCpuNetwork.intializeId(981);
+				mCpuNetwork.initializeId(981);
 
 				mGpuNetwork.mirror(mCpuNetwork);
 				mGpuNetwork.upload();
@@ -215,7 +217,7 @@ namespace NetworkLib {
 						"\nAccuracy: {}"
 						, cpuNetwork.mMse
 						, cpuNetwork.mMisses
-						,  sampleNum - cpuNetwork.mMisses / float(sampleNum)
+						,  (sampleNum - cpuNetwork.mMisses) / float(sampleNum)*100.0f
 					);
 				}
 			}
@@ -239,11 +241,13 @@ namespace NetworkLib {
 						}
 						});
 					});
-				std::println("Took: {}", convergenceTime.getString<seconds>());
 
 				mNetworksSorter.sortBySuperRadius();
+
 				if (mPrintConsole) {
-					
+
+					std::println("Took: {}", convergenceTime.getString<seconds>());
+
 					std::println("Networks sorted by SuperRadius: ");
 
 					for (std::size_t i = 0; auto networkIdx : mNetworksSorter.mNetworksIdx) {
@@ -266,7 +270,7 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 2, ActivationFunction::ReLU}
+					, {{ 100, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
@@ -286,7 +290,7 @@ namespace NetworkLib {
 
 						network.create(&mNetworkTemplate, true);
 
-						network.intializeId(id);
+						network.initializeId(id);
 					}
 					});
 
@@ -307,7 +311,6 @@ namespace NetworkLib {
 					};
 
 				setupGpuWork();
-
 
 				mBatchedSamples = mTrainingManager.createXORBatchedSamples(mBatchSize);
 			}
@@ -338,7 +341,7 @@ namespace NetworkLib {
 				if (mPrintConsole)
 					std::print("Training Networks: ");
 
-				TimeAverage<nanoseconds> trainTime;
+				TimeAverage<milliseconds> trainTime;
 
 				trainTime.accumulateTime([&]() {
 
@@ -361,7 +364,8 @@ namespace NetworkLib {
 
 								gpu.sync();
 
-								printProgress(++progress, mNetworks.size());
+								if( mPrintConsole)
+									printProgress(++progress, mNetworks.size());
 							}
 						}
 						});

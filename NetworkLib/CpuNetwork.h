@@ -91,7 +91,7 @@ namespace NetworkLib {
 			}
 
 
-			void intializeId(std::size_t id) {
+			void initializeId(std::size_t id) {
 				std::mt19937_64 random(id);
 				initialize(random);
 			}
@@ -263,8 +263,8 @@ namespace NetworkLib {
 				{2, LayerTemplate::ActivationFunction::Softmax}
 			};
 			network.create(&nt);
-			network.intializeId(1);
-			auto input = Tensor::View2((float*)nullptr, std::array{ 4, 3 });
+			network.initializeId(1);
+			//auto input = Tensor::View2((float*)nullptr, std::array{ 4, 3 });
 			//auto output = network.forward(input, 0);
 			network.destroy();
 		}

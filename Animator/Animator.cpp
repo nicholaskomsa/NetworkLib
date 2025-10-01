@@ -512,7 +512,7 @@ void Animator::animateXORNetwork() {
 
         auto sampleNum = xorModel.mBatchedSamples.size() * xorModel.mBatchSize;
         float accuracy = (sampleNum - misses) / float(sampleNum) * 100.0f;
-        textArea.updateLabeledValue(mAccuracyValueRef, std::format("{:.2}", accuracy));
+        textArea.updateLabeledValue(mAccuracyValueRef, std::format("{}", accuracy));
         };
 
     setup(selectedFloatsView);
