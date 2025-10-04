@@ -26,11 +26,10 @@ int main() {
 
 	//NetworkLib::Cpu::example();
 	//NetworkLib::Cpu::networkExample();
-
-//	NetworkLib::Model::XOR xorModel;
-//xorModel.run();
-	NetworkLib::Model::XORLottery xorLotteryModel;
-	xorLotteryModel.run();
+	NetworkLib::Model::XOR xorModel;
+	xorModel.run();
+	//NetworkLib::Model::XORLottery xorLotteryModel;
+	//xorLotteryModel.run();
 
 	//NetworkLib::Gpu::Environment::example();
 

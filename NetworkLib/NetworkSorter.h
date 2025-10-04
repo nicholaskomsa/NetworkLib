@@ -7,7 +7,8 @@ namespace NetworkLib {
 
 	struct NetworksSorter {
 
-		using NetworksIdx = std::vector<std::size_t>;
+		using Idx = std::size_t;
+		using NetworksIdx = std::vector<Idx>;
 		NetworksIdx mNetworksIdx;
 
 		Cpu::NetworksView mNetworks;

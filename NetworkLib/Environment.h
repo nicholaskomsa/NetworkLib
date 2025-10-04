@@ -31,7 +31,7 @@ namespace NetworkLib {
 			void mse(const GpuView2& sought, const GpuView2& desired);
 			float getMseResult();
 			void resetMseResult();
-			void downloadConvergenceResults();
+			void downloadConvergenceResults(bool doSync=true);
 
 			void relu(const GpuView1& o1, GpuView1& a1);
 			void applyReluPrime(const GpuView1& a1, GpuView1& p1);

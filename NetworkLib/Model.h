@@ -17,12 +17,11 @@ namespace NetworkLib {
 		public:
 
 			std::mt19937_64 mRandom;
-			Gpu::Environment mGpu;
-			TrainingManager::GpuBatchedSamples mBatchedSamples;
-			Gpu::Network mGpuNetwork;
+			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
 			Cpu::Network mCpuNetwork;
 			NetworkTemplate mNetworkTemplate;
 			TrainingManager mTrainingManager;
+			TrainingManager::GpuTask* mGpuTask = nullptr;
 
 			std::size_t mInputSize = 2, mOutputSize = 2
 				, mTrainNum = 5000;
@@ -34,108 +33,45 @@ namespace NetworkLib {
 
 			void calculateConvergence() {
 
-				mGpu.resetMseResult();
-				mGpu.resetMissesResult();
+				mTrainingManager.calculateNetworkConvergence(*mGpuTask, 0, mBatchedSamplesView, mPrintConsole);
 
-				for (const auto& [seen, desired] : mBatchedSamples) {
-
-					auto sought = mGpuNetwork.forward(mGpu, seen);
-					auto output = mGpuNetwork.getOutput();
-
-					mGpu.mse(sought, desired);
-					mGpu.score(sought, desired);
-
-					if (mPrintConsole) {
-
-						sought.downloadAsync(mGpu);
-						output.downloadAsync(mGpu);
-
-						mGpu.sync();
-
-						std::println("\nseen: {}"
-							"\ndesired: {}"
-							"\nsought: {}"
-							"\noutput: {}"
-							, seen
-							, desired
-							, sought
-							, output
-						);
-					}
-						
-				}
-
-				if(mPrintConsole)
-					std::println("mse: {}\n", mGpu.getMseResult() );
 			}
 			void create() {
 
-				mGpu.create();
-
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 100, ActivationFunction::ReLU}
-					, { 50, ActivationFunction::ReLU}
-					, { 25, ActivationFunction::ReLU }
+					, {{ 1000, ActivationFunction::ReLU}
+					, { 500, ActivationFunction::ReLU}
+					, { 250, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
 				mCpuNetwork.create(&mNetworkTemplate);
 				mCpuNetwork.initializeId(981);
-
-				mGpuNetwork.mirror(mCpuNetwork);
-				mGpuNetwork.upload();
-
-				mBatchedSamples = mTrainingManager.createXORBatchedSamples(mBatchSize);
+				
+				mTrainingManager.create(1, mNetworkTemplate, { &mCpuNetwork, 1 });
+				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
+				
+				mGpuTask = &mTrainingManager.getGpuTask();
 			}
 			void destroy() {
 				mTrainingManager.destroy();
-				mGpuNetwork.destroy();
 				mCpuNetwork.destroy();
-				mGpu.destroy();
 			}
 
-			void trainOne(std::size_t generation) {
-
-				TimeAverage<microseconds> trainTime;
-
-				trainTime.accumulateTime([&]() {
-
-					const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
-
-					mGpuNetwork.forward(mGpu, seen);
-					mGpuNetwork.backward(mGpu, seen, desired, mLearnRate);
-
-					});
-			}
-
-			void train(bool print=false) {
-
-				TimeAverage<microseconds> trainTime;
-
-				if(mPrintConsole)
-					std::print("Training: ");
-
-				for (auto generation : std::views::iota(0ULL, mTrainNum))
-					trainTime.accumulateTime([&]() {
-
-						trainOne(generation);
-						
-						if(mPrintConsole)
-							printProgress(generation, mTrainNum);
-
-						});
-
+			void train(std::size_t trainNum=1, bool print=false) {
+				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, print);
 			}
 
 			void run(bool print=true) {
-
 
 				mPrintConsole = print;
 
 				create();
 				calculateConvergence();
-				train();
+				train(mTrainNum);
+
 				calculateConvergence();
 				destroy();
 			}
@@ -144,19 +80,10 @@ namespace NetworkLib {
 		class XORLottery {
 		public:
 
-			struct GpuTask {
-				Gpu::Environment mGpu;
-				Gpu::Network mGpuNetwork;
-				Cpu::NetworksView mSourceNetworks;
-			};
-
-			std::vector<GpuTask> mGpuTasks;
-			Parallel mParallelGpuTasks;
-
 			Cpu::Networks mNetworks;
 			NetworksSorter mNetworksSorter;
 
-			TrainingManager::GpuBatchedSamples mBatchedSamples;
+			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
 
 			NetworkTemplate mNetworkTemplate;
 			TrainingManager mTrainingManager;
@@ -169,84 +96,13 @@ namespace NetworkLib {
 
 			std::size_t mMaxGpus = 2, mMaxNetworks = 1000;
 			bool mPrintConsole = false;
-			
-			void calculateConvergence(Gpu::Environment& gpu, Gpu::Network& gpuNetwork, Cpu::Network& cpuNetwork, bool print=false) {
 
-				gpuNetwork.mirror(cpuNetwork);
-
-				gpu.resetMseResult();
-				gpu.resetMissesResult();
-
-				for (const auto& [seen, desired] : mBatchedSamples) {
-
-					auto sought = gpuNetwork.forward(gpu, seen);
-					auto output = gpuNetwork.getOutput();
-
-					gpu.mse(sought, desired);
-					gpu.score(sought, desired);
-
-					if (print) {
-
-						sought.downloadAsync(gpu);
-						output.downloadAsync(gpu);
-						gpu.sync();
-
-						std::println("\nseen: {}"
-							"\ndesired: {}"
-							"\nsought: {}"
-							"\noutput: {}"
-							, seen
-							, desired
-							, sought
-							, output
-						);
-					}
-				}
-
-				gpu.downloadConvergenceResults();
-				gpu.sync();
-				cpuNetwork.mMse = gpu.getMseResult();
-				cpuNetwork.mMisses = gpu.getMissesResult();
-
-				if (print) {
-
-					auto sampleNum = mBatchedSamples.size() * mBatchSize;
-
-					std::println("\nMse: {}"
-						"\nMisses: {}"
-						"\nAccuracy: {}"
-						, cpuNetwork.mMse
-						, cpuNetwork.mMisses
-						,  (sampleNum - cpuNetwork.mMisses) / float(sampleNum)*100.0f
-					);
-				}
-			}
 			void calculateConvergence() {
 
-				if (mPrintConsole)
-					std::println("Calculate Convergence");
-
-				TimeAverage<microseconds> convergenceTime;
-
-				convergenceTime.accumulateTime([&]() {
-
-					mParallelGpuTasks([&](Parallel::Section& section) {
-
-						for (auto gpuTaskId : section.mIotaView) {
-
-							auto& [gpu, gpuNetwork, cpuNetworks] = mGpuTasks[gpuTaskId];
-
-							for (auto& cpuNetwork : cpuNetworks) 
-								calculateConvergence(gpu, gpuNetwork, cpuNetwork);
-						}
-						});
-					});
-
+				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView);
 				mNetworksSorter.sortBySuperRadius();
 
 				if (mPrintConsole) {
-
-					std::println("Took: {}", convergenceTime.getString<seconds>());
 
 					std::println("Networks sorted by SuperRadius: ");
 
@@ -255,17 +111,16 @@ namespace NetworkLib {
 						std::println("Rank: {}; Network Id: {}; Misses: {}; Mse: {};", ++i, networkIdx, network.mMisses, network.mMse);
 					}
 				}
-				
+
 				auto& bestNetwork = mNetworksSorter.getBest();
 				auto bestNetworkIdx = mNetworksSorter.getBestIdx();
 				std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkIdx, bestNetwork.mMisses, bestNetwork.mMse);
 
-				auto& [gpu, gpuNetwork, cpuNetworks] = mGpuTasks.front();
-				calculateConvergence(gpu, gpuNetwork, bestNetwork, true);
+				mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetworkIdx, mBatchedSamplesView, true);
 			}
 			void create() {
 
-				if( mPrintConsole )
+				if (mPrintConsole)
 					std::println("Create XOR Lottery: ");
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
@@ -274,14 +129,11 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				mGpuTasks.resize(mMaxGpus);
-				mParallelGpuTasks.section(mGpuTasks.size(), mGpuTasks.size());
-
 				mNetworks.resize(mMaxNetworks);
 				mNetworksSorter.create(mNetworks);
 
 				Parallel parallelNetworks(mNetworks.size());
-				
+
 				parallelNetworks([&](auto& section) {
 
 					for (auto id : section.mIotaView) {
@@ -294,99 +146,34 @@ namespace NetworkLib {
 					}
 					});
 
-				auto setupGpuWork = [&]() {
-
-					std::size_t start = 0, end = 0, size = mNetworks.size() / mGpuTasks.size();
-					for (auto& [gpu, gpuNetwork, cpuNetworks] : mGpuTasks | std::views::take(mGpuTasks.size() - 1)) {
-						gpu.create();
-
-						end = start + size;
-						cpuNetworks = { &mNetworks[start], size };
-						start = end;
-					}
-					auto& [gpu, gpuNetwork, cpuNetworks] = mGpuTasks.back();
-					gpu.create();	
-					cpuNetworks = { &mNetworks[start], mNetworks.size() - start};
-					
-					};
-
-				setupGpuWork();
-
-				mBatchedSamples = mTrainingManager.createXORBatchedSamples(mBatchSize);
+				mTrainingManager.create(mMaxGpus, mNetworkTemplate, mNetworks);
+				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
 			}
 			void destroy() {
-				
-				if( mPrintConsole )
+
+				if (mPrintConsole)
 					std::println("destroying model");
 
 				mTrainingManager.destroy();
-				for( auto& network: mNetworks)
+				for (auto& network : mNetworks)
 					network.destroy();
 
-				for (auto& [gpu, gpuNetworks, cpuNetworks] : mGpuTasks) {
-					gpuNetworks.destroy();
-					gpu.destroy();
-				}
 			}
-
-			void trainOne( Gpu::Environment& gpu, Gpu::Network& network,std::size_t generation) {
-				const auto& [seen, desired] = mBatchedSamples[generation % mBatchedSamples.size()];
-
-				network.forward(gpu, seen);
-				network.backward(gpu, seen, desired, mLearnRate);
-			}
-
 			void train(bool print = false) {
-
-				if (mPrintConsole)
-					std::print("Training Networks: ");
-
-				TimeAverage<milliseconds> trainTime;
-
-				trainTime.accumulateTime([&]() {
-
-					std::atomic<std::size_t> progress = 0;
-					mParallelGpuTasks([&](Parallel::Section& section) {
-
-						for (auto gpuTaskId : section.mIotaView) {
-
-							auto& [gpu, gpuNetwork, cpuNetworks] = mGpuTasks[gpuTaskId];
-
-							for (auto& cpuNetwork : cpuNetworks) {
-
-								gpuNetwork.mirror(cpuNetwork);
-
-								for (auto generation : std::views::iota(0ULL, mTrainNum))
-									trainOne(gpu, gpuNetwork, generation);
-
-								gpuNetwork.mWeights.downloadAsync(gpu);
-								gpuNetwork.mBias.downloadAsync(gpu);
-
-								gpu.sync();
-
-								if( mPrintConsole)
-									printProgress(++progress, mNetworks.size());
-							}
-						}
-						});
-					
-					});
-
-				if (mPrintConsole)
-					std::println("Training took: {}", trainTime.getString<seconds>());
+				mTrainingManager.trainNetworks(mTrainNum, mBatchedSamplesView, mLearnRate, print);
 			}
-
 			void run(bool print = true) {
 
 				mPrintConsole = print;
 
 				create();
-				train();
+				calculateConvergence();
+				train(true);
 				calculateConvergence();
 
 				destroy();
 			}
 		};
-		
 	}
 }

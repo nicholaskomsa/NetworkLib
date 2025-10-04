@@ -217,9 +217,11 @@ int Environment::getMissesResult() {
 	return mMissesResult;
 }
 
-void Environment::downloadConvergenceResults() {
+void Environment::downloadConvergenceResults(bool doSync) {
 	mMissesResult.downloadAsync(mStream);
 	mMseResult.downloadAsync(mStream);
+	if (doSync)
+		sync();
 }
 void Environment::relu(const GpuView1& o1, GpuView1& a1) {
 	Kernel::relu(mStream, o1.mGpu, a1.mGpu, o1.mSize);

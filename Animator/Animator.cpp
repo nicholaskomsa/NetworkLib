@@ -479,9 +479,11 @@ void Animator::animateXORNetwork() {
 
     NetworkLib::Model::XOR xorModel;
     xorModel.create();
+    auto& [gpu, gpuNetwork] = *xorModel.mGpuTask;
 
     std::size_t generation = 0;
-    auto selectedView = xorModel.mGpuNetwork.mWeights;
+    
+    auto selectedView = gpuNetwork.mWeights;
     auto selectedFloatsView = NetworkLib::Cpu::Tensor::view(selectedView.mView);
 
     auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedFloatsView.size(), Animator::mAspectRatio);
@@ -500,7 +502,6 @@ void Animator::animateXORNetwork() {
 
     mCustomGuiEvents = [&](bool& changeDimensions, bool& doConvert){
 
-
         };
 
     float mse = 0.0f;
@@ -510,7 +511,7 @@ void Animator::animateXORNetwork() {
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
 
-        auto sampleNum = xorModel.mBatchedSamples.size() * xorModel.mBatchSize;
+       auto sampleNum = xorModel.mBatchedSamplesView.size() * xorModel.mBatchSize;
         float accuracy = (sampleNum - misses) / float(sampleNum) * 100.0f;
         textArea.updateLabeledValue(mAccuracyValueRef, std::format("{}", accuracy));
         };
@@ -519,15 +520,12 @@ void Animator::animateXORNetwork() {
 
     auto step = [&](auto floats) {
 
-        xorModel.trainOne(generation++);
+        xorModel.train();
 
-        selectedView.downloadAsync(xorModel.mGpu);
-     //   xorModel.mNetwork.mWeights.downloadAsync(xorModel.mGpu);
         xorModel.calculateConvergence();
-        xorModel.mGpu.downloadConvergenceResults();
-        xorModel.mGpu.sync();
-        mse = xorModel.mGpu.getMseResult();
-		misses = xorModel.mGpu.getMissesResult();
+        gpu.downloadConvergenceResults();
+        mse = gpu.getMseResult();
+		misses = gpu.getMissesResult();
 
         return true;
         };

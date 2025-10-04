@@ -143,5 +143,9 @@ namespace NetworkLib {
 			if( finale )
 				operator()(std::move(finale), true);
 		}
+		//single threaded setup
+		void operator()(SectionsFunctor&& setup) {
+			setup(mSectionsView);
+		}
 	};
 }
