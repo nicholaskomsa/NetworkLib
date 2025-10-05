@@ -60,15 +60,23 @@ void FloatSpace1::create(const Cpu::FloatSpace1& cpuSpace) {
 
 	float* cpu = cpuSpace.mCpu, * gpu=nullptr;
 	std::size_t size = cpuSpace.mView.extent(0);
-
-	if( size != mView.mSize )
-		destroy();
-
 	Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&gpu), size * sizeof(float)));
-
+	
 	mView = { cpuSpace.mView, gpu, cpu };
 }
 
+void FloatSpace1::resize(const Cpu::FloatSpace1& cpuSpace) {
+
+	float* cpu = cpuSpace.mCpu, * gpu = mView.mGpu;
+	std::size_t size = cpuSpace.mView.extent(0);
+
+	if (size != mView.mSize || mView.mGpu == nullptr) {
+		destroy();
+		Error::checkCuda(cudaMalloc(reinterpret_cast<void**>(&gpu), size * sizeof(float)));
+	}
+
+	mView = { cpuSpace.mView, gpu, cpu };
+}
 void FloatSpace1::destroy() {
 	if (mView.mGpu)
 		Error::checkCuda(cudaFree(mView.mGpu));

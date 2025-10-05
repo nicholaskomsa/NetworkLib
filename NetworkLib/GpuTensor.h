@@ -112,6 +112,7 @@ namespace NetworkLib {
 			GpuView1 mView;
 
 			void create(const Cpu::FloatSpace1& cpuSpace);
+			void resize(const Cpu::FloatSpace1& cpuSpace);
 
 			void destroy();
 

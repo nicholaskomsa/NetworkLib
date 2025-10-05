@@ -32,7 +32,7 @@ public:
 
     constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
     constexpr static float mAspectRatio = float(mWindowWidth) / mWindowHeight;
-    constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 7;
+    constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 6;
 
 private:
 
@@ -61,7 +61,7 @@ private:
     QuadManager::QuadReference mViewerQuadRef;
     TextManager mTextManager;
     TextManager::TextAreaReference mTextAreaRef;
-    TextArea::LabeledValueReference mTicksValueRef, mColorModeValueRef, mStripeNumValueRef;
+    TextArea::LabeledValueReference mTicksValueRef, mFpsValueRef, mColorModeValueRef, mStripeNumValueRef;
 
     bool mRunning = false, mPaused = false;
 

@@ -22,8 +22,7 @@ namespace NetworkLib {
 				auto firstInputSize = nt.mInputSize;
 				bool backwards = cpuNetwork.mPrimes.size() > 0;
 
- 				mGpuFloats.create(cpuNetwork.mFloats);
-
+ 				mGpuFloats.resize(cpuNetwork.mFloats);
 				mLayers.resize(cpuNetwork.mLayers.size());
 
 				auto begin = mGpuFloats.begin();

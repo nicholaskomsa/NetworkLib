@@ -311,7 +311,9 @@ void Animator::setup(FloatsView floats = {}) {
             mTextAreaRef = mTextManager.addTextArea();
             auto& textArea = mTextManager.getTextArea(mTextAreaRef);
             
-            mTicksValueRef = textArea.addLabeledValue(minecraftFont, "Ticks:", "0");
+            mTicksValueRef = textArea.addLabeledValue(minecraftFont, "Ticks:", "00");
+            mFpsValueRef = textArea.addLabeledValue(minecraftFont, "FPS:", "00");
+
             mColorModeValueRef = textArea.addLabeledValue(minecraftFont, "Color Mode:", 
                 std::format("{}x{}"
                 , FloatSpaceConvert::getColorNames()[mColorizeMode]
@@ -367,9 +369,10 @@ void Animator::run(StepFunction&& step) {
 
     nanoseconds lag(0), elapsedTime(0);
     clock::time_point nowTime, oldTime = clock::now() - mLengthOfStep;
-    std::uint32_t tickCount = 0;
+    std::uint32_t tickCount = 0, fps = 0;
 
     auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+	clock::time_point fpsOldTime = clock::now();
 
     do {
         nowTime = clock::now();
@@ -379,6 +382,12 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
+            if( clock::now() - fpsOldTime >= 1s) {
+                fpsOldTime = clock::now();
+                textArea.updateLabeledValue(mFpsValueRef, std::to_string(fps));
+                fps = 0;
+			}
+
             textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount));
             if (mCustomGuiRender) mCustomGuiRender();
 
@@ -386,6 +395,7 @@ void Animator::run(StepFunction&& step) {
                 floatSpaceConvert();
 
             render();
+            ++fps;
 
             lag -= mLengthOfStep;
 
@@ -504,10 +514,11 @@ void Animator::animateXORNetwork() {
 
         };
 
-    float mse = 0.0f;
-    std::size_t misses = 0;
-
     mCustomGuiRender = [&]() {
+
+        float mse = xorModel.mCpuNetwork.mMse
+            , misses = xorModel.mCpuNetwork.mMisses;
+
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
 
@@ -523,9 +534,6 @@ void Animator::animateXORNetwork() {
         xorModel.train();
 
         xorModel.calculateConvergence();
-        gpu.downloadConvergenceResults();
-        mse = gpu.getMseResult();
-		misses = gpu.getMissesResult();
 
         return true;
         };
