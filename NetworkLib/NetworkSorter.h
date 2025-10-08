@@ -26,7 +26,7 @@ namespace NetworkLib {
 		}
 
 		Cpu::Network& getBest() {
-			return mNetworks[mNetworksIdx.front()];
+			return mNetworks[getBestIdx()];
 		}
 		std::size_t getBestIdx() {
 			return mNetworksIdx.front();
@@ -38,6 +38,7 @@ namespace NetworkLib {
 		}
 		void sortBySuperRadius() {
 			std::sort(mNetworksIdx.begin(), mNetworksIdx.end(), [&](auto& a, auto& b) {
+
 				auto& nna = mNetworks[a];
 				auto& nnb = mNetworks[b];
 

@@ -5,6 +5,7 @@
 using namespace NetworkLib::Gpu;
 
 std::atomic<std::size_t> Environment::mCommandCounter;
+std::mutex Environment::mCommandMutex;
 
 void Environment::create() {
 	Error::checkBlas(cublasCreate(&mHandle));
@@ -222,6 +223,7 @@ void Environment::downloadConvergenceResults(bool doSync) {
 	mMseResult.downloadAsync(mStream);
 	if (doSync)
 		sync();
+	commandQueueSync(2);
 }
 void Environment::relu(const GpuView1& o1, GpuView1& a1) {
 	Kernel::relu(mStream, o1.mGpu, a1.mGpu, o1.mSize);
@@ -389,11 +391,15 @@ void Environment::sync() {
 	Error::checkCuda(cudaStreamSynchronize(mStream));
 }
 void Environment::commandQueueSync(std::size_t commandCount) {
+
 	mCommandCounter += commandCount;
-	if (mCommandCounter >= mMaxQueuedCommands) {
-		mCommandCounter = 0;
+	
+	if (mCommandCounter < mMaxQueuedCommands) return;
+
+	std::scoped_lock lock(mCommandMutex);
+
+	if (mCommandCounter >= mMaxQueuedCommands) 
 		deviceSync();
-	}
 }
 
 void Environment::example() {

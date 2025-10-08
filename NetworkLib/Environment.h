@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 
 #include "GpuTensor.h"
 
@@ -15,6 +16,7 @@ namespace NetworkLib {
 			cublasHandle_t getBlas();
 			cudaStream_t getStream();
 			operator cudaStream_t();
+			
 
 			void vecScale(GpuView1& a1, float scale);
 			void vecAddVec(const GpuView1& a1, GpuView1& o1);
@@ -55,8 +57,7 @@ namespace NetworkLib {
 		
 			void sync();
 			void deviceSync();
-			void commandQueueSync(std::size_t commandCount=1);
-			
+			void commandQueueSync(std::size_t commandCount = 1);
 			static void example();
 
 		private:
@@ -65,6 +66,7 @@ namespace NetworkLib {
 
 			static constexpr std::size_t mMaxQueuedCommands = 50000;
 			static std::atomic<std::size_t> mCommandCounter;
+			static std::mutex mCommandMutex;
 
 			Gpu::LinkedFloatSpace mLinkedFloatSpace;
 			Float mMseResult;

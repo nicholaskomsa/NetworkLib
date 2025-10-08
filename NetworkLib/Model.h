@@ -33,7 +33,7 @@ namespace NetworkLib {
 
 			void calculateConvergence() {
 
-				mTrainingManager.calculateNetworkConvergence(*mGpuTask, 0, mBatchedSamplesView, mPrintConsole);
+				mTrainingManager.calculateNetworkConvergence(*mGpuTask, mCpuNetwork, mBatchedSamplesView, mPrintConsole);
 
 			}
 			void create() {
@@ -116,7 +116,7 @@ namespace NetworkLib {
 				auto bestNetworkIdx = mNetworksSorter.getBestIdx();
 				std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkIdx, bestNetwork.mMisses, bestNetwork.mMse);
 
-				mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetworkIdx, mBatchedSamplesView, true);
+				mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
 			}
 			void create() {
 
@@ -125,7 +125,7 @@ namespace NetworkLib {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 100, ActivationFunction::ReLU}
+					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 

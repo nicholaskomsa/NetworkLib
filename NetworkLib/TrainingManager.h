@@ -37,6 +37,7 @@ namespace NetworkLib {
 
 			mParallelGpuTasks([&](Parallel::Section& section) {
 
+
 				auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
 
 				auto& [gpu, gpuNetwork] = gpuTask;
@@ -47,13 +48,6 @@ namespace NetworkLib {
 		}
 
 		void destroy() {
-
-			auto destroyLinkedSpace = [](Gpu::LinkedFloatSpace& linkedSpace) {
-				auto& [cpuSpace, gpuSpace] = linkedSpace;
-				gpuSpace.destroy();
-				cpuSpace.destroy();
-				};
-
 
 			mParallelGpuTasks([&](auto& section) {
 
@@ -73,10 +67,7 @@ namespace NetworkLib {
 			auto& section = sectionsView[idx % sectionsView.size()];
 			return std::any_cast<GpuTask&>(section.mAny);
 		}
-		void train(Cpu::Network& cpuNetwork, GpuTask& gpuTask, std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print = false) {
-			
-			train(gpuTask, trainNum, samples, learnRate, print);
-		}
+
 		void train(GpuTask& gpuTask, std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print = false) {
 			
 			if( print)
@@ -196,12 +187,10 @@ namespace NetworkLib {
 				);
 			}
 		}
-		void calculateNetworkConvergence(GpuTask& gpuTask, NetworksSorter::Idx idx, const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
+		void calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
 		
 			if (print)
 				std::println("Calculate Convergence");
-
-			auto& cpuNetwork = mNetworks[idx];
 
 			TimeAverage<seconds> convergenceTime;
 			convergenceTime.accumulateTime([&]() {
@@ -264,7 +253,8 @@ namespace NetworkLib {
 
 			auto batchNum = std::ceil(cpuSamples.size() / float(batchSize));
 			auto viewStart = gpuSamples.size();
-			for (auto batch : std::views::iota(0ULL, batchNum )) {
+			constexpr std::size_t zero = 0;
+			for (auto batch : std::views::iota(zero, batchNum )) {
 
 				GpuBatchedSample gpuSample;
 
@@ -273,7 +263,7 @@ namespace NetworkLib {
 				gpuSampleSpace.advance(seenBatch, begin, inputSize, batchSize);
 				gpuSampleSpace.advance(desiredBatch, begin, outputSize, batchSize);
 
-				for (auto b : std::views::iota(0ULL, batchSize)) {
+				for (auto b : std::views::iota(zero, batchSize)) {
 
 					if (currentSample == cpuSamples.end()) break;
 					auto& [seen, desired] = *currentSample;
