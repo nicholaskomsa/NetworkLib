@@ -20,7 +20,8 @@ namespace NetworkLib {
 		using GpuBatchedSamples = std::vector<GpuBatchedSample>;
 		using GpuBatchedSamplesView = std::span<GpuBatchedSample>;
 
-		Cpu::NetworksView mNetworks;
+		Cpu::NetworksMap mNetworksMap;
+		std::mutex mNetworksMapMutex;
 
 		struct GpuTask {
 			Gpu::Environment mGpu;
@@ -28,26 +29,29 @@ namespace NetworkLib {
 		};
 		using GpuTasks = std::vector<GpuTask>;
 		Parallel mParallelGpuTasks;
+		std::size_t mGpuNum = 0;
 
-		void create(std::size_t gpuNum, NetworkTemplate& networkTemplate, Cpu::NetworksView networks) {
-			        
-			mParallelGpuTasks.setup(GpuTask{}, networks.size(), gpuNum);
+		TrainingManager& operator=(const TrainingManager&) = delete;
 
-			mNetworks = networks;
+		void create(std::size_t gpuNum) {
+			
+			mGpuNum = gpuNum;
+			mParallelGpuTasks.setup(GpuTask{}, gpuNum, gpuNum);
 
 			mParallelGpuTasks([&](Parallel::Section& section) {
-
 
 				auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
 
 				auto& [gpu, gpuNetwork] = gpuTask;
 				gpu.create();
-				gpuNetwork.mirror(networks.front());
 				
  				});
 		}
 
 		void destroy() {
+
+			for( auto& [id, network] : mNetworksMap )
+				network.destroy();
 
 			mParallelGpuTasks([&](auto& section) {
 
@@ -60,7 +64,24 @@ namespace NetworkLib {
 
 			mLogicSamples.destroy();
 		}
+		Cpu::Network& addNetwork(NetworkTemplate& networkTemplate, std::size_t id) {
+			
+			auto found = mNetworksMap.find(id);
+			if (found != mNetworksMap.end())
+				return found->second;
 
+			auto& network = mNetworksMap[id];
+
+			return network;
+		}
+		Cpu::Network& getNetwork(std::size_t id) {
+			
+			auto found = mNetworksMap.find(id);
+			if (found == mNetworksMap.end())
+				throw std::runtime_error("Network not found");
+
+			return found->second;
+		}
 		GpuTask& getGpuTask(std::size_t idx = 0) {
 		
 			auto& sectionsView = mParallelGpuTasks.mSectionsView;
@@ -75,7 +96,7 @@ namespace NetworkLib {
 
 			auto& [gpu, gpuNetwork] = gpuTask;
 
- 			TimeAverage<milliseconds> trainTime;
+ 			TimeAverage<seconds> trainTime;
 
 			trainTime.accumulateTime([&]() {
 				for (auto generation : std::views::iota(0ULL, trainNum)) {
@@ -103,30 +124,21 @@ namespace NetworkLib {
 				std::print("Training Networks: ");
 
 			TimeAverage<seconds> trainTime;
-
 			trainTime.accumulateTime([&]() {
 
 				std::atomic<std::size_t> progress = 0;
-				mParallelGpuTasks([&](Parallel::Section& section) {
 
-					auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
+				forEachNetwork(mNetworksMap, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
 
 					auto& [gpu, gpuNetwork] = gpuTask;
+					gpuNetwork.mirror(cpuNetwork);
 
-					for (auto idx : section.mIotaView){
+					train(gpuTask, trainNum, samples, learnRate, false);
 
-						auto& cpuNetwork = mNetworks[idx];
+					if (print)
+						printProgress(++progress, mNetworksMap.size());
 
-						gpuNetwork.mirror(cpuNetwork);
-
-						train(gpuTask, trainNum, samples, learnRate);
-
-						if (print)
-							printProgress(++progress, mNetworks.size());
-					}
-					
 					});
-
 				});
 
 			if (print)
@@ -202,7 +214,46 @@ namespace NetworkLib {
 			if (print)
 				std::println("Took: {}", convergenceTime.getString<seconds>());
 		}
-		void calculateNetworksConvergence(const TrainingManager::GpuBatchedSamplesView samples, bool print=false) {
+
+		
+		
+		void forEachNetwork(Cpu::NetworksMap& networks, auto&& functor) {
+
+
+			auto networksBegin = networks.begin();
+
+			auto getNextNetwork = [&]()->Cpu::Network* {
+
+				std::scoped_lock lock(mNetworksMapMutex);
+
+				if (networksBegin == mNetworksMap.end())
+					return nullptr;
+
+				Cpu::Network* network = &networksBegin->second;
+
+				std::advance(networksBegin, 1);
+				return network;
+				};
+
+			mParallelGpuTasks.section(networks.size());
+
+			mParallelGpuTasks([&](auto& section) {
+
+				auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
+
+				for (auto idx : section.mIotaView) {
+
+					auto cpuNetwork = getNextNetwork();
+					if (!cpuNetwork)
+						return;
+
+					functor(gpuTask, *cpuNetwork);
+				}
+				},true);
+				
+		}
+
+		void calculateNetworksConvergence(Cpu::NetworksMap& networks, TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
 
 			if (print)
 				std::println("Calculate Convergence");
@@ -210,25 +261,21 @@ namespace NetworkLib {
 			TimeAverage<seconds> convergenceTime;
 
 			convergenceTime.accumulateTime([&]() {
-
-				mParallelGpuTasks([&](auto& section) {
-
-					auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
-	
-					for (auto idx : section.mIotaView) {
-						
-						auto& cpuNetwork = mNetworks[idx];
-
-						calculateConvergence(gpuTask, cpuNetwork, samples);
-					}
+				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
+					calculateConvergence(gpuTask, cpuNetwork, samples, print);
 					});
 				});
 
 			if (print)
 				std::println("Took: {}", convergenceTime.getString<seconds>());
-
 		}
 
+		void calculateNetworksConvergence(const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
+
+			calculateNetworksConvergence(mNetworksMap, samples, print);
+		}
+
+		
 		static GpuBatchedSamples createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
 			, std::size_t inputSize, std::size_t outputSize, std::size_t sampleNum, std::size_t batchSize = 1) {
 
@@ -285,7 +332,7 @@ namespace NetworkLib {
 		struct LogicSamples {
 
 			Gpu::LinkedFloatSpace mFloatSpace;
-			GpuBatchedSamples mGpuBatchedSamples;
+			GpuBatchedSamples mLogicSamples;
 
 			GpuBatchedSamplesView mXORSamples;
 			GpuBatchedSamplesView mANDSamples;
@@ -297,7 +344,7 @@ namespace NetworkLib {
 					, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
 				auto batchSize = networkTemplate.mBatchSize;
 				auto sampleNum =  4 * 3 ; //XOR, AND, OR all have 4 samples
-				mGpuBatchedSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
+				mLogicSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
 					, inputSize, outputSize, sampleNum, batchSize);
 
 				auto begin = mFloatSpace.mGpuSpace.begin();
@@ -321,15 +368,24 @@ namespace NetworkLib {
 					{{1,1}, {0,1}}
 					};
 
-				mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mGpuBatchedSamples, andSamples, batchSize);
-				mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mGpuBatchedSamples, xorSamples, batchSize);
-				mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mGpuBatchedSamples, orSamples, batchSize);
+				mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, andSamples, batchSize);
+				mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, orSamples, batchSize);
+				mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, xorSamples, batchSize);
 
 				mFloatSpace.mGpuSpace.upload();
 			}
 			void destroy() {
 				mFloatSpace.destroy();
 			}
+
+			struct SamplesGroup {
+				GpuBatchedSamplesView mXOR, mOR, mAND, mAll;
+			};
+
+			SamplesGroup getSamples() {
+				return { mXORSamples, mORSamples, mANDSamples, mLogicSamples };
+			}                 
+			   
 		} mLogicSamples;
 
 	};

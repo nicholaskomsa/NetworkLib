@@ -1,6 +1,7 @@
 #pragma once
 
 #include <random>
+#include <unordered_map>
 
 #include "parallel.h"
 #include "CpuTensor.h"
@@ -92,6 +93,7 @@ namespace NetworkLib {
 
 
 			void initializeId(std::size_t id) {
+				mId = id;
 				std::mt19937_64 random(id);
 				initialize(random);
 			}
@@ -246,10 +248,12 @@ namespace NetworkLib {
 			
 			float mMse = 0.0f;
 			std::size_t mMisses = 0;
+			std::size_t mId = 0;
 		};
 
 		using NetworksView = std::span<Network>;
 		using Networks = std::vector<Network>;
+		using NetworksMap = std::unordered_map<std::size_t, Network>;
 
 		static void networkExample() {
 

@@ -1,6 +1,0 @@
-xor lottery parallel tests
-gpu num time best
-
-1 1000 1055s
-2 1000 887s 853s 881
-3 1000 1036

@@ -516,8 +516,9 @@ void Animator::animateXORNetwork() {
 
     mCustomGuiRender = [&]() {
 
-        float mse = xorModel.mCpuNetwork.mMse
-            , misses = xorModel.mCpuNetwork.mMisses;
+        auto& network = xorModel.getNetwork();
+        float mse = network.mMse
+            , misses = network.mMisses;
 
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));

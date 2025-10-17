@@ -28,9 +28,10 @@ int main() {
 	//NetworkLib::Cpu::networkExample();
 	//NetworkLib::Model::XOR xorModel;
 	//xorModel.run();
-	NetworkLib::Model::XORLottery xorLotteryModel;
-	xorLotteryModel.run();
-
+	//NetworkLib::Model::XORLottery xorLotteryModel;
+	//xorLotteryModel.run();
+	NetworkLib::Model::LogicLottery logicLotteryModel;
+	logicLotteryModel.run();
 	//NetworkLib::Gpu::Environment::example();
 
 	std::puts("\nProgram Finished press enter to exit");
