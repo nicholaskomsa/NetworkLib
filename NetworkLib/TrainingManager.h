@@ -38,13 +38,14 @@ namespace NetworkLib {
 			mGpuNum = gpuNum;
 			mParallelGpuTasks.setup(GpuTask{}, gpuNum, gpuNum);
 
+			auto& defaultNetwork = mNetworksMap.begin()->second;
 			mParallelGpuTasks([&](Parallel::Section& section) {
 
 				auto& gpuTask = std::any_cast<GpuTask&>(section.mAny);
 
 				auto& [gpu, gpuNetwork] = gpuTask;
 				gpu.create();
-				
+				gpuNetwork.mirror(defaultNetwork);
  				});
 		}
 
@@ -64,15 +65,13 @@ namespace NetworkLib {
 
 			mLogicSamples.destroy();
 		}
-		Cpu::Network& addNetwork(NetworkTemplate& networkTemplate, std::size_t id) {
+		void addNetwork(std::size_t id) {
 			
 			auto found = mNetworksMap.find(id);
 			if (found != mNetworksMap.end())
-				return found->second;
+				throw std::runtime_error("network already exists");
 
-			auto& network = mNetworksMap[id];
-
-			return network;
+			auto network = mNetworksMap[id];
 		}
 		Cpu::Network& getNetwork(std::size_t id) {
 			
@@ -249,11 +248,11 @@ namespace NetworkLib {
 
 					functor(gpuTask, *cpuNetwork);
 				}
-				},true);
+				});
 				
 		}
 
-		void calculateNetworksConvergence(Cpu::NetworksMap& networks, TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
+		void calculateNetworksConvergence(Cpu::NetworksMap& networks, GpuBatchedSamplesView samples, bool print = false) {
 
 			if (print)
 				std::println("Calculate Convergence");
@@ -270,12 +269,11 @@ namespace NetworkLib {
 				std::println("Took: {}", convergenceTime.getString<seconds>());
 		}
 
-		void calculateNetworksConvergence(const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
+		void calculateNetworksConvergence(GpuBatchedSamplesView samples, bool print = false) {
 
 			calculateNetworksConvergence(mNetworksMap, samples, print);
 		}
 
-		
 		static GpuBatchedSamples createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
 			, std::size_t inputSize, std::size_t outputSize, std::size_t sampleNum, std::size_t batchSize = 1) {
 

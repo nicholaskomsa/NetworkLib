@@ -46,14 +46,17 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				mTrainingManager.addNetwork(mNetworkTemplate, mId);
-				
+				mTrainingManager.addNetwork(mId);
+				auto& network = mTrainingManager.getNetwork(mId);
+				network.create(&mNetworkTemplate, true);
+				network.initializeId(mId);
+
 				mTrainingManager.create(1);
 				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
 				
 				mGpuTask = &mTrainingManager.getGpuTask();
-			}
+			}       
 			void destroy() {
 				mTrainingManager.destroy();
 			}
@@ -130,7 +133,7 @@ namespace NetworkLib {
 
 				mTrainingManager.create(mMaxGpus);
 				for (auto id : std::views::iota(0ULL, mMaxNetworks))
-					mTrainingManager.addNetwork(mNetworkTemplate, id);
+					mTrainingManager.addNetwork(id);
 
 				mNetworksSorter.create(mTrainingManager.mNetworksMap);
 
@@ -286,9 +289,8 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				mTrainingManager.create(mMaxGpus);
 				for (auto id : std::views::iota(0ULL, mMaxNetworks))
-					mTrainingManager.addNetwork(mNetworkTemplate, id);
+					mTrainingManager.addNetwork(id);
 
 				mNetworksSorter.create(mTrainingManager.mNetworksMap);
 
@@ -306,6 +308,8 @@ namespace NetworkLib {
 					}
 					});
 
+				mTrainingManager.create(mMaxGpus);
+				
 				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
 
 				mNetworksTracker.create(mMaxNetworks);
