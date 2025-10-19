@@ -114,8 +114,8 @@ namespace NetworkLib {
 						std::println("Rank: {}; Network Id: {}; Misses: {}; Mse: {};", rank++, networkId, network.mMisses, network.mMse);
 					}
 					auto& bestNetwork = mNetworksSorter.getBest();
-					auto bestNetworkIdx = mNetworksSorter.getBestId();
-					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkIdx, bestNetwork.mMisses, bestNetwork.mMse);
+					auto bestNetworkId = mNetworksSorter.getBestId();
+					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkId, bestNetwork.mMisses, bestNetwork.mMse);
 
 					mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
 				}
@@ -131,26 +131,33 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				mTrainingManager.create(mMaxGpus);
-				for (auto id : std::views::iota(0ULL, mMaxNetworks))
-					mTrainingManager.addNetwork(id);
+				auto createNetworks = [&]() {
+					
+					for (auto id : std::views::iota(0ULL, mMaxNetworks))
+						mTrainingManager.addNetwork(id);
 
-				mNetworksSorter.create(mTrainingManager.mNetworksMap);
+					mNetworksSorter.create(mTrainingManager.mNetworksMap);
 
-				auto& networkIds = mNetworksSorter.mNetworksIds;
-				Parallel parallelNetworks(networkIds.size());
-				parallelNetworks([&](auto& section) {
+					auto& networkIds = mNetworksSorter.mNetworksIds;
+					Parallel parallelNetworks(networkIds.size());
+					parallelNetworks([&](auto& section) {
 
-					for (auto idx : section.mIotaView) {
+						for (auto idx : section.mIotaView) {
 
-						auto id = networkIds[idx];
-						auto& network = mTrainingManager.getNetwork(id);
+							auto id = networkIds[idx];
+							auto& network = mTrainingManager.getNetwork(id);
 
-						network.create(&mNetworkTemplate, true);
-						network.initializeId(id);
-					}
-					});
+							network.create(&mNetworkTemplate, true);
+							network.initializeId(id);
+						}
+						});
 
+					mTrainingManager.create(mMaxGpus);
+
+					};
+
+				createNetworks();
+				
 				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
 			}
@@ -289,26 +296,31 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				for (auto id : std::views::iota(0ULL, mMaxNetworks))
-					mTrainingManager.addNetwork(id);
+				auto createNetworks = [&]() {
 
-				mNetworksSorter.create(mTrainingManager.mNetworksMap);
+					for (auto id : std::views::iota(0ULL, mMaxNetworks))
+						mTrainingManager.addNetwork(id);
 
-				auto& networkIds = mNetworksSorter.mNetworksIds;
-				Parallel parallelNetworks(networkIds.size());
-				parallelNetworks([&](auto& section) {
+					mNetworksSorter.create(mTrainingManager.mNetworksMap);
 
-					for (auto idx : section.mIotaView) {
+					auto& networkIds = mNetworksSorter.mNetworksIds;
+					Parallel parallelNetworks(networkIds.size());
+					parallelNetworks([&](auto& section) {
 
-						auto id = networkIds[idx];
-						auto& network = mTrainingManager.getNetwork(id);
+						for (auto idx : section.mIotaView) {
 
-						network.create(&mNetworkTemplate, true);
-						network.initializeId(id);
-					}
-					});
+							auto id = networkIds[idx];
+							auto& network = mTrainingManager.getNetwork(id);
 
-				mTrainingManager.create(mMaxGpus);
+							network.create(&mNetworkTemplate, true);
+							network.initializeId(id);
+						}
+						});
+
+					mTrainingManager.create(mMaxGpus);
+
+					};
+				createNetworks();
 				
 				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
 

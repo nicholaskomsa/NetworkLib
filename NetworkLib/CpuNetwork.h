@@ -248,12 +248,14 @@ namespace NetworkLib {
 			
 			float mMse = 0.0f;
 			std::size_t mMisses = 0;
-			std::size_t mId = 0;
+
+			using Id = std::size_t;
+			Id mId = 0;
 		};
 
 		using NetworksView = std::span<Network>;
 		using Networks = std::vector<Network>;
-		using NetworksMap = std::unordered_map<std::size_t, Network>;
+		using NetworksMap = std::unordered_map<Network::Id, Network>;
 
 		static void networkExample() {
 

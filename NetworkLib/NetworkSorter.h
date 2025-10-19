@@ -27,8 +27,7 @@ namespace NetworkLib {
 			}
 		};
 
-		using Id = std::size_t;
-		using NetworksIds = std::vector<Id>;
+		using NetworksIds = std::vector<Cpu::Network::Id>;
 		NetworksIds mNetworksIds;
 
 		Cpu::NetworksMap* mNetworksMap;
