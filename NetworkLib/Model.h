@@ -244,14 +244,14 @@ namespace NetworkLib {
 						std::size_t listSize = 5;
 
 						auto best = mNetworksSorter.getTop(listSize);
-						for (std::size_t rank = 0; auto idx : best) {
-							auto& network = networksMap[idx];
+						for (std::size_t rank = 0; auto id : best) {
+							auto& network = networksMap[id];
 							recordNetwork(++rank, network);
 						}
 
 						auto worst = mNetworksSorter.getBottom(listSize);
-						for (std::size_t rank = networksMap.size() - listSize; auto idx : worst | std::views::reverse) {
-							auto& network = networksMap[idx];
+						for (std::size_t rank = networksMap.size() - listSize; auto id : worst | std::views::reverse) {
+							auto& network = networksMap[id];
 							recordNetwork(++rank, network);
 						}
 						record("\n");
