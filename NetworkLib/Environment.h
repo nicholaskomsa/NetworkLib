@@ -18,6 +18,8 @@ namespace NetworkLib {
 			operator cudaStream_t();
 			
 
+			void conv1(const GpuView1& w1, const GpuView1& i1, GpuView1& o1);
+
 			void vecScale(GpuView1& a1, float scale);
 			void vecAddVec(const GpuView1& a1, GpuView1& o1);
 			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1);
@@ -59,6 +61,7 @@ namespace NetworkLib {
 			void deviceSync();
 			void commandQueueSync(std::size_t commandCount = 1);
 			static void example();
+			static void example2();
 
 		private:
 			cublasHandle_t mHandle;

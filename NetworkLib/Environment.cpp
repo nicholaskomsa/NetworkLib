@@ -2,6 +2,8 @@
 
 #include "kernel.h"
 
+#include <numeric>
+
 using namespace NetworkLib::Gpu;
 
 std::atomic<std::size_t> Environment::mCommandCounter;
@@ -41,6 +43,11 @@ Environment::operator cudaStream_t() {
 }
 
 
+void Environment::conv1( const GpuView1& w1, const GpuView1& i1, GpuView1& o1) {
+
+	Kernel::conv1(mStream, w1.mGpu, o1.mGpu, i1.mGpu, i1.mSize, w1.mSize);
+	commandQueueSync();
+}
 void Environment::vecScale(GpuView1& a1, float scale) {
 
 	auto result = cublasSscal(mHandle, a1.mSize, &scale, a1.mGpu, 1);
@@ -490,4 +497,53 @@ void Environment::example() {
 	linkedSpace.destroy();
 
 	gpu.destroy();
+}
+void Environment::example2() {
+
+	Environment gpu;
+	gpu.create();
+
+	LinkedFloatSpace linkedSpace;
+	auto& [cpuSpace, gpuSpace] = linkedSpace;
+
+	Gpu::GpuView1 b1, i1, p1, w1;
+
+	std::size_t kernelSize = 3;
+	std::size_t inputSize = 5
+		, biasSize = inputSize - kernelSize + 1;
+
+	linkedSpace.create(inputSize + biasSize * 2 + kernelSize) ;
+
+	auto begin = gpuSpace.begin();
+
+	gpuSpace.advance(i1, begin, inputSize);
+	gpuSpace.advance(w1, begin, kernelSize);
+	gpuSpace.advance(b1, begin, biasSize);
+	gpuSpace.advance(p1, begin, biasSize);
+
+	std::iota(i1.begin(), i1.end(), 1);
+
+	std::fill(b1.begin(), b1.end(), 1);
+
+	w1.mView[0] = 1.0f;
+	w1.mView[1] = 0.0f;
+	w1.mView[2] = -1.0f;
+
+	gpuSpace.upload();
+	
+	gpu.sync();
+
+	gpu.conv1(w1, i1, p1);
+	
+	gpuSpace.downloadAsync(gpu);
+	gpu.sync();
+
+	for (const auto& f : p1)
+		std::print("{} ", f);
+	std::println("");
+
+	linkedSpace.destroy();
+
+	gpu.destroy();
+	
 }

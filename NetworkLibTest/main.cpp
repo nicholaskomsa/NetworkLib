@@ -5,10 +5,8 @@
 
 #include <CpuNetwork.h>
 #include <CpuTensor.h>
-#include <Model.h>
+#include <ModelLogic.h>
 
-#include <CpuNetwork.h>
-#include <GpuNetwork.h>
 
 int main() {
 
@@ -30,9 +28,10 @@ int main() {
 	//xorModel.run();
 	//NetworkLib::Model::XORLottery xorLotteryModel;
 	//xorLotteryModel.run();
-	NetworkLib::Model::LogicLottery logicLotteryModel;
-	logicLotteryModel.run();
+	//NetworkLib::Model::LogicLottery logicLotteryModel;
+	//logicLotteryModel.run();
 	//NetworkLib::Gpu::Environment::example();
+	NetworkLib::Gpu::Environment::example2();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

@@ -335,3 +335,28 @@ void Kernel::batchedUpdateWeights(cudaStream_t stream, float* weights, const flo
     cuBatchedUpdateWeights << <gridDim, blockDim, 0, stream >> >(weights, primes, seen, rows, cols, batchSize, learnRate);
 
 }
+
+
+__global__ void cuConv1(float* seen, float* weights, float* primes, int outputSize, int kernelSize) {
+
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < outputSize) {
+
+        float sum = 0.0f;
+        for (int k = 0; k < kernelSize; ++k) {
+            sum += weights[k] * seen[idx + k];
+        }
+
+        primes[idx] = sum;
+    }
+}
+
+void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize) {
+
+    int outputSize = inputSize - kernelSize + 1;
+    int threads = std::min(outputSize, 256);
+    int blocks = (outputSize + threads - 1) / threads;
+
+    cuConv1<<<blocks, threads, 0, stream >>>(seen, weights, primes, outputSize, kernelSize);
+}

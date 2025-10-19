@@ -21,13 +21,15 @@ namespace NetworkLib {
 	}
 
 	template<typename TimeType>
-	TimeType time(const std::string& caption, auto&& functor) {
+	TimeType time(const std::string& caption, auto&& functor, bool print=true) {
 
-		std::println("timing {}", caption);
+		if( print)
+			std::println("timing {}", caption);
 
 		auto elapsed = time<TimeType>(std::move(functor));
 
-		std::println("\t{} took {}", caption, elapsed.count());
+		if(print)
+			std::println("\t{} took {}", caption, elapsed.count());
 
 		return elapsed;
 	}

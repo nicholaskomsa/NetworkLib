@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cuda_runtime.h>
+
 namespace NetworkLib {
 	namespace Gpu {
 		namespace Kernel{
@@ -20,6 +22,8 @@ namespace NetworkLib {
 			void batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
 			void batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
 			void batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int cols, int rows, int batchSize, float learnRate);
+			
+			void conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize);
 
 		}
 	}

@@ -97,15 +97,12 @@ namespace NetworkLib {
 
 		void train(GpuTask& gpuTask, std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print = false) {
 			
-			if( print)
-				std::print("Training: ");
-
 			auto& [gpu, gpuNetwork] = gpuTask;
+			
+			time<seconds>("Training Network", [&]() {
 
- 			TimeAverage<seconds> trainTime;
-
-			trainTime.accumulateTime([&]() {
 				for (auto generation : std::views::iota(0ULL, trainNum)) {
+
 					const auto& [seen, desired] = samples[generation % samples.size()];
 
 					gpuNetwork.forward(gpu, seen);
@@ -119,18 +116,12 @@ namespace NetworkLib {
 				gpuNetwork.mBias.downloadAsync(gpu);
 
 				gpu.sync();
-				});
 
-			if (print)
-				std::println("Training took: {}", trainTime.getString<seconds>());
+				}, print);
 		}
 		void trainNetworks(std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print=false) {
 
-			if (print)
-				std::print("Training Networks: ");
-
-			TimeAverage<seconds> trainTime;
-			trainTime.accumulateTime([&]() {
+			time<seconds>("Training Networks", [&]() {
 
 				std::atomic<std::size_t> progress = 0;
 
@@ -145,10 +136,8 @@ namespace NetworkLib {
 						printProgress(++progress, mNetworksMap.size());
 
 					});
-				});
 
-			if (print)
-				std::println("Training took: {}", trainTime.getString<seconds>());
+				}, print);
 		}
 
 		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
@@ -206,25 +195,15 @@ namespace NetworkLib {
 			}
 		}
 		void calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print = false) {
-		
-			if (print)
-				std::println("Calculate Convergence");
-
-			TimeAverage<seconds> convergenceTime;
-			convergenceTime.accumulateTime([&]() {
+	
+			time<seconds>("Calculate Network Convergence", [&]() {
 
 				calculateConvergence(gpuTask, cpuNetwork, samples, print);
  
-				});
-
-			if (print)
-				std::println("Took: {}", convergenceTime.getString<seconds>());
+				}, print);
 		}
-
-		
 		
 		void forEachNetwork(Cpu::NetworksMap& networks, auto&& functor) {
-
 
 			auto networksBegin = networks.begin();
 
@@ -255,25 +234,16 @@ namespace NetworkLib {
 
 					functor(gpuTask, *cpuNetwork);
 				}
-				});
-				
+				});	
 		}
 
 		void calculateNetworksConvergence(Cpu::NetworksMap& networks, GpuBatchedSamplesView samples, bool print = false) {
 
-			if (print)
-				std::println("Calculate Convergence");
-
-			TimeAverage<seconds> convergenceTime;
-
-			convergenceTime.accumulateTime([&]() {
+			time<seconds>("Calculate Networks Convergence", [&]() {
 				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
 					calculateConvergence(gpuTask, cpuNetwork, samples, print);
 					});
-				});
-
-			if (print)
-				std::println("Took: {}", convergenceTime.getString<seconds>());
+				}, print);
 		}
 
 		void calculateNetworksConvergence(GpuBatchedSamplesView samples, bool print = false) {

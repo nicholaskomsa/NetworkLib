@@ -4,11 +4,7 @@
 
 #include "Algorithms.h"
 
-#include "Environment.h"
 #include "TrainingManager.h"
-#include "CpuNetwork.h"
-#include "GpuNetwork.h"
-#include "NetworkSorter.h"
 
 namespace NetworkLib {
 
