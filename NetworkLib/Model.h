@@ -298,8 +298,8 @@ namespace NetworkLib {
 
 				auto createNetworks = [&]() {
 
-					for (auto id : std::views::iota(0ULL, mMaxNetworks))
-						mTrainingManager.addNetwork(id);
+					for (auto n : std::views::iota(0ULL, mMaxNetworks))
+						mTrainingManager.addNetwork();
 
 					mNetworksSorter.create(mTrainingManager.mNetworksMap);
 

@@ -21,6 +21,8 @@ namespace NetworkLib {
 		using GpuBatchedSamplesView = std::span<GpuBatchedSample>;
 
 		Cpu::NetworksMap mNetworksMap;
+		Cpu::Network::Id mNetworksIdCounter = 0;
+
 		std::mutex mNetworksMapMutex;
 
 		struct GpuTask {
@@ -32,6 +34,7 @@ namespace NetworkLib {
 		std::size_t mGpuNum = 0;
 
 		TrainingManager& operator=(const TrainingManager&) = delete;
+
 
 		void create(std::size_t gpuNum) {
 			
@@ -64,6 +67,10 @@ namespace NetworkLib {
 				});
 
 			mLogicSamples.destroy();
+		}
+		void addNetwork() {
+			std::size_t id = mNetworksIdCounter++;
+			addNetwork(id);
 		}
 		void addNetwork(std::size_t id) {
 			
