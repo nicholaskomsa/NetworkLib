@@ -49,15 +49,15 @@ namespace NetworkLib {
 			mNetworksMap = nullptr;
 		}
 
-		std::vector<std::size_t> getTop(std::size_t number=1) {
-			std::vector<std::size_t> top;
+		NetworksIds getTop(std::size_t number=1) {
+			NetworksIds top;
 			top.reserve(number);
 			for (auto id : mNetworksIds | std::views::take(number))
 				top.push_back(id);
 			return top;
 		}
-		std::vector<std::size_t> getBottom(std::size_t number = 1) {
-			std::vector<std::size_t> bottom;
+		NetworksIds getBottom(std::size_t number = 1) {
+			NetworksIds bottom;
 			bottom.reserve(number);
 			for (auto id : mNetworksIds | std::views::reverse | std::views::take(number))
 				bottom.push_back(id);
