@@ -26,20 +26,7 @@ namespace NetworkLib {
 				auto& layerTemplates = nt.mLayerTemplates;
 				auto batchSize = nt.mBatchSize;
 
-				auto& firstInputSize = nt.mInputSize;
-				std::size_t size = 0, inputSize = firstInputSize;
-				for (auto& layerTemplate : layerTemplates) {
-					const auto n = layerTemplate.mNodeCount;
-					//weights + bias + batchSize * (outputs + activations)
-					size += n * inputSize + n + batchSize * 2 * n;
-					inputSize = n;
-				}
-
-				if (backwards)
-					for (auto& layerTemplate : layerTemplates) {
-						const auto n = layerTemplate.mNodeCount;
-						size += batchSize * n; //batchSize * primes
-					}
+				std::size_t size = nt.getTotalSize(backwards);
 
 				mFloats.create(size);
 
@@ -51,15 +38,8 @@ namespace NetworkLib {
 
 					auto componentBegin = begin;
 
-					inputSize = firstInputSize;
-					for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
-
-						const auto n = layerTemplate.mNodeCount;
-
-						setupFunctor(layer, layerTemplate, n, inputSize);
-
-						inputSize = n;
-					}
+					for (std::size_t idx =0; const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) 
+						setupFunctor(layer, layerTemplate, idx++);
 
 					std::size_t size = std::distance(componentBegin, begin);
 					auto view = Cpu::Tensor::View1(componentBegin, std::array{ size });
@@ -67,23 +47,38 @@ namespace NetworkLib {
 					};
 
 				//mWeights, etc refer to all weights from all layers, they are grouped
-				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.mActivationFunction = layerTemplate.mActivationFunction;
-					Tensor::advance(layer.mWeights, begin, n, inputSize);
+				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+
+					switch( layerTemplate.mConvolutionType ) {
+						case LayerTemplate::ConvolutionType::Conv1: {
+
+							Tensor::advance(layer.mWeights, begin, layerTemplate.mKernelWidth, 1ULL, layerTemplate.mKernelNumber);
+							break;
+						}
+						case LayerTemplate::ConvolutionType::None: {
+						
+							auto inputSize = ( idx == 0 ) ?
+								nt.mInputSize : layerTemplates[idx-1].mNodeCount;
+
+							Tensor::advance(layer.mWeights, begin, layerTemplate.mNodeCount, inputSize, 1ULL);
+							break;
+						}
+					}
+	
 					});
-				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					Tensor::advance(layer.mBias, begin, n);
+				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					Tensor::advance(layer.mBias, begin, layerTemplate.mNodeCount);
 					});
-				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					Tensor::advance(layer.mOutputs, begin, n, batchSize);
+				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					Tensor::advance(layer.mOutputs, begin, layerTemplate.mNodeCount, batchSize);
 					});
-				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					Tensor::advance(layer.mActivations, begin, n, batchSize);
+				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					Tensor::advance(layer.mActivations, begin, layerTemplate.mNodeCount, batchSize);
 					});
 
 				if (backwards)
-					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					Tensor::advance(layer.mPrimes, begin, n, batchSize);
+					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+						Tensor::advance(layer.mPrimes, begin, layerTemplate.mNodeCount, batchSize);
 						});
 			}
 
@@ -224,11 +219,9 @@ namespace NetworkLib {
 					return mActivations;
 				}
 
-				View2 mWeights;
+				View3 mWeights;
 				View1 mBias;
 				View2 mOutputs, mActivations, mPrimes;
-
-				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
 			};
 
 			using Layers = std::vector<Layer>;
@@ -260,7 +253,7 @@ namespace NetworkLib {
 		static void networkExample() {
 
 			Network network;
-			NetworkTemplate nt;
+			NetworkTemplate nt  ;
 			nt.mInputSize = 4;
 			nt.mBatchSize = 3;
 			nt.mLayerTemplates = {

@@ -88,6 +88,7 @@ namespace NetworkLib {
 
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
+		using GpuView3 = GpuView<Cpu::Tensor::View3>;
 
 		struct Float {
 			float* mGpu = nullptr, * mCpu = nullptr;

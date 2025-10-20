@@ -351,7 +351,19 @@ __global__ void cuConv1(float* seen, float* weights, float* primes, int outputSi
         primes[idx] = sum;
     }
 }
+__global__ void cuConv1UpdateWeights(float* seen, float* weights, float* primes, int outputSize, int kernelSize, float learnRate) {
+   
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
+    if (idx < outputSize) {
+        for (int k = 0; k < kernelSize; ++k) {
+            // Each thread contributes to the gradient of weight[k]
+            // primes[idx] is the error signal at this output position
+            // seen[idx + k] is the input that contributed to this output
+            atomicAdd(&weights[k], -learnRate * primes[idx] * seen[idx + k]);
+        }
+    }
+}
 void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize) {
 
     int outputSize = inputSize - kernelSize + 1;
@@ -359,4 +371,12 @@ void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* se
     int blocks = (outputSize + threads - 1) / threads;
 
     cuConv1<<<blocks, threads, 0, stream >>>(seen, weights, primes, outputSize, kernelSize);
+}
+void Kernel::conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, float learnRate) {
+
+    int outputSize = inputSize - kernelSize + 1;
+    int threads = std::min(outputSize, 256);
+    int blocks = (outputSize + threads - 1) / threads;
+
+   cuConv1UpdateWeights<<<blocks, threads, 0, stream>>>(seen, weights, primes, outputSize, kernelSize, learnRate);
 }

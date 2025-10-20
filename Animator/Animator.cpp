@@ -9,7 +9,7 @@
 
 #include <Gpt2.h>
 #include <Serializer.h>
-#include <Model.h>
+#include <ModelLogic.h>
 
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}

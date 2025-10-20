@@ -103,6 +103,8 @@ namespace NetworkLib {
 
 				if (mPrintConsole) {
 
+					auto& networksMap = mTrainingManager.mNetworksMap;
+
 					std::println("Networks sorted by SuperRadius: ");
 
 					for (std::size_t rank = 1; auto networkId : mNetworksSorter.mNetworksIds) {
@@ -114,6 +116,18 @@ namespace NetworkLib {
 					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkId, bestNetwork.mMisses, bestNetwork.mMse);
 
 					mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
+				
+					auto printZeroMisses = [&]() {
+
+						auto zeroMissesCount = std::count_if(networksMap.begin(), networksMap.end(), [&](auto& networkPair) {
+
+							return networkPair.second.mMisses == 0;
+
+							});
+
+						std::println("\nNetworks with zero misses: {}", zeroMissesCount);
+						};
+					printZeroMisses();
 				}
 			}
 			void create() {

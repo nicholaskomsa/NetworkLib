@@ -24,6 +24,7 @@ namespace NetworkLib {
 			void batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int cols, int rows, int batchSize, float learnRate);
 			
 			void conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize);
+			void conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, float learnRate);
 
 		}
 	}

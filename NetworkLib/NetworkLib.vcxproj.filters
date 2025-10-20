@@ -63,6 +63,9 @@
     <ClInclude Include="NetworkSorter.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="Model.h">
+      <Filter>Network</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">

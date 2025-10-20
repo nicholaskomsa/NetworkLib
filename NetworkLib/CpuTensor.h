@@ -139,6 +139,7 @@ namespace NetworkLib {
 
 		using View1 = Tensor::View1;
 		using View2 = Tensor::View2;
+		using View3 = Tensor::View3;
 
 		class FloatSpace1 {
 		public:

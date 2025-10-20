@@ -22,11 +22,11 @@ namespace NetworkLib {
 
 			void vecScale(GpuView1& a1, float scale);
 			void vecAddVec(const GpuView1& a1, GpuView1& o1);
-			void matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1);
-			void batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuView2& o2);
-			void batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2);
-			void batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2);
-			void matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1);
+			void matMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
+			void batchedMatMulVec1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
+			void batchedMatMulVec(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
+			void batchedMatTMulVec(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
+			void matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
 
 			void score(const GpuView2& sought, const GpuView2& desired);
 			void resetMissesResult();
@@ -43,13 +43,13 @@ namespace NetworkLib {
 			void batchedSoftmax1(const GpuView2& o2, GpuView2& a2);
 			void batchedSoftmax(const GpuView2& o2, GpuView2& a2);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
-			void updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate);
+			void updateWeights(const GpuView1& seen, GpuView3& weights, const GpuView1& primes, float learnRate);
 			void copy(const GpuView1& source, GpuView1& dest);
 			void batchedCopy(const GpuView2& source, GpuView2& dest);
 			void batchedBroadcast(const GpuView1& source, GpuView2& dest);
 			void batchedBroadcastAdd(const GpuView1& source, GpuView2& dest);
 			void batchedDiff(const GpuView2& desired2, const GpuView2& sought2, GpuView2& primes2);
-			void batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, const GpuView2& primes, float learnRate);
+			void batchedUpdateWeights(const GpuView2& seen, GpuView3& weights, const GpuView2& primes, float learnRate);
 			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1);
 			void batchedActivationFunction(LayerTemplate::ActivationFunction af, const GpuView2& o2, GpuView2& a2);
 			void activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1);

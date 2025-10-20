@@ -60,7 +60,7 @@ void Environment::vecAddVec(const GpuView1& a1, GpuView1& o1) {
 	Error::checkBlas(result);
 	commandQueueSync();
 }
-void Environment::matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
+void Environment::matMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 	//cuda is in C++ style of row-major
 	//cublas wants Fortran style, col-major,
 	//mdspan has been configured to be layout_left - cublas correct
@@ -68,8 +68,8 @@ void Environment::matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1
 	float alpha = 1.0f;
 	float beta = 0.0f;
 
-	Dimension r = w2.mView.extent(0)
-		, c = w2.mView.extent(1);
+	Dimension r = w3.mView.extent(0)
+		, c = w3.mView.extent(1);
 
 	Error::checkMissMatch(c, i1.mSize);
 
@@ -77,16 +77,16 @@ void Environment::matMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1
 		CUBLAS_OP_N,
 		r, c,
 		&alpha,
-		w2.mGpu, r,
+		w3.mGpu, r,
 		i1.mGpu, 1,
 		&beta,
 		o1.mGpu, 1);
 	Error::checkBlas(result);
 	commandQueueSync();
 }
-void Environment::batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+void Environment::batchedMatMulVec1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2) {
 
-	int c = w2.mView.extent(1);
+	int c = w3.mView.extent(1);
 	int k = i2.mView.extent(0);
 
 	Error::checkMissMatch(c, k);
@@ -98,16 +98,16 @@ void Environment::batchedMatMulVec1(const GpuView2& w2, const GpuView2& i2, GpuV
 		const GpuView1 i1 = i2.viewColumn(b);
 		GpuView1 o1 = o2.viewColumn(b);
 
-		matMulVec(w2, i1, o1);
+		matMulVec(w3, i1, o1);
 	}
 	commandQueueSync();
 }
-void Environment::batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+void Environment::batchedMatMulVec(const GpuView3& w3, const GpuView2& i2, GpuView2& o2) {
 
 	float alpha = 1.0f, beta = 0.0f;
 
-	int r = w2.mView.extent(0)       // rows of matrix
-		, c = w2.mView.extent(1)       // cols of matrix
+	int r = w3.mView.extent(0)       // rows of matrix
+		, c = w3.mView.extent(1)       // cols of matrix
 		, batchSize = i2.mView.extent(1);
 
 	Error::checkMissMatch(c, i2.mView.extent(0));
@@ -128,7 +128,7 @@ void Environment::batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuVi
 		CUBLAS_OP_N, CUBLAS_OP_N,
 		r, 1, c,
 		&alpha,
-		w2.mGpu, lda, strideA,
+		w3.mGpu, lda, strideA,
 		i2.mGpu, ldb, strideB,
 		&beta,
 		o2.mGpu, ldc, strideC,
@@ -138,12 +138,12 @@ void Environment::batchedMatMulVec(const GpuView2& w2, const GpuView2& i2, GpuVi
 	Error::checkBlas(result);
 	commandQueueSync();
 }
-void Environment::batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuView2& o2) {
+void Environment::batchedMatTMulVec(const GpuView3& w3, const GpuView2& i2, GpuView2& o2) {
 	float alpha = 1.0f;
 	float beta = 0.0f;
 
-	int r = w2.mView.extent(0);       // rows of w2
-	int c = w2.mView.extent(1);       // cols of w2
+	int r = w3.mView.extent(0);       // rows of w2
+	int c = w3.mView.extent(1);       // cols of w2
 	int batchSize = i2.mView.extent(1);
 
 	Error::checkMissMatch(r, i2.mView.extent(0));
@@ -164,7 +164,7 @@ void Environment::batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuV
 		CUBLAS_OP_T, CUBLAS_OP_N,  // transpose w2, no transpose i2
 		c, 1, r,                   // output dim: (c × 1), inner dim: r
 		&alpha,
-		w2.mGpu, lda, strideA,
+		w3.mGpu, lda, strideA,
 		i2.mGpu, ldb, strideB,
 		&beta,
 		o2.mGpu, ldc, strideC,
@@ -175,13 +175,13 @@ void Environment::batchedMatTMulVec(const GpuView2& w2, const GpuView2& i2, GpuV
 	commandQueueSync();
 }
 
-void Environment::matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o1) {
+void Environment::matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
 	float alpha = 1.0f;
 	float beta = 0.0f;
 
-	Dimension r = w2.mView.extent(0)
-		, c = w2.mView.extent(1);
+	Dimension r = w3.mView.extent(0)
+		, c = w3.mView.extent(1);
 
 	Error::checkMissMatch(r, i1.mSize);
 
@@ -189,7 +189,7 @@ void Environment::matTMulVec(const GpuView2& w2, const GpuView1& i1, GpuView1& o
 		CUBLAS_OP_T,
 		r, c,
 		&alpha,
-		w2.mGpu, r,
+		w3.mGpu, r,
 		i1.mGpu, 1,
 		&beta,
 		o1.mGpu, 1);
@@ -263,7 +263,7 @@ void Environment::diff(const GpuView1& desired1, const GpuView1& sought1, GpuVie
 	Kernel::diff(mStream, desired1.mGpu, sought1.mGpu, primes1.mGpu, desired1.mSize);
 	commandQueueSync();
 }
-void Environment::updateWeights(const GpuView1& seen, GpuView2& weights, const GpuView1& primes, float learnRate) {
+void Environment::updateWeights(const GpuView1& seen, GpuView3& weights, const GpuView1& primes, float learnRate) {
 
 	int rows = weights.mView.extent(0);
 	int cols = weights.mView.extent(1);
@@ -297,7 +297,7 @@ void Environment::batchedDiff(const GpuView2& desired2, const GpuView2& sought2,
 	Kernel::diff(mStream, desired2.mGpu, sought2.mGpu, primes2.mGpu, desired2.mSize);
 	commandQueueSync();
 }
-void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView2& weights, const GpuView2& primes, float learnRate) {
+void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView3& weights, const GpuView2& primes, float learnRate) {
 
 	int rows = weights.mView.extent(0);
 	int cols = weights.mView.extent(1);
@@ -419,7 +419,7 @@ void Environment::example() {
 
 	Gpu::GpuView1 b1;
 	Gpu::GpuView2 o2, a2, i2, d2, p2;
-	Gpu::GpuView2 w2;
+	Gpu::GpuView3 w3;
 	Gpu::GpuView2 activations, softmax;
 
 	std::size_t inputSize = 3
@@ -433,7 +433,7 @@ void Environment::example() {
 	auto begin = gpuSpace.begin();
 
 	gpuSpace.advance(i2, begin, inputSize, batchSize);
-	gpuSpace.advance(w2, begin, biasSize, inputSize);
+	gpuSpace.advance(w3, begin, biasSize, inputSize, 1ULL);
 	gpuSpace.advance(b1, begin, biasSize);
 	gpuSpace.advance(o2, begin, biasSize, batchSize);
 	gpuSpace.advance(a2, begin, biasSize, batchSize);
@@ -442,7 +442,7 @@ void Environment::example() {
 	gpuSpace.advance(softmax, begin, biasSize, batchSize);
 	gpuSpace.advance(activations, begin, biasSize, batchSize);
 
-	std::fill(w2.begin(), w2.end(), 1);
+	std::fill(w3.begin(), w3.end(), 1);
 	std::fill(i2.begin(), i2.end(), 1);
 	std::fill(b1.begin(), b1.end(), 1);
 	std::fill(d2.begin(), d2.end(), 0.5);
@@ -469,7 +469,7 @@ void Environment::example() {
 
 		auto forward = [&]() {
 
-			gpu.batchedMatMulVec(w2, i2, o2);
+			gpu.batchedMatMulVec(w3, i2, o2);
 			gpu.batchedBroadcastAdd(b1, o2);
 			gpu.batchedActivationFunction(af, o2, a2);
 
@@ -480,7 +480,7 @@ void Environment::example() {
 
 			gpu.batchedErrorFunction(af, d2, a2, p2);
 
-			gpu.batchedUpdateWeights(i2, w2, p2, 0.002);
+			gpu.batchedUpdateWeights(i2, w3, p2, 0.002);
 			};
 		backward();
 	}

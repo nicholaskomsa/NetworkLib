@@ -31,41 +31,50 @@ namespace NetworkLib {
 
 					auto componentBegin = begin;
 
-					auto inputSize = firstInputSize;
-					for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates)) {
-
-						const auto n = layerTemplate.mNodeCount;
-
-						setupFunctor( layer, layerTemplate, n, inputSize);
-		
-						inputSize = n;
-					}
-
+					for (std::size_t idx = 0; const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates))
+						setupFunctor( layer, layerTemplate, idx++);
+		 
 					std::size_t size = std::distance(componentBegin, begin);
 					auto view = Cpu::Tensor::View1(componentBegin, std::array{ size });
 					return { view, mGpuFloats.getGpu(view), componentBegin };
 					};
 
 				//mWeights, etc refer to all weights from all layers, they are grouped
-				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					layer.mActivationFunction = layerTemplate.mActivationFunction;
-					mGpuFloats.advance(layer.mWeights, begin, n, inputSize);
+				mWeights = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+
+					switch (layerTemplate.mConvolutionType) {
+					case LayerTemplate::ConvolutionType::Conv1: {
+
+						mGpuFloats.advance(layer.mWeights, begin, layerTemplate.mKernelWidth, 1ULL, layerTemplate.mKernelNumber);
+						break;
+					}
+					case LayerTemplate::ConvolutionType::None: {
+
+						auto inputSize = (idx==0) ?
+							nt.mInputSize : layerTemplates[idx-1].mNodeCount;
+
+						mGpuFloats.advance(layer.mWeights, begin, layerTemplate.mNodeCount, inputSize, 1ULL);
+						break;
+					}
+					}
+
 					});
-				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					mGpuFloats.advance(layer.mBias, begin, n);
+
+				mBias = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					mGpuFloats.advance(layer.mBias, begin, layerTemplate.mNodeCount);
 					});
-				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					mGpuFloats.advance(layer.mOutputs, begin, n, batchSize);
+				mOutputs = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					mGpuFloats.advance(layer.mOutputs, begin, layerTemplate.mNodeCount, batchSize);
 					});
-				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-					mGpuFloats.advance(layer.mActivations, begin, n, batchSize);
+				mActivations = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+					mGpuFloats.advance(layer.mActivations, begin, layerTemplate.mNodeCount, batchSize);
 					});
 
 				if(backwards)
-					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t n, std::size_t inputSize) {
-						mGpuFloats.advance(layer.mPrimes, begin, n, batchSize);
+					mPrimes = groupComponent([&](auto& layer, auto& layerTemplate, std::size_t idx) {
+						mGpuFloats.advance(layer.mPrimes, begin, layerTemplate.mNodeCount, batchSize);
 						});
-
+  
 				upload();
 			}
 
@@ -79,30 +88,35 @@ namespace NetworkLib {
 
 			const GpuView1 forward(Environment& gpu, GpuView1 seen, std::size_t batch = 0) {
 				
-				for( auto& layer : mLayers ) 
-					seen = layer.forward(gpu, seen, batch);
+				auto& layersTemplates = mNetworkTemplate->mLayerTemplates;
+
+				for(const auto& [layer, layerTemplate] : std::views::zip(mLayers, layersTemplates))
+					seen = layer.forward(gpu, seen, layerTemplate, batch);
 				
 				return seen;
 			}
 
 			const GpuView2 forward(Environment& gpu, GpuView2 seenBatch) {
 
-				for (auto& layer : mLayers)
-					seenBatch = layer.forward(gpu, seenBatch);
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layerTemplates))
+					seenBatch = layer.forward(gpu, seenBatch, layerTemplate);
 
 				return seenBatch;
 			}
 
 			void backward(Environment& env, const GpuView1& seen, const GpuView1& desired, float learnRate, std::size_t batch = 0) {
 
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
 				auto backLayer = [&]() {
 
 					auto& back = mLayers.back();
 					const auto sought = back.mActivations.viewColumn(batch);
 					auto p1 = back.mPrimes.viewColumn(batch);
-
+					auto af = layerTemplates.back().mActivationFunction;
 					//output layer makes a comparison between desired and sought
-					env.errorFunction(back.mActivationFunction, desired, sought, p1);
+					env.errorFunction(af, desired, sought, p1);
 					};
 
 				auto hiddenLayers = [&]() {
@@ -112,12 +126,14 @@ namespace NetworkLib {
 						auto& layer = mLayers[l];
 						auto& nextLayer = mLayers[l + 1];
 
+						auto af = layerTemplates[l].mActivationFunction;
+
 						auto p1 = layer.mPrimes.viewColumn(batch);
 						auto o1 = layer.mOutputs.viewColumn(batch);
 						auto np1 = nextLayer.mPrimes.viewColumn(batch);
 
 						env.matTMulVec(nextLayer.mWeights, np1, p1);
-						env.activationFunctionPrime(layer.mActivationFunction, o1, p1);
+						env.activationFunctionPrime(af, o1, p1);
 					}
 					};
 
@@ -145,13 +161,15 @@ namespace NetworkLib {
 
 			void backward(Environment& env, const GpuView2& seenBatch, const GpuView2& desiredBatch, float learnRate) {
 
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
 				auto backLayer = [&]() {
 
 					auto& back = mLayers.back();
 					const auto soughtBatch = back.mActivations;
-
+					auto af = layerTemplates.back().mActivationFunction;
 					//output layer makes a comparison between desired and sought
-					env.batchedErrorFunction(back.mActivationFunction, desiredBatch, soughtBatch, back.mPrimes);
+					env.batchedErrorFunction(af, desiredBatch, soughtBatch, back.mPrimes);
 					};
 
 				auto hiddenLayers = [&]() {
@@ -160,9 +178,10 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 						auto& nextLayer = mLayers[l + 1];
+						auto af = layerTemplates[l].mActivationFunction;
 
 						env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
-						env.batchedActivationFunctionPrime(layer.mActivationFunction, layer.mOutputs, layer.mPrimes);
+						env.batchedActivationFunctionPrime(af, layer.mOutputs, layer.mPrimes);
 					}
 					};
 
@@ -199,31 +218,32 @@ namespace NetworkLib {
 			class Layer {
 			public:
 
-				const GpuView1 forward(Environment& env, const GpuView1& input, std::size_t batch = 0) {
+				const GpuView1 forward(Environment& env, const GpuView1& input, LayerTemplate& layerTemplate, std::size_t batch = 0) {
 
 					auto outputs1 = mOutputs.viewColumn(batch);
 					auto activations1 = mActivations.viewColumn(batch);
-
+					auto af = layerTemplate.mActivationFunction;
+					
 					env.matMulVec(mWeights, input, outputs1);
 					env.vecAddVec(mBias, outputs1);
-					env.activationFunction(mActivationFunction, outputs1, activations1);
+					env.activationFunction(af, outputs1, activations1);
 
 					return activations1;
 				}
-				const GpuView2& forward(Environment& env, const GpuView2& input) {
-				
+				const GpuView2& forward(Environment& env, const GpuView2& input, LayerTemplate& layerTemplate) {
+					
+					auto af = layerTemplate.mActivationFunction;
+					
 					env.batchedMatMulVec(mWeights, input, mOutputs);
 					env.batchedBroadcastAdd(mBias, mOutputs);
+					env.batchedActivationFunction(af, mOutputs, mActivations);
 
-					env.batchedActivationFunction(mActivationFunction, mOutputs, mActivations);
 					return mActivations;
 				}
 
-				GpuView2 mWeights;
+				GpuView3 mWeights;
 				GpuView1 mBias;
 				GpuView2 mOutputs, mActivations, mPrimes;
-
-				LayerTemplate::ActivationFunction mActivationFunction = LayerTemplate::ActivationFunction::None;
 			};
 
 			using Layers = std::vector<Layer>;
