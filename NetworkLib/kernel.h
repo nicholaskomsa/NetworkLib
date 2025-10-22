@@ -25,7 +25,9 @@ namespace NetworkLib {
 			
 			void conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, int kernelDepth);
 			void conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, int kernelDepth, float learnRate);
-			//void conv1Backward()
+			void conv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelSize, int primesSize, int kernelDepth);
+			void batchedConv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelSize, int primesSize, int kernelDepth, int batchSize);
+
 		}
 	}
 }

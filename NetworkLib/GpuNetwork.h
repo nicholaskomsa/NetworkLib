@@ -135,7 +135,7 @@ namespace NetworkLib {
 
 						switch (ct) {
 						case LayerTemplate::ConvolutionType::Conv1:
-							env.backwardConv1(nextLayer.mWeights, np1, p1);
+							env.conv1VecMulVec(nextLayer.mWeights, np1, p1);
 							break;
 						case LayerTemplate::ConvolutionType::None:
 							env.matTMulVec(nextLayer.mWeights, np1, p1);
@@ -203,7 +203,7 @@ namespace NetworkLib {
 
 						switch (ct) {
 						case LayerTemplate::ConvolutionType::Conv1:
-							env.batchedBackwardConv1(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+							env.batchedConv1VecMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
 							break;
 						case LayerTemplate::ConvolutionType::None:
 							env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
