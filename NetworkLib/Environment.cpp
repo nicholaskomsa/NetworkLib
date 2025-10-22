@@ -49,34 +49,55 @@ void Environment::conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
 	auto kernelSize = w3.mView.extent(0);
 	auto kernelDepth = w3.mView.extent(2);
+	auto primesSize = o1.mView.extent(0);
 
-	Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, i1.mView.extent(0), kernelSize, kernelDepth);
+	Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelSize, kernelDepth);
 
 	commandQueueSync();
 }
 void Environment::batchedConv1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2) {
 
+	auto wView = w3.mView;
+	auto iView = i2.mView;
+	auto oView = o2.mView;
+
+	auto kernelDepth = wView.extent(2);
+	auto primesSize = oView.extent(0);
+	auto kernelWidth = wView.extent(0);
+	auto batchSize = oView.extent(1);
+
+	Kernel::batchedConv1(mStream, w3.mGpu, o2.mGpu, i2.mGpu, primesSize, kernelWidth, kernelDepth, batchSize);
+	
+	/*
 	std::size_t batchSize = i2.mView.extent(1);
 	for (auto b : std::views::iota(0ULL, batchSize)) {
 		GpuView1 i1 = i2.viewColumn(b);
 		GpuView1 o1 = o2.viewColumn(b);
 		conv1(w3, i1, o1);
 	}
+	*/
 }
 void Environment::conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate) {
 
 	std::size_t kernelNum = w3.mView.extent(2);
 	std::size_t kernelSize = w3.mView.extent(0);
-	Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, i1.mView.extent(0), kernelSize, kernelNum, learnRate);
+	std::size_t primesSize = p1.mView.extent(0);
+
+	Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, primesSize, kernelSize, kernelNum, learnRate);
 	commandQueueSync();
 }
 void Environment::batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, const GpuView2& p2, float learnRate) {
-	std::size_t batchSize = i2.mView.extent(1);
-	for (auto b : std::views::iota(0ULL, batchSize)) {
-		GpuView1 i1 = i2.viewColumn(b);
-		GpuView1 p1 = p2.viewColumn(b);
-		conv1UpdateKernel(w3, i1, p1, learnRate);
-	}
+	
+	auto wView = w3.mView;
+	auto iView = i2.mView;
+	auto pView = p2.mView;
+
+	auto kernelDepth = wView.extent(2);
+	auto primesSize = pView.extent(0);
+	auto kernelWidth = wView.extent(0);
+	auto batchSize = pView.extent(1);
+
+	Kernel::batchedConv1UpdateKernel(mStream, w3.mGpu, p2.mGpu, i2.mGpu, primesSize, kernelWidth, kernelDepth, batchSize, learnRate); 
 }
 void Environment::vecScale(GpuView1& a1, float scale) {
 

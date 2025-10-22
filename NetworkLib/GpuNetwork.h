@@ -285,14 +285,9 @@ namespace NetworkLib {
 					switch (layerTemplate.mConvolutionType) {
 					case LayerTemplate::ConvolutionType::Conv1: 
 
-						for (auto b : std::views::iota(0ULL, input.mView.extent(1))) {
 
-							auto inputs1 = input.viewColumn(b);
-							auto outputs1 = mOutputs.viewColumn(b);
-							auto activations1 = mActivations.viewColumn(b);
+						env.batchedConv1(mWeights, input, mOutputs);
 
-							env.conv1(mWeights, inputs1, outputs1);
-						}
 						break;
 					case LayerTemplate::ConvolutionType::None:
 
