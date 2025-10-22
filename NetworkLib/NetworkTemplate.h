@@ -50,7 +50,7 @@ namespace NetworkLib {
 					case LayerTemplate::ConvolutionType::Conv1: {
 						//for Conv1, node count is determined by input size and kernel size
 						size = size - layer.mKernelWidth + 1;
-						layer.mNodeCount = size;
+						layer.mNodeCount = size * layer.mKernelNumber;
 						break;
 					}
 					case LayerTemplate::ConvolutionType::None:

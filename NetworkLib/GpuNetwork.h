@@ -90,7 +90,7 @@ namespace NetworkLib {
 				
 				auto& layersTemplates = mNetworkTemplate->mLayerTemplates;
 
-				for(const auto& [layer, layerTemplate] : std::views::zip(mLayers, layersTemplates))
+				for (const auto& [layer, layerTemplate] : std::views::zip(mLayers, layersTemplates))
 					seen = layer.forward(gpu, seen, layerTemplate, batch);
 				
 				return seen;
@@ -131,27 +131,45 @@ namespace NetworkLib {
 						auto p1 = layer.mPrimes.viewColumn(batch);
 						auto o1 = layer.mOutputs.viewColumn(batch);
 						auto np1 = nextLayer.mPrimes.viewColumn(batch);
+						auto ct = layerTemplates[l].mConvolutionType;
 
-						env.matTMulVec(nextLayer.mWeights, np1, p1);
+						switch (ct) {
+						case LayerTemplate::ConvolutionType::Conv1:
+							env.backwardConv1(nextLayer.mWeights, np1, p1);
+							break;
+						case LayerTemplate::ConvolutionType::None:
+							env.matTMulVec(nextLayer.mWeights, np1, p1);
+							break;
+						}
 						env.activationFunctionPrime(af, o1, p1);
 					}
 					};
 
 				auto updateWeights = [&]() {
-					for (auto l : std::views::iota(0ULL, mLayers.size())) {
+			                    
+					auto update = [&](std::size_t l) {
 
 						auto& layer = mLayers[l];
-
-						GpuView1 input;
-						if (l == 0)
-							input = seen;
-						else
-							input = mLayers[l-1].mActivations.viewColumn(batch);
+						auto input = (l == 0) ?
+							seen : mLayers[l - 1].mActivations.viewColumn(batch);
+						auto& layerTemplate = layerTemplates[l];
 
 						auto primes = layer.mPrimes.viewColumn(batch);
 
-						env.updateWeights(input, layer.mWeights, primes, learnRate);
-					}
+						auto ct = layerTemplate.mConvolutionType;
+						switch (ct) {
+						case LayerTemplate::ConvolutionType::Conv1:
+							env.conv1UpdateKernel(layer.mWeights, input, primes, learnRate);
+							break;
+						case LayerTemplate::ConvolutionType::None:
+							env.updateWeights(input, layer.mWeights, primes, learnRate);
+							break;
+						}
+						};
+
+					for (auto l : std::views::iota(0ULL, mLayers.size()))
+						update(l);
+
 					};
 
 				backLayer();
@@ -178,25 +196,47 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 						auto& nextLayer = mLayers[l + 1];
-						auto af = layerTemplates[l].mActivationFunction;
+						
+						auto& layerTemplate = layerTemplates[l];
+						auto af = layerTemplate.mActivationFunction;
+						auto ct = layerTemplate.mConvolutionType;
 
-						env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+						switch (ct) {
+						case LayerTemplate::ConvolutionType::Conv1:
+							env.batchedBackwardConv1(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+							break;
+						case LayerTemplate::ConvolutionType::None:
+							env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+							break;
+						}
+						
 						env.batchedActivationFunctionPrime(af, layer.mOutputs, layer.mPrimes);
 					}
 					};
 
 				auto updateWeights = [&]() {
 
-					auto& front = mLayers.front();
-					env.batchedUpdateWeights(seenBatch, front.mWeights, front.mPrimes, learnRate);
-
-					for (auto l : std::views::iota(1ULL, mLayers.size())) {
+					auto update = [&](std::size_t l) {
 
 						auto& layer = mLayers[l];
-						auto& prevLayer = mLayers[l - 1];
+						auto& prevActivations = ( l == 0 ) ?
+							seenBatch : mLayers[l - 1].mActivations;
+						auto& layerTemplate = layerTemplates[l];
 
-						env.batchedUpdateWeights(prevLayer.mActivations, layer.mWeights, layer.mPrimes, learnRate);
-					}
+						auto ct = layerTemplate.mConvolutionType;
+						switch (ct) {
+						case LayerTemplate::ConvolutionType::Conv1:
+							env.batchedConv1UpdateKernel(layer.mWeights, prevActivations, layer.mPrimes, learnRate);
+							break;
+						case LayerTemplate::ConvolutionType::None:
+							env.batchedUpdateWeights(prevActivations, layer.mWeights, layer.mPrimes, learnRate);
+							break;
+						}
+						};
+
+					for (auto l : std::views::iota(0ULL, mLayers.size()))
+						update(l);
+
 					};
 
 				backLayer();
@@ -223,8 +263,16 @@ namespace NetworkLib {
 					auto outputs1 = mOutputs.viewColumn(batch);
 					auto activations1 = mActivations.viewColumn(batch);
 					auto af = layerTemplate.mActivationFunction;
+					           
+					switch (layerTemplate.mConvolutionType) {
+					case LayerTemplate::ConvolutionType::Conv1: 
+						env.conv1(mWeights, input, outputs1);
+						break;
+					case LayerTemplate::ConvolutionType::None:
+						env.matMulVec(mWeights, input, outputs1);
+						break;
+					}
 					
-					env.matMulVec(mWeights, input, outputs1);
 					env.vecAddVec(mBias, outputs1);
 					env.activationFunction(af, outputs1, activations1);
 
@@ -233,8 +281,26 @@ namespace NetworkLib {
 				const GpuView2& forward(Environment& env, const GpuView2& input, LayerTemplate& layerTemplate) {
 					
 					auto af = layerTemplate.mActivationFunction;
-					
-					env.batchedMatMulVec(mWeights, input, mOutputs);
+	
+					switch (layerTemplate.mConvolutionType) {
+					case LayerTemplate::ConvolutionType::Conv1: 
+
+						for (auto b : std::views::iota(0ULL, input.mView.extent(1))) {
+
+							auto inputs1 = input.viewColumn(b);
+							auto outputs1 = mOutputs.viewColumn(b);
+							auto activations1 = mActivations.viewColumn(b);
+
+							env.conv1(mWeights, inputs1, outputs1);
+						}
+						break;
+					case LayerTemplate::ConvolutionType::None:
+
+						env.batchedMatMulVec(mWeights, input, mOutputs);
+
+						break;
+					}
+
 					env.batchedBroadcastAdd(mBias, mOutputs);
 					env.batchedActivationFunction(af, mOutputs, mActivations);
 

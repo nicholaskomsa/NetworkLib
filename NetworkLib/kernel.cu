@@ -332,51 +332,57 @@ void Kernel::batchedUpdateWeights(cudaStream_t stream, float* weights, const flo
     dim3 blockDim(tx, ty, 1);  // Threads per block
     dim3 gridDim((cols + tx-1) / tx, (rows + ty-1) / ty, batchSize);  // One block per batch
     
-    cuBatchedUpdateWeights << <gridDim, blockDim, 0, stream >> >(weights, primes, seen, rows, cols, batchSize, learnRate);
-
+    cuBatchedUpdateWeights << <gridDim, blockDim, 0, stream >> > (weights, primes, seen, rows, cols, batchSize, learnRate);
 }
 
+__global__ void cuConv1(float* seen, float* weights, float* primes, int outputSize, int kernelSize, int kernelDepth) {
+  
+    int idx = blockIdx.x * blockDim.x + threadIdx.x; // output index
+    int kernel = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
 
-__global__ void cuConv1(float* seen, float* weights, float* primes, int outputSize, int kernelSize) {
-
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (idx < outputSize) {
+    if (kernel < kernelDepth && idx < outputSize) {
 
         float sum = 0.0f;
-        for (int k = 0; k < kernelSize; ++k) {
-            sum += weights[k] * seen[idx + k];
-        }
-
-        primes[idx] = sum;
+  
+        for (int k = 0; k < kernelSize; ++k) 
+            sum += weights[kernel * kernelSize + k] * seen[idx + k];
+        
+        primes[kernel * outputSize + idx] = sum;
     }
 }
-__global__ void cuConv1UpdateWeights(float* seen, float* weights, float* primes, int outputSize, int kernelSize, float learnRate) {
+
+__global__ void cuConv1UpdateWeights(float* seen, float* weights, float* primes, int outputSize, int kernelSize, int kernelDepth, float learnRate) {
    
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    int idx = blockIdx.x * blockDim.x + threadIdx.x; // output index
+    int kernel = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
 
-    if (idx < outputSize) {
-        for (int k = 0; k < kernelSize; ++k) {
-            // Each thread contributes to the gradient of weight[k]
-            // primes[idx] is the error signal at this output position
-            // seen[idx + k] is the input that contributed to this output
-            atomicAdd(&weights[k], -learnRate * primes[idx] * seen[idx + k]);
-        }
+    if (idx < outputSize && kernel < kernelDepth ) {
+
+        float prime_val = -learnRate * primes[kernel * outputSize + idx] / float(outputSize);
+        int kernelOffset = kernel * kernelSize;
+
+        for (int k = 0; k < kernelSize; ++k) 
+            atomicAdd(&weights[kernelOffset + k], prime_val * seen[idx + k] );
     }
 }
-void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize) {
-
+void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, int kernelDepth) {
     int outputSize = inputSize - kernelSize + 1;
-    int threads = std::min(outputSize, 256);
-    int blocks = (outputSize + threads - 1) / threads;
+    int tx = std::min(32, std::max(1, outputSize / kernelDepth));       // threads per block in x → output positions
+    int ty = std::min(32, kernelDepth);      // threads per block in y → kernel depth
 
-    cuConv1<<<blocks, threads, 0, stream >>>(seen, weights, primes, outputSize, kernelSize);
+    dim3 threadsPerBlock(tx, ty);
+    dim3 numBlocks((outputSize + tx - 1) / tx, (kernelDepth + ty - 1) / ty);  
+
+    cuConv1<<<numBlocks, threadsPerBlock, 0, stream>>>(seen, weights, primes, outputSize, kernelSize, kernelDepth);
+   
 }
-void Kernel::conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, float learnRate) {
+void Kernel::conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int inputSize, int kernelSize, int kernelDepth, float learnRate) {
 
     int outputSize = inputSize - kernelSize + 1;
-    int threads = std::min(outputSize, 256);
-    int blocks = (outputSize + threads - 1) / threads;
+    int tx = std::min(32, std::max(1, outputSize / kernelDepth));       // threads per block in x → output positions
+    int ty = std::min(32, kernelDepth);      // threads per block in y → kernel depth
 
-   cuConv1UpdateWeights<<<blocks, threads, 0, stream>>>(seen, weights, primes, outputSize, kernelSize, learnRate);
+    dim3 threadsPerBlock(tx, ty);
+    dim3 numBlocks((outputSize + tx - 1) / tx, (kernelDepth + ty - 1) / ty);
+    cuConv1UpdateWeights <<<numBlocks, threadsPerBlock, 0, stream>>>(seen, weights, primes, outputSize, kernelSize, kernelDepth, learnRate);
 }

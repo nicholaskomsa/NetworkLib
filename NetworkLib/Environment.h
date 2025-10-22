@@ -18,7 +18,12 @@ namespace NetworkLib {
 			operator cudaStream_t();
 			
 
-			void conv1(const GpuView1& w1, const GpuView1& i1, GpuView1& o1);
+			void conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
+			void batchedConv1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
+			void conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate);
+			void batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, const GpuView2& p2, float learnRate);
+			void backwardConv1(const GpuView3& w3, const GpuView1& o1, GpuView1& p1);
+			void batchedBackwardConv1(const GpuView3& w3, const GpuView2& o2, GpuView2& p2);
 
 			void vecScale(GpuView1& a1, float scale);
 			void vecAddVec(const GpuView1& a1, GpuView1& o1);

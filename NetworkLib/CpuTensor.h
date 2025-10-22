@@ -125,6 +125,16 @@ namespace NetworkLib {
 
 				return View1(cpu, std::array{ rows });
 			}
+			static View2 viewDepth(const View3 v2, Coordinate depth) {
+
+				auto rows = v2.extent(0);
+				auto cols = v2.extent(1);
+
+				auto offset = rows * cols * depth;
+				auto cpu = v2.data_handle() + offset;
+
+				return View2(cpu, std::array{ rows, cols });
+			}
 
 			template<ViewConcept ViewType>
 			View1 flatten(ViewType& v) {
@@ -183,17 +193,17 @@ namespace NetworkLib {
 			Tensor::View<width, height> fv2(nullptr);
 			Tensor::View<width, Tensor::Dynamic, Tensor::Dynamic> fv3;
 
-			Tensor::advance(v1, begin, a);
-			Tensor::advance(v2, begin, b, c);
-			Tensor::advance(fv2, begin);
-			Tensor::advance(fv3, begin, b, c);
+			//Tensor::advance(v1, begin, a);
+			//Tensor::advance(v2, begin, b, c);
+			//Tensor::advance(fv2, begin);
+			//Tensor::advance(fv3, begin, b, c);
 
-			v2[b - 1, c - 1] = 6.5f;
-			floatSpace.mView[2] = 7;
-			fv2[0, 2] = 9;
-			fv3[3, 3, 3] = 4.3;
+			//v2[b - 1, c - 1] = 6.5f;
+			//floatSpace.mView[2] = 7;
+			//fv2[0, 2] = 9;
+			//fv3[3, 3, 3] = 4.3;
 
-			std::println("{} {} {} {}", v2[b - 1, c - 1], v1[2], floatSpace.mView[30], fv2[0, 2]);
+			//std::println("{} {} {} {}", v2[b - 1, c - 1], v1[2], floatSpace.mView[30], fv2[0, 2]);
 
 			auto v2Shape = Tensor::getShape(v2);
 			for (auto d : v2Shape)

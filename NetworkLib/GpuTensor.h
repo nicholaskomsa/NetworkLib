@@ -84,6 +84,24 @@ namespace NetworkLib {
 				};
 
 			}
+			GpuView<Cpu::Tensor::View2> viewDepth(Coordinate depth) const {
+
+				Error::checkBounds(depth, mView.extent(2));
+
+				auto cpuView = Cpu::Tensor::viewDepth(mView, depth);
+
+				auto rows = mView.extent(0);
+				auto cols = mView.extent(1);
+
+				std::size_t offset = cols * rows * depth;
+				auto gpu = mGpu + offset;
+
+				return {
+					 cpuView
+					, gpu
+					, cpuView.data_handle()
+				};
+			}
 		};
 
 		using GpuView1 = GpuView<Cpu::Tensor::View1>;

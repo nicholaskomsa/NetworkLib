@@ -52,7 +52,7 @@ namespace NetworkLib {
 					switch( layerTemplate.mConvolutionType ) {
 						case LayerTemplate::ConvolutionType::Conv1: {
 
-							Tensor::advance(layer.mWeights, begin, layerTemplate.mKernelWidth, 1ULL, layerTemplate.mKernelNumber);
+							Tensor::advance(layer.mWeights, begin, layerTemplate.mKernelWidth, 1ULL, layerTemplate.mKernelNumber );
 							break;
 						}
 						case LayerTemplate::ConvolutionType::None: {
@@ -161,7 +161,19 @@ namespace NetworkLib {
 						++mMisses;
 				}
 			}
+			static float mse( const View1& sought, const View1& desired) {
+				float sum = 0.0f;
+				for( auto i : std::views::iota(0ULL, sought.extent(0)) ) {
+					
+					auto diff = desired[i] - sought[i];
+					sum += diff * diff;
+				}
+				sum /= sought.extent(0);
+				return sum;
+			}
+			void mse(View2 soughtBatch, View2 desiredBatch) {
 
+			}
 			void backward(const View1& seen, const View1& desired, float learnRate, std::size_t batch = 0) {
 
 			}

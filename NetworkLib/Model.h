@@ -18,7 +18,7 @@ namespace NetworkLib {
 			TrainingManager mTrainingManager;
 			TrainingManager::GpuTask* mGpuTask = nullptr;
 
-			std::size_t mInputSize = 2, mOutputSize = 2
+			std::size_t mInputWidth = 2, mOutputSize = 2
 				, mTrainNum = 5000;
 			std::size_t kernelSize = 2;
 
@@ -38,8 +38,8 @@ namespace NetworkLib {
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 
-				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ ConvolutionType::Conv1, kernelSize, 1, ActivationFunction::ReLU}
+				mNetworkTemplate = { mInputWidth, mBatchSize
+					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 

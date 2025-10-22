@@ -23,15 +23,16 @@ int main() {
 	//diag.simpleChat();
 
 	//NetworkLib::Cpu::example();
-	//NetworkLib::Cpu::networkExample();
 	//NetworkLib::Model::XOR xorModel;
 	//xorModel.run();
 	//NetworkLib::Model::XORLottery xorLotteryModel;
 	//xorLotteryModel.run();
-	NetworkLib::Model::LogicLottery logicLotteryModel;
-	logicLotteryModel.run();
+	//NetworkLib::Model::LogicLottery logicLotteryModel;
+	//logicLotteryModel.run();
 	//NetworkLib::Gpu::Environment::example();
 	//NetworkLib::Gpu::Environment::example2();
+	NetworkLib::Model::Convolution1 conv1Model;
+	conv1Model.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

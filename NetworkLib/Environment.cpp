@@ -3,6 +3,8 @@
 #include "kernel.h"
 
 #include <numeric>
+#include <random>
+#include "CpuNetwork.h"
 
 using namespace NetworkLib::Gpu;
 
@@ -43,10 +45,38 @@ Environment::operator cudaStream_t() {
 }
 
 
-void Environment::conv1( const GpuView1& w1, const GpuView1& i1, GpuView1& o1) {
+void Environment::conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
-	Kernel::conv1(mStream, w1.mGpu, o1.mGpu, i1.mGpu, i1.mSize, w1.mSize);
+	auto kernelSize = w3.mView.extent(0);
+	auto kernelDepth = w3.mView.extent(2);
+
+	Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, i1.mView.extent(0), kernelSize, kernelDepth);
+
 	commandQueueSync();
+}
+void Environment::batchedConv1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2) {
+
+	std::size_t batchSize = i2.mView.extent(1);
+	for (auto b : std::views::iota(0ULL, batchSize)) {
+		GpuView1 i1 = i2.viewColumn(b);
+		GpuView1 o1 = o2.viewColumn(b);
+		conv1(w3, i1, o1);
+	}
+}
+void Environment::conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate) {
+
+	std::size_t kernelNum = w3.mView.extent(2);
+	std::size_t kernelSize = w3.mView.extent(0);
+	Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, i1.mView.extent(0), kernelSize, kernelNum, learnRate);
+	commandQueueSync();
+}
+void Environment::batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, const GpuView2& p2, float learnRate) {
+	std::size_t batchSize = i2.mView.extent(1);
+	for (auto b : std::views::iota(0ULL, batchSize)) {
+		GpuView1 i1 = i2.viewColumn(b);
+		GpuView1 p1 = p2.viewColumn(b);
+		conv1UpdateKernel(w3, i1, p1, learnRate);
+	}
 }
 void Environment::vecScale(GpuView1& a1, float scale) {
 
@@ -175,6 +205,45 @@ void Environment::batchedMatTMulVec(const GpuView3& w3, const GpuView2& i2, GpuV
 	commandQueueSync();
 }
 
+void Environment::backwardConv1(const GpuView3& w3, const GpuView1& e1, GpuView1& p1) {
+	
+	auto wView = w3.mView;
+	auto eView = e1.mView;
+	auto pView = p1.mView;
+
+	auto kernelDepth = wView.extent(2);
+	auto errorsPerKernel = eView.extent(0) / kernelDepth;
+	auto kernelSize = wView.extent(0);
+
+	for( auto k : std::views::iota(0ULL, kernelDepth))
+		for (auto n : std::views::iota(0ULL, errorsPerKernel)){
+			auto sum = 0.0f;
+			auto idx = n + k * errorsPerKernel;
+			auto e = eView[idx];
+
+			for( auto w : std::views::iota(0ULL, kernelSize))
+				sum += wView[w,0,k] * e;
+		
+			pView[idx] = sum;
+		}
+}
+void Environment::batchedBackwardConv1(const GpuView3& w3, const GpuView2& o2, GpuView2& p2) {
+	
+	w3.downloadAsync(mStream); sync();
+	o2.downloadAsync(mStream); sync();
+
+	Dimension batchSize = o2.mView.extent(1);
+
+	for (auto b : std::views::iota(0ULL, batchSize)) {
+
+		GpuView1 o1 = o2.viewColumn(b);
+		GpuView1 p1 = p2.viewColumn(b);
+
+		backwardConv1(w3, o1, p1);
+	}
+
+	p2.upload();
+}
 void Environment::matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
 	float alpha = 1.0f;
@@ -340,12 +409,12 @@ void Environment::batchedActivationFunction(LayerTemplate::ActivationFunction af
 		break;
 	}
 }
-void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& a1, GpuView1& p1) {
+void Environment::activationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& p1) {
 
 	using ActivationFunction = LayerTemplate::ActivationFunction;
 	switch (af) {
 	case ActivationFunction::ReLU:
-		applyReluPrime(a1, p1);
+		applyReluPrime(o1, p1);
 		break;
 	case ActivationFunction::None:
 		break;
@@ -431,7 +500,7 @@ void Environment::example() {
 		+ biasSize * inputSize + biasSize * 2 * batchSize);
 
 	auto begin = gpuSpace.begin();
-
+	
 	gpuSpace.advance(i2, begin, inputSize, batchSize);
 	gpuSpace.advance(w3, begin, biasSize, inputSize, 1ULL);
 	gpuSpace.advance(b1, begin, biasSize);
@@ -441,13 +510,13 @@ void Environment::example() {
 	gpuSpace.advance(d2, begin, biasSize, batchSize);
 	gpuSpace.advance(softmax, begin, biasSize, batchSize);
 	gpuSpace.advance(activations, begin, biasSize, batchSize);
-
+	
 	std::fill(w3.begin(), w3.end(), 1);
 	std::fill(i2.begin(), i2.end(), 1);
 	std::fill(b1.begin(), b1.end(), 1);
 	std::fill(d2.begin(), d2.end(), 0.5);
 
-	i2.mView[0, 1] = 0;
+	i2.mView[0ULL, 1ULL] = 0;
 
 	d2.mView[0, 0] = .314;
 	d2.mView[0, 1] = 1;
@@ -502,45 +571,145 @@ void Environment::example2() {
 
 	Environment gpu;
 	gpu.create();
-
+	 
 	LinkedFloatSpace linkedSpace;
 	auto& [cpuSpace, gpuSpace] = linkedSpace;
 
-	Gpu::GpuView1 b1, i1, p1, w1;
+	using GpuSample = std::pair< GpuView1, GpuView1>;
+	std::vector<GpuSample> samples;
+;
 
-	std::size_t kernelSize = 3;
-	std::size_t inputSize = 5
-		, biasSize = inputSize - kernelSize + 1;
+	Gpu::GpuView1 b1, p1, o1, a1, e1;
+	Gpu::GpuView3 w3;
 
-	linkedSpace.create(inputSize + biasSize * 2 + kernelSize) ;
+	std::size_t kernelSize = 7;
+	std::size_t inputSize = 10
+		, biasSize = inputSize - kernelSize + 1
+		, outputSize = biasSize;
+
+	//1 sample per input
+	samples.resize(inputSize);
+
+	linkedSpace.create((inputSize + outputSize)*samples.size() + biasSize * 4 + kernelSize);
 
 	auto begin = gpuSpace.begin();
+	
+	for (auto& [seen,desired] : samples) {
+		gpuSpace.advance(seen, begin, inputSize);
+		gpuSpace.advance(desired, begin, outputSize);
+	}
 
-	gpuSpace.advance(i1, begin, inputSize);
-	gpuSpace.advance(w1, begin, kernelSize);
+	gpuSpace.advance(w3, begin, kernelSize, 1ULL, 1ULL);
 	gpuSpace.advance(b1, begin, biasSize);
 	gpuSpace.advance(p1, begin, biasSize);
+	gpuSpace.advance(a1, begin, biasSize);
+	gpuSpace.advance(e1, begin, biasSize);
+	gpuSpace.advance(o1, begin, outputSize);
 
-	std::iota(i1.begin(), i1.end(), 1);
+	std::uniform_real_distribution reals(-1.0f, 1.0f), noise(0.0f, 0.1f);
+	std::mt19937 random;
+	std::size_t sampleIdx = 0;
 
-	std::fill(b1.begin(), b1.end(), 1);
+ 	auto createPingSample = [&](auto& seen, auto& desired) {
 
-	w1.mView[0] = 1.0f;
-	w1.mView[1] = 0.0f;
-	w1.mView[2] = -1.0f;
+ 		std::size_t idx = sampleIdx++;
+		
+		std::fill(desired.begin(), desired.end(), 0);
+
+		//static
+		std::generate(seen.begin(), seen.end(), [&]() { return 0; });// noise(random); });
+
+		//ping
+		seen.mView[idx] = 1.0f;
+		
+		std::size_t minIdx = std::max<int>(0, idx - kernelSize+1);
+		std::size_t maxIdx = std::min(outputSize, idx + 1);
+
+		for (auto i : std::views::iota(minIdx, maxIdx )) 
+			desired.mView[i] = 1.0f;
+		
+		};
+
+	for (auto& [seen, desired] : samples) 
+		createPingSample(seen, desired);
+	
+
+	auto createKernel = [&]() {
+		std::generate(w3.begin(), w3.end(), [&]() {return reals(random); });
+		std::generate(b1.begin(), b1.end(), [&]() {return reals(random); });
+		};
+	createKernel();
+
+
 
 	gpuSpace.upload();
 	
 	gpu.sync();
 
-	gpu.conv1(w1, i1, p1);
-	
+	auto print = [&](std::string_view caption, const Gpu::GpuView1& v1) {
+		v1.downloadAsync(gpu); gpu.sync();
+		std::print("{}: ", caption);
+		for (const auto& val : v1)
+			std::print("{} ", val);
+		std::println("\n");
+		};
+
+
+	auto forward = [&](auto& i1) {
+
+		//forward
+		gpu.conv1(w3, i1, o1);
+		gpu.vecAddVec(b1, o1);
+		gpu.activationFunction(LayerTemplate::ActivationFunction::ReLU, o1, a1);
+
+		};
+
+	auto convergence = [&](bool print=false) {
+
+		float mse = 0.0f;
+		for( const auto& [seen, desired] : samples){
+			forward(seen);
+			a1.downloadAsync(gpu); gpu.sync();
+
+			auto& sought = a1;
+			mse += Cpu::Network::mse(sought.mView, desired.mView);
+		
+			if (print) 
+				std::println("\nseen: {}\ndesired: {}\nsought: {}\n", seen, desired, sought);
+		}
+
+		std::println("convergence: {}", mse);
+		};
+	auto backward = [&](auto& i1, auto& d1) {
+
+		gpu.errorFunction(LayerTemplate::ActivationFunction::None, d1, a1, e1);
+
+		e1.downloadAsync(gpu); gpu.sync();
+		gpu.backwardConv1(w3, e1, p1);
+		p1.upload(); gpu.sync();
+
+		gpu.activationFunctionPrime(LayerTemplate::ActivationFunction::ReLU, o1, p1);
+		gpu.conv1UpdateKernel(w3, i1, p1, 0.002f);
+		};
+
+	for( auto generation : std::views::iota(0, 1000)) {
+		
+		auto& [seen, desired] = samples[generation % samples.size()];
+
+		forward(seen);
+		backward(seen, desired);
+		convergence();
+	}
+
+	convergence(true);
+
 	gpuSpace.downloadAsync(gpu);
 	gpu.sync();
-
-	for (const auto& f : p1)
-		std::print("{} ", f);
-	std::println("");
+	
+	print("a1", a1);
+	print("e1", e1);
+	print("p1a", p1);
+	print("p1b", p1);
 
 	linkedSpace.destroy();
 
