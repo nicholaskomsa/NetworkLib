@@ -469,11 +469,11 @@ __global__ void cuBatchedConv1UpdateWeights(float* seen, float* weights, float* 
         std::size_t seenBatchOffset = (kPrimesSize + kernelWidth - 1) * b + p;
         std::size_t primesBatchOffset = kPrimesSize * kernelDepth * b + k * kPrimesSize + p;
 
-        float prime_val = -learnRate * primes[primesBatchOffset] / float(kPrimesSize);
+        float prime_val = -learnRate * primes[primesBatchOffset] / kPrimesSize / batchSize;
         int kernelOffset = k * kernelWidth;
 
-        for (int k = 0; k < kernelWidth; ++k)
-            atomicAdd(&weights[kernelOffset + k], prime_val * seen[seenBatchOffset+k]);
+        for (int w = 0; w < kernelWidth; ++w)
+            atomicAdd(&weights[kernelOffset + w], prime_val * seen[seenBatchOffset+w]);
     }
 }
 void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth) {

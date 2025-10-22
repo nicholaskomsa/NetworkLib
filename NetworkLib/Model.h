@@ -19,7 +19,7 @@ namespace NetworkLib {
 			TrainingManager::GpuTask* mGpuTask = nullptr;
 
 			std::size_t mInputWidth = 2, mOutputSize = 2
-				, mTrainNum = 5000;
+				, mTrainNum = 10000;
 			std::size_t kernelSize = 2;
 
 			std::size_t mBatchSize = 4;

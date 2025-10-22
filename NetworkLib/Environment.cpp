@@ -226,7 +226,7 @@ void Environment::batchedMatTMulVec(const GpuView3& w3, const GpuView2& i2, GpuV
 	commandQueueSync();
 }
 
-void conv1VecMulVec1(const GpuView3& w3, const GpuView1& e1, GpuView1& p1) {
+void Environment::conv1VecMulVec1(const GpuView3& w3, const GpuView1& e1, GpuView1& p1) {
 
 	auto wView = w3.mView;
 	auto eView = e1.mView;
