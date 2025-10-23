@@ -397,12 +397,10 @@ __global__ void cuBatchedConv1VecMulVec(float* weights, float* errors, float* pr
         int batchOffset = primesSize * kernelDepth * b;
         int idx = batchOffset + primesSize * k + p, wOffset = kernelSize * k;
 
-        float e = errors[idx], sum = 0.0f;
+        float e = errors[idx];
 
         for (int w = 0; w < kernelSize; ++w)
-            sum += weights[wOffset + w] * e;
-
-        primes[idx] = sum;
+            atomicAdd(&primes[idx], weights[wOffset + w] * e);
     }
 }
 void Kernel::conv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int primesSize, int kernelWidth, int kernelDepth) {
@@ -440,38 +438,41 @@ void Kernel::batchedConv1VecMulVec(cudaStream_t stream, float* weights, float* e
     cuBatchedConv1VecMulVec << <numBlocks, threadsPerBlock, 0, stream >> > (weights, errors, primes, kernelWidth, kprimesSize, kernelDepth, batchSize);
 
 }
-__global__ void cuConv1UpdateWeights(float* seen, float* weights, float* primes, int outputSize, int kernelSize, int kernelDepth, float learnRate) {
+__global__ void cuConv1UpdateWeights(float* seen, float* weights, float* primes, int kPrimesSize, int kernelSize, int kernelDepth, float learnRate) {
    
     int idx = blockIdx.x * blockDim.x + threadIdx.x; // output index
-    int kernel = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
+    int k = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
 
-    if (idx < outputSize && kernel < kernelDepth ) {
+    if (idx < kPrimesSize && k < kernelDepth ) {
 
-        float prime_val = -learnRate * primes[kernel * outputSize + idx] / float(outputSize);
-        int kernelOffset = kernel * kernelSize;
+        float prime_val = -learnRate * primes[k * kPrimesSize + idx] / float(kPrimesSize);
+        int kernelOffset = k * kernelSize;
 
-        for (int k = 0; k < kernelSize; ++k) 
-            atomicAdd(&weights[kernelOffset + k], prime_val * seen[idx + k] );
+        for (int w = 0; w < kernelSize; ++w) 
+            atomicAdd(&weights[kernelOffset + w], prime_val * seen[idx + w] );
     }
 }
 
 __global__ void cuBatchedConv1UpdateWeights(float* seen, float* weights, float* primes, int kPrimesSize, int kernelWidth, int kernelDepth, int batchSize, float learnRate) {
 
+    /*no work
     int p = blockIdx.x * blockDim.x + threadIdx.x; // output index
     int k = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
     int b = blockIdx.z * blockDim.z + threadIdx.z;
 
     if (k < kernelDepth && p < kPrimesSize && b < batchSize) {
 
-        std::size_t seenBatchOffset = (kPrimesSize + kernelWidth - 1) * b + p;
+        std::size_t inputSize = kPrimesSize + kernelWidth - 1;
+        std::size_t seenBatchOffset = inputSize * b + p;
         std::size_t primesBatchOffset = kPrimesSize * kernelDepth * b + k * kPrimesSize + p;
 
-        float prime_val = -learnRate * primes[primesBatchOffset] / kPrimesSize / batchSize;
+        float prime_val = -learnRate * primes[primesBatchOffset] / kPrimesSize;
         int kernelOffset = k * kernelWidth;
 
         for (int w = 0; w < kernelWidth; ++w)
             atomicAdd(&weights[kernelOffset + w], prime_val * seen[seenBatchOffset+w]);
     }
+    */
 }
 void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth) {
     int kprimesSize = std::max(1, primesSize / kernelDepth);
