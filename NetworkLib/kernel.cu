@@ -374,13 +374,13 @@ __global__ void cuBatchedConv1(float* seen, float* weights, float* primes, int p
         primes[primesBatchOffset] = sum / batchSize;
     }
 }
-__global__ void cuConv1VecMulVec(float* weights, float* errors, float* primes, int kernelSize, int primesSize, int kernelDepth) {
+__global__ void cuConv1VecMulVec(float* weights, float* errors, float* primes, int kernelSize, int kPrimesSize, int kernelDepth) {
 
     int p = blockIdx.x * blockDim.x + threadIdx.x;
     int k = blockIdx.y * blockDim.y + threadIdx.y;
 
-    if (p < primesSize && k < kernelDepth) {
-        int idx = primesSize * k + p, wOffset = kernelSize * k;
+    if (p < kPrimesSize && k < kernelDepth) {
+        int idx = kPrimesSize * k + p, wOffset = kernelSize * k;
         float e = errors[idx], sum = 0.0f;
 
         for (int w = 0; w < kernelSize; ++w)
