@@ -367,11 +367,8 @@ __global__ void cuBatchedConv1(float* seen, float* weights, float* primes, int p
         std::size_t seenBatchOffset = (primesSize + kernelWidth-1) * b + p;
         std::size_t primesBatchOffset = primesSize * kernelDepth * b + k * primesSize + p;
 
-        float sum = 0.0f;
         for (int w = 0; w < kernelWidth; ++w)
-            sum += weights[k * kernelWidth + w] * seen[seenBatchOffset + w];
-
-        primes[primesBatchOffset] = sum / batchSize;
+            atomicAdd(&primes[primesBatchOffset], weights[k * kernelWidth + w] * seen[seenBatchOffset + w]);
     }
 }
 __global__ void cuConv1VecMulVec(float* weights, float* errors, float* primes, int kernelSize, int kPrimesSize, int kernelDepth) {

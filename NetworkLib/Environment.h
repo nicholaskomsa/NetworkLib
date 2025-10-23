@@ -50,6 +50,7 @@ namespace NetworkLib {
 			void batchedSoftmax(const GpuView2& o2, GpuView2& a2);
 			void diff(const GpuView1& desired1, const GpuView1& sought1, GpuView1& primes1);
 			void updateWeights(const GpuView1& seen, GpuView3& weights, const GpuView1& primes, float learnRate);
+			void fill(GpuView1 a, float value = 0.0f);
 			void copy(const GpuView1& source, GpuView1& dest);
 			void batchedCopy(const GpuView2& source, GpuView2& dest);
 			void batchedBroadcast(const GpuView1& source, GpuView2& dest);
