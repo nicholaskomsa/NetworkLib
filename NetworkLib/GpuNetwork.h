@@ -135,7 +135,10 @@ namespace NetworkLib {
 						auto p1 = layer.mPrimes.viewColumn(batch);
 						auto o1 = layer.mOutputs.viewColumn(batch);
 						auto np1 = nextLayer.mPrimes.viewColumn(batch);
-						auto ct = layerTemplates[l].mConvolutionType;
+
+						auto& nextLayerTemplate = layerTemplates[l + 1];
+
+						auto ct = nextLayerTemplate.mConvolutionType;
 
 						switch (ct) {
 						case LayerTemplate::ConvolutionType::Conv1:
