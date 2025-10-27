@@ -66,7 +66,13 @@ namespace NetworkLib {
 					, mCpu
 				};
 			}
-
+			GpuView<Cpu::Tensor::View2> upDimension() {
+				return {
+					Cpu::Tensor::upDimension(mView)
+					, mGpu
+					, mCpu
+				};
+			}
 			GpuView<Cpu::Tensor::View1> viewColumn( Coordinate col) const{
 
 				Error::checkBounds(col, mView.extent(1));

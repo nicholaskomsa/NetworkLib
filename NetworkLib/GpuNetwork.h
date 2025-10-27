@@ -85,7 +85,11 @@ namespace NetworkLib {
 			void upload() {
 				mGpuFloats.upload();
 			}
-
+			void download(Environment& gpu, bool sync=true) {
+				mGpuFloats.downloadAsync(gpu);
+				if(sync)
+					gpu.sync();
+			}
 			const GpuView1 forward(Environment& gpu, GpuView1 seen, std::size_t batch = 0) {
 				
 				auto& layersTemplates = mNetworkTemplate->mLayerTemplates;
@@ -196,10 +200,11 @@ namespace NetworkLib {
 
 						auto& layer = mLayers[l];
 						auto& nextLayer = mLayers[l + 1];
-						
 						auto& layerTemplate = layerTemplates[l];
+						auto& nextLayerTemplate = layerTemplates[l + 1];
+
 						auto af = layerTemplate.mActivationFunction;
-						auto ct = layerTemplate.mConvolutionType;
+						auto ct = nextLayerTemplate.mConvolutionType;
 
 						switch (ct) {
 						case LayerTemplate::ConvolutionType::Conv1:

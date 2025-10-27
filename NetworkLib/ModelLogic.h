@@ -38,6 +38,7 @@ namespace NetworkLib {
 				mNetworkTemplate = { mInputSize, mBatchSize
 					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
+						
 				};
 
 				if (mPrintConsole) {

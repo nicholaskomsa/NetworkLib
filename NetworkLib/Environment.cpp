@@ -47,12 +47,12 @@ Environment::operator cudaStream_t() {
 
 void Environment::conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
-	auto kernelSize = w3.mView.extent(0);
+	auto kernelRows = w3.mView.extent(0);
 	auto kernelDepth = w3.mView.extent(2);
 	auto primesSize = o1.mView.extent(0);
 
 	for( auto kernel: std::views::iota(0ULL, kernelDepth))
-		Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelSize, kernelDepth, kernel);
+		Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelRows, kernelDepth, kernel);
 
 	commandQueueSync();
 }
@@ -179,13 +179,13 @@ void Environment::batchedMatMulVec(const GpuView3& w3, const GpuView2& i2, GpuVi
 
 	// Leading dimensions
 	int lda = r  // w2: (r × c)
-		, ldb = c  // i2: (c × 1)
-		, ldc = r;  // o2: (r × 1)
+		, ldb = c  // i2: (c × b)
+		, ldc = r;  // o2: (r × b)
 
 	// Strides
 	long long strideA = 0                  // w2 is shared across batches
-		, strideB = static_cast<long long>(c)  // each vector is c × 1
-		, strideC = static_cast<long long>(r);  // each output is r × 1
+		, strideB = static_cast<long long>(c)  // each vector is c × b
+		, strideC = static_cast<long long>(r);  // each output is r × b
 
 	auto result = cublasSgemmStridedBatched(
 		mHandle,
@@ -270,6 +270,7 @@ void Environment::conv1VecMulVec(const GpuView3& w3, const GpuView1& e1, GpuView
 	auto kernelDepth = wView.extent(2);
 	auto primesSize = eView.extent(0);
 	auto kernelWidth = wView.extent(0);
+
 	for (auto kernel : std::views::iota(0ULL, kernelDepth)) 
 		Kernel::conv1VecMulVec(mStream, w3.mGpu, e1.mGpu, p1.mGpu, primesSize, kernelWidth, kernelDepth, kernel);
 	
@@ -284,9 +285,9 @@ void Environment::batchedConv1VecMulVec(const GpuView3& w3, const GpuView2& e2, 
 	auto kernelDepth = wView.extent(2);
 	auto primesSize = eView.extent(0);
 	auto batchSize = eView.extent(1);
-	auto kernelWidth = wView.extent(0);
+	auto kernelRows = wView.extent(0);
 
-	fill(p2.flatten());
+	fill(p2.flatten(),7);
 	for (auto b : std::views::iota(0ULL, batchSize)) {
 
 		GpuView1 e1 = e2.viewColumn(b);
@@ -395,7 +396,7 @@ void Environment::updateWeights(const GpuView1& seen, GpuView3& weights, const G
 	commandQueueSync();
 }
 void Environment::fill(GpuView1 a, float value) {
-	cudaMemset(a.mGpu, 0.0f, a.mSize * sizeof(float));
+	cudaMemset(a.mGpu, value, a.mSize * sizeof(float));
 }
 void Environment::copy(const GpuView1& source, GpuView1& dest) {
 	auto result = cublasScopy(mHandle, source.mSize, source.mGpu, 1, dest.mGpu, 1);

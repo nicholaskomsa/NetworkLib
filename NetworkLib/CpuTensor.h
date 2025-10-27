@@ -107,7 +107,7 @@ namespace NetworkLib {
 			}
 
 			template<ViewConcept ViewType>
-			std::vector<Dimension> getShape(const ViewType& view) {
+			std::vector<Dimension> getShape(const ViewType view) {
 
 				auto rank = ViewType::rank();
 				std::vector<Dimension> result(rank);
@@ -117,7 +117,7 @@ namespace NetworkLib {
 				return result;
 			}
 
-			static View1 viewColumn(const View2& v2, Coordinate col) {
+			static View1 viewColumn(const View2 v2, Coordinate col) {
 
 				auto rows = v2.extent(0);
 				auto offset = rows * col;
@@ -137,12 +137,16 @@ namespace NetworkLib {
 			}
 
 			template<ViewConcept ViewType>
-			View1 flatten(ViewType& v) {
+			View1 flatten(ViewType v) {
 				return View1(v.data_handle(), std::array{ area(v) });
 			}
 
+			static View2 upDimension(const View1 v) {
+				return View2(v.data_handle(), std::array<Dimension, 2>{ area(v), 1 });
+			}
+
 			template<ViewConcept ViewType>
-			FloatsView view(ViewType& v) {
+			FloatsView view(ViewType v) {
 				return FloatsView(v.data_handle(), area(v));
 			}
 		}

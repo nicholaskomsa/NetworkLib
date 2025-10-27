@@ -36,7 +36,8 @@ int main() {
 	//xorModel.run();
 	NetworkLib::Model::Convolution1Comparison conv1Model;
 	conv1Model.run();
-
+	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
+	//conv1Lotto.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

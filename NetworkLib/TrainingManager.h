@@ -112,10 +112,7 @@ namespace NetworkLib {
 						printProgress(generation, trainNum);
 				}
 
-				gpuNetwork.mWeights.downloadAsync(gpu);
-				gpuNetwork.mBias.downloadAsync(gpu);
-
-				gpu.sync();
+				gpuNetwork.download(gpu);
 
 				}, print);
 		}

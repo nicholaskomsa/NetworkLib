@@ -35,7 +35,6 @@ namespace NetworkLib {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
 				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
-
 			}
 			void create() {
 
@@ -88,13 +87,78 @@ namespace NetworkLib {
 
 		class Convolution1Comparison : public Convolution1 {
 		public:
+
+			void compare(XOR& fcModel) {
+				
+				auto& [fcGpu, fcGpuNetwork] = *fcModel.mGpuTask;
+				fcGpuNetwork.download(fcGpu);
+
+				auto& [c1Gpu, c1GpuNetwork] = *mGpuTask;
+				c1GpuNetwork.download(c1Gpu);
+
+
+
+				auto& fc = fcModel.mTrainingManager.getNetwork(mId);
+				auto& c1 = mTrainingManager.getNetwork(mId);
+
+				auto fcWeights1 = fc.mWeights;
+				auto fcOutputs1 = fc.mOutputs;
+				auto fcPrimes1 = Cpu::Tensor::flatten(fc.getPrimes());
+				auto fcActivations1 = fc.mActivations;
+	
+				auto c1Weights1 = c1.mWeights;
+				auto c1Outputs1 = c1.mOutputs;
+				auto c1Primes1 = Cpu::Tensor::flatten(c1.getPrimes());
+				auto c1Activations1 = c1.mActivations;
+
+				auto weightsMse = Cpu::Network::mse(c1Weights1, fcWeights1);
+				auto outputsMse = Cpu::Network::mse(c1Outputs1, fcOutputs1);
+				auto primesMse = Cpu::Network::mse(c1Primes1, fcPrimes1);
+				auto activationsMse = Cpu::Network::mse(c1Activations1, fcActivations1);
+
+				auto sVec = [&](Cpu::Tensor::View1 view)->std::string {
+					 std::stringstream sstr;
+					 sstr << " [ ";
+
+					 for (auto n : std::views::iota(0ULL, Cpu::Tensor::area(view)))
+						sstr << view[n] << " ";
+
+					sstr << "]";
+
+					return sstr.str();
+					};
+
+				std::println("fc Weights: {}\nc1 Weights: {}\nMse : {}"
+					"\nfc Activations: {}\nc1 Activations: {}"
+					"\nfc Outputs: {}\nc1 Outputs: {}"
+					"\nfc Primes: {}\nc1 Primes: {}"
+					, sVec(fcWeights1), sVec(c1Weights1), weightsMse
+					, sVec(fcActivations1), sVec(c1Activations1)
+					, sVec(fcOutputs1), sVec(c1Outputs1)
+					, sVec(fcPrimes1), sVec(c1Primes1));
+			}
+
+
 			virtual ~Convolution1Comparison() = default;
 
 			void run(bool print = true) override {
-				NetworkLib::Model::XOR xorModel;
-				xorModel.run();
+				
+				XOR xorModel;
+				
+				xorModel.create();
+				xorModel.calculateConvergence();
+				xorModel.train(1, true);
+				xorModel.calculateConvergence();
+				
+				create();
+				calculateConvergence();
+				train(1, true);
+				calculateConvergence();
 
-				Convolution1::run(print);
+				compare(xorModel);
+
+				xorModel.destroy();
+				destroy();
 			}
 		};
 
