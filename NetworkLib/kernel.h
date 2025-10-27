@@ -23,12 +23,14 @@ namespace NetworkLib {
 			void batchedBroadcastAdd(cudaStream_t stream, const float* src, float* dst, int size, int batchSize);
 			void batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int cols, int rows, int batchSize, float learnRate);
 			
-			void conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth);
+			void conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelWidth, int kernelDepth, int kernel);
 			void batchedConv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth, int batchSize);
-			void conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth, float learnRate);
-			void batchedConv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelSize, int kernelDepth, int batchSize, float learnRate);
-			void conv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelSize, int primesSize, int kernelDepth);
-			void batchedConv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelSize, int primesSize, int kernelDepth, int batchSize);
+			void conv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen
+				, int primesSize, int kernelSize, int kernelDepth, int kernel, float learnRate);
+
+			void batchedConv1UpdateKernel(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelWidth, int kernelDepth, int batchSize, float learnRate);
+			void conv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelWidth, int primesSize, int kernelDepth, int kernel);
+			void batchedConv1VecMulVec(cudaStream_t stream, float* weights, float* errors, float* primes, int kernelWidth, int primesSize, int kernelDepth, int batchSize);
 
 		}
 	}

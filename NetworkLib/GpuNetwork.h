@@ -159,7 +159,7 @@ namespace NetworkLib {
 						auto ct = layerTemplate.mConvolutionType;
 						switch (ct) {
 						case LayerTemplate::ConvolutionType::Conv1:
-							env.conv1UpdateKernel(layer.mWeights, input, primes, learnRate);
+							env.conv1UpdateKernels(layer.mWeights, input, primes, learnRate);
 							break;
 						case LayerTemplate::ConvolutionType::None:
 							env.updateWeights(input, layer.mWeights, primes, learnRate);

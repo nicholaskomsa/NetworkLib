@@ -32,10 +32,11 @@ int main() {
 	//NetworkLib::Gpu::Environment::example();
 	//NetworkLib::Gpu::Environment::example2();
 
-	NetworkLib::Model::XOR xorModel;
-	xorModel.run();
-	//NetworkLib::Model::Convolution1 conv1Model;
-	//conv1Model.run();
+	//NetworkLib::Model::XOR xorModel;
+	//xorModel.run();
+	NetworkLib::Model::Convolution1Comparison conv1Model;
+	conv1Model.run();
+
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

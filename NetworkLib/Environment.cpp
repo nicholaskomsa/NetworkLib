@@ -51,7 +51,8 @@ void Environment::conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 	auto kernelDepth = w3.mView.extent(2);
 	auto primesSize = o1.mView.extent(0);
 
-	Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelSize, kernelDepth);
+	for( auto kernel: std::views::iota(0ULL, kernelDepth))
+		Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelSize, kernelDepth, kernel);
 
 	commandQueueSync();
 }
@@ -67,23 +68,28 @@ void Environment::batchedConv1(const GpuView3& w3, const GpuView2& i2, GpuView2&
 	auto batchSize = oView.extent(1);
 
 	fill(o2.flatten());
-	Kernel::batchedConv1(mStream, w3.mGpu, o2.mGpu, i2.mGpu, primesSize, kernelWidth, kernelDepth, batchSize);
+	//Kernel::batchedConv1(mStream, w3.mGpu, o2.mGpu, i2.mGpu, primesSize, kernelWidth, kernelDepth, batchSize);
 	
-	
-	//for (auto b : std::views::iota(0ULL, batchSize)) {
-	//	GpuView1 i1 = i2.viewColumn(b);
-	//	GpuView1 o1 = o2.viewColumn(b);
-	//	conv1(w3, i1, o1);
-	//}
+	for (auto b : std::views::iota(0ULL, batchSize)) {
+		GpuView1 i1 = i2.viewColumn(b);
+		GpuView1 o1 = o2.viewColumn(b);
+		conv1(w3, i1, o1);
+	}
+}
+void Environment::conv1UpdateKernels(GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate) {
+	std::size_t kernelDepth = w3.mView.extent(2);
+
+	for (auto kernel : std::views::iota(0ULL, kernelDepth))
+		conv1UpdateKernel(w3, i1, p1, kernel, learnRate);
 	
 }
-void Environment::conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate) {
+void Environment::conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, std::size_t kernel, float learnRate) {
 
-	std::size_t kernelNum = w3.mView.extent(2);
+	std::size_t kernelDepth = w3.mView.extent(2);
 	std::size_t kernelSize = w3.mView.extent(0);
 	std::size_t primesSize = p1.mView.extent(0);
 
-	Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, primesSize, kernelSize, kernelNum, learnRate);
+	Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, primesSize, kernelSize, kernelDepth, kernel, learnRate);
 	commandQueueSync();
 }
 void Environment::batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, const GpuView2& p2, float learnRate) {
@@ -102,7 +108,7 @@ void Environment::batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, co
 		auto p1 = p2.viewColumn(b);
 		auto i1 = i2.viewColumn(b);
 
-		Kernel::conv1UpdateKernel(mStream, w3.mGpu, p1.mGpu, i1.mGpu, primesSize, kernelWidth, kernelDepth, learnRate);
+		conv1UpdateKernels(w3, i1, p1, learnRate);
 	}
 	//Kernel::batchedConv1UpdateKernel(mStream, w3.mGpu, p2.mGpu, i2.mGpu, primesSize, kernelWidth, kernelDepth, batchSize, learnRate); 
 }
@@ -264,8 +270,9 @@ void Environment::conv1VecMulVec(const GpuView3& w3, const GpuView1& e1, GpuView
 	auto kernelDepth = wView.extent(2);
 	auto primesSize = eView.extent(0);
 	auto kernelWidth = wView.extent(0);
-
-	Kernel::conv1VecMulVec(mStream, w3.mGpu, e1.mGpu, p1.mGpu, primesSize, kernelWidth, kernelDepth);
+	for (auto kernel : std::views::iota(0ULL, kernelDepth)) 
+		Kernel::conv1VecMulVec(mStream, w3.mGpu, e1.mGpu, p1.mGpu, primesSize, kernelWidth, kernelDepth, kernel);
+	
 	commandQueueSync();
 }
 void Environment::batchedConv1VecMulVec(const GpuView3& w3, const GpuView2& e2, GpuView2& p2) {
@@ -278,17 +285,18 @@ void Environment::batchedConv1VecMulVec(const GpuView3& w3, const GpuView2& e2, 
 	auto primesSize = eView.extent(0);
 	auto batchSize = eView.extent(1);
 	auto kernelWidth = wView.extent(0);
-	
-	//for (auto b : std::views::iota(0ULL, batchSize)) {
 
-	//	GpuView1 e1 = e2.viewColumn(b);
-	//	GpuView1 p1 = p2.viewColumn(b);
-
-	//	conv1VecMulVec(w3, e1, p1);
-	//}
-	
 	fill(p2.flatten());
-	Kernel::batchedConv1VecMulVec(mStream, w3.mGpu, e2.mGpu, p2.mGpu, kernelWidth, primesSize, kernelDepth, batchSize);
+	for (auto b : std::views::iota(0ULL, batchSize)) {
+
+		GpuView1 e1 = e2.viewColumn(b);
+		GpuView1 p1 = p2.viewColumn(b);
+
+		conv1VecMulVec(w3, e1, p1);
+	}
+	
+
+	//Kernel::batchedConv1VecMulVec(mStream, w3.mGpu, e2.mGpu, p2.mGpu, kernelWidth, primesSize, kernelDepth, batchSize);
 }
 void Environment::matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 
@@ -740,7 +748,7 @@ void Environment::example2() {
 		p1.upload(); gpu.sync();
 
 		gpu.activationFunctionPrime(LayerTemplate::ActivationFunction::ReLU, o1, p1);
-		gpu.conv1UpdateKernel(w3, i1, p1, 0.002f);
+		gpu.conv1UpdateKernel(w3, i1, p1, 0, 0.002f);
 		};
 
 	for( auto generation : std::views::iota(0, 1000)) {

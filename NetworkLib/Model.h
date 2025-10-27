@@ -6,6 +6,8 @@
 
 #include "TrainingManager.h"
 
+#include "ModelLogic.h"
+
 namespace NetworkLib {
 
 	namespace Model {
@@ -27,6 +29,8 @@ namespace NetworkLib {
 
 			bool mPrintConsole = false;
 
+			virtual ~Convolution1() = default;
+
 			void calculateConvergence() {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
@@ -42,6 +46,10 @@ namespace NetworkLib {
 					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
+
+				if (mPrintConsole) {
+					std::println("{}","Creating Convolutional Network");
+				}
 
 				mTrainingManager.addNetwork(mId);
 				auto& network = mTrainingManager.getNetwork(mId);
@@ -65,7 +73,7 @@ namespace NetworkLib {
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);
 			}
-			void run(bool print = true) {
+			virtual void run(bool print = true) {
 
 				mPrintConsole = print;
 
@@ -75,6 +83,18 @@ namespace NetworkLib {
 
 				calculateConvergence();
 				destroy();
+			}
+		};
+
+		class Convolution1Comparison : public Convolution1 {
+		public:
+			virtual ~Convolution1Comparison() = default;
+
+			void run(bool print = true) override {
+				NetworkLib::Model::XOR xorModel;
+				xorModel.run();
+
+				Convolution1::run(print);
 			}
 		};
 

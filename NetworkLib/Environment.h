@@ -20,7 +20,9 @@ namespace NetworkLib {
 
 			void conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
 			void batchedConv1(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
-			void conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate);
+			void conv1UpdateKernel( GpuView3& w3, const GpuView1& i1, const GpuView1& p1, std::size_t kernel, float learnRate);
+			void conv1UpdateKernels(GpuView3& w3, const GpuView1& i1, const GpuView1& p1, float learnRate);
+
 			void batchedConv1UpdateKernel( GpuView3& w3, const GpuView2& i2, const GpuView2& p2, float learnRate);
 			void conv1VecMulVec1(const GpuView3& w3, const GpuView1& e1, GpuView1& p1);
 			void conv1VecMulVec(const GpuView3& w3, const GpuView1& e1, GpuView1& p1);

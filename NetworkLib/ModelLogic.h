@@ -40,6 +40,10 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
+				if (mPrintConsole) {
+					std::println("{}", "Creating FC Network");
+				}
+
 				mTrainingManager.addNetwork(mId);
 				auto& network = mTrainingManager.getNetwork(mId);
 				network.create(&mNetworkTemplate, true);

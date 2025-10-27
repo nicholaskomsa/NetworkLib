@@ -86,6 +86,9 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <CudaCompile Include="Conv1.cu" />
+    <CudaCompile Include="FullConnect.cu" />
+    <CudaCompile Include="GeneralKernel.cu" />
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
