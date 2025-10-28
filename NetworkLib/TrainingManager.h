@@ -402,7 +402,7 @@ namespace NetworkLib {
 					readHeading(filestream, magicHeading);
 
 					if (magicHeading != magic) 
-						throw std::logic_error("Incorrect file magic");
+						throw std::logic_error("Incorrect magic heading");
 					};
 
 				constexpr auto binaryIn = std::ios::in | std::ios::binary;
