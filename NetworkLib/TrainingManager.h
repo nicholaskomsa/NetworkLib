@@ -6,6 +6,7 @@
 
 #include <fstream>
 #include <map>
+#include <numeric>
 
 namespace NetworkLib {
 
@@ -404,7 +405,7 @@ namespace NetworkLib {
 					if (magicHeading != magic) 
 						throw std::logic_error("Incorrect magic heading");
 					};
-
+				      
 				constexpr auto binaryIn = std::ios::in | std::ios::binary;
 				std::ifstream finImages(mMNISTFolder + imageFileName, binaryIn)
 					, finLabels(mMNISTFolder + labelFileName, binaryIn);
@@ -429,22 +430,24 @@ namespace NetworkLib {
 				readHeading(finImages, cols);
 
 				using LabelType = std::uint8_t;
-				using ByteImage1 = std::vector<std::uint8_t>;
+				using ImageType = std::uint8_t;
+				using Image1 = std::vector<ImageType>;
 				using FloatImage1 = std::vector<float>;
+				constexpr float normalizeFactor = std::numeric_limits<ImageType>::max();
 
 				LabelType label = 0;
-				ByteImage1 byteImage(rows * cols);
+				Image1 image(rows * cols);
 				FloatImage1 floatImage(rows * cols);
 
 				std::println("Reading mnist x {} images", numImages);
 
 				for (auto i : std::views::iota(0UL, numImages)) {
 
-					finImages.read(reinterpret_cast<char*>(byteImage.data()), byteImage.size() * sizeof(std::uint8_t) );
+					finImages.read(reinterpret_cast<char*>(image.data()), image.size() * sizeof(ImageType));
 					finLabels.read(reinterpret_cast<char*>(&label), sizeof(label));
 						
-					std::transform(byteImage.begin(), byteImage.end(), floatImage.begin()
-						, [](auto& f) { return f / 255.0f; });
+					std::transform(image.begin(), image.end(), floatImage.begin()
+						, [](auto& f) { return f / normalizeFactor; });
 
 					digitsMap[label].push_back(floatImage);
 				}
