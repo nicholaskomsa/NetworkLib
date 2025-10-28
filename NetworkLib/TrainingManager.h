@@ -386,7 +386,7 @@ namespace NetworkLib {
 				mTrainSamplesMap = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
 				mTestSamplesMap = loadDigitsSamples(testImagesFileName, testLabelsFileName);
 			}
-			DigitSamplesMap loadDigitsSamples(const std::string& imageFileName, const std::string& labelFileName) {
+			DigitSamplesMap loadDigitsSamples(const std::string& imagesFileName, const std::string& labelsFileName) {
 
 				DigitSamplesMap digitsMap;
 					
@@ -407,12 +407,13 @@ namespace NetworkLib {
 					};
 				      
 				constexpr auto binaryIn = std::ios::in | std::ios::binary;
-				std::ifstream finImages(mMNISTFolder + imageFileName, binaryIn)
-					, finLabels(mMNISTFolder + labelFileName, binaryIn);
+				std::ifstream finImages(mMNISTFolder + imagesFileName, binaryIn)
+					, finLabels(mMNISTFolder + labelsFileName, binaryIn);
 
-				if (finImages.fail()) {
-					std::println("failed to open");
-				}
+				if (finImages.fail()) 
+					throw std::runtime_error(std::format("failed to open {}", imagesFileName));
+				if (finLabels.fail())
+					throw std::runtime_error(std::format("failed to open {}", labelsFileName));
 
 				HeadingType numImages = 0, numLabels = 0
 					, rows = 0, cols = 0;
@@ -430,12 +431,12 @@ namespace NetworkLib {
 				readHeading(finImages, cols);
 
 				using LabelType = std::uint8_t;
-				using ImageType = std::uint8_t;
-				using Image1 = std::vector<ImageType>;
+				using Image1Type = std::uint8_t;
+				using Image1 = std::vector<Image1Type>;
 				using FloatImage1 = std::vector<float>;
-				constexpr float normalizeFactor = std::numeric_limits<ImageType>::max();
+				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
 
-				LabelType label = 0;
+				LabelType label;
 				Image1 image(rows * cols);
 				FloatImage1 floatImage(rows * cols);
 
@@ -443,7 +444,7 @@ namespace NetworkLib {
 
 				for (auto i : std::views::iota(0UL, numImages)) {
 
-					finImages.read(reinterpret_cast<char*>(image.data()), image.size() * sizeof(ImageType));
+					finImages.read(reinterpret_cast<char*>(image.data()), image.size() * sizeof(Image1Type));
 					finLabels.read(reinterpret_cast<char*>(&label), sizeof(label));
 						
 					std::transform(image.begin(), image.end(), floatImage.begin()
