@@ -4,6 +4,9 @@
 #include "GpuNetwork.h"
 #include "NetworkSorter.h"
 
+#include <fstream>
+#include <map>
+
 namespace NetworkLib {
 
 	class TrainingManager {
@@ -359,6 +362,143 @@ namespace NetworkLib {
 			}                 
 			   
 		} mLogicSamples;
+
+		struct MNISTSamples {
+
+			Gpu::LinkedFloatSpace mFloatSpace;
+			GpuBatchedSamples mMNISTSamples;
+			std::string mMNISTFolder = "./mnist/";
+
+			using DigitSamplesMap = std::map<std::uint8_t, std::vector<std::vector<float>>>;
+			DigitSamplesMap mTestSamplesMap, mTrainSamplesMap;
+
+			using GpuDigitSamplesMap = std::map<std::uint8_t, std::vector<GpuBatchedSamplesView>>;
+			GpuDigitSamplesMap mGpuTrainSamplesMap, mGpuTestSamplesMap;
+
+			void loadDigitsSamples() {
+			
+				std::string testImagesFileName = "t10k-images.idx3-ubyte"
+					, testLabelsFileName = "t10k-labels.idx1-ubyte"
+					, trainImagesFileName = "train-images.idx3-ubyte"
+					, trainLabelsFileName = "train-labels.idx1-ubyte";
+
+				mTrainSamplesMap = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
+				mTestSamplesMap = loadDigitsSamples(testImagesFileName, testLabelsFileName);
+			}
+			DigitSamplesMap loadDigitsSamples(std::string_view imageFileName, std::string_view labelFileName) {
+
+				DigitSamplesMap digitsMap;
+					
+				using HeadingType = std::uint32_t;
+				auto readHeading = [](auto& filestream, HeadingType& h) {
+
+					filestream.read(reinterpret_cast<char*>(&h), sizeof(h));
+					h = std::byteswap(h);
+					};
+
+				auto checkMagic = [&](auto& filestream, HeadingType magic) {
+
+					HeadingType magicHeading;
+					readHeading(filestream, magicHeading);
+
+					if (magicHeading != magic) 
+						throw std::logic_error("Incorrect file magic");
+					};
+
+				constexpr auto binaryIn = std::ios::in | std::ios::binary;
+				std::ifstream finImages(mMNISTFolder + trainImagesFileName, binaryIn)
+					, finLabels(mMNISTFolder + trainLabelsFileName, binaryIn);
+
+				if (finImages.fail()) {
+					std::println("failed to open");
+				}
+
+				HeadingType numImages = 0, numLabels = 0
+					, rows = 0, cols = 0;
+
+				checkMagic(finImages, 2051);
+				checkMagic(finLabels, 2049);
+
+				readHeading(finImages, numImages);
+				readHeading(finLabels, numLabels);
+
+				if (numImages != numLabels)
+					throw std::logic_error("image num should equal label num");
+				
+				readHeading(finImages, rows);
+				readHeading(finImages, cols);
+
+				using LabelType = std::uint8_t;
+				using ByteImage1 = std::vector<std::uint8_t>;
+				using FloatImage1 = std::vector<float>;
+
+				LabelType label = 0;
+				ByteImage1 byteImage(rows * cols);
+				FloatImage1 floatImage(rows * cols);
+
+				std::println("Reading mnist x {} images", numImages);
+
+				for (auto i : std::views::iota(0UL, numImages)) {
+
+					finImages.read(reinterpret_cast<char*>(byteImage.data()), byteImage.size() * sizeof(std::uint8_t) );
+					finLabels.read(reinterpret_cast<char*>(&label), sizeof(label));
+						
+					std::transform(byteImage.begin(), byteImage.end(), floatImage.begin()
+						, [](auto& f) { return f / 255.0f; });
+
+					digitsMap[label].push_back(floatImage);
+				}
+				return digitsMap;
+			}
+		
+			void create(NetworkTemplate& networkTemplate) {
+				
+				auto inputSize = networkTemplate.mInputSize
+					, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
+				auto batchSize = networkTemplate.mBatchSize;
+
+				loadDigitsSamples();
+
+
+				return;
+				auto sampleNum = 1; 
+				mMNISTSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
+					, inputSize, outputSize, sampleNum, batchSize);
+
+				auto begin = mFloatSpace.mGpuSpace.begin();
+
+				/*
+				CpuSamples andSamples = {
+					{{ 0,0 }, {1,0}},
+					{{ 0,1 }, {1,0}},
+					{{ 1,0 }, {1,0}},
+					{{ 1,1 }, {0,1}}
+				};
+				const CpuSamples xorSamples = {
+					{{0,0}, {1,0}},
+					{{0,1}, {0,1}},
+					{{1,0}, {0,1}},
+					{{1,1}, {1,0}}
+				};
+				const CpuSamples orSamples = {
+					{{0,0}, {1,0}},
+					{{0,1}, {0,1}},
+					{{1,0}, {0,1}},
+					{{1,1}, {0,1}}
+				};
+
+				mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, andSamples, batchSize);
+				mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, orSamples, batchSize);
+				mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, xorSamples, batchSize);
+				*/
+
+				mFloatSpace.mGpuSpace.upload();
+			}
+			void destroy() {
+				mFloatSpace.destroy();
+			}
+
+		} mMNISTSamples;
 
 	};
 	

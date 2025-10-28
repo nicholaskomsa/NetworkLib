@@ -6,13 +6,14 @@
 #include <CpuNetwork.h>
 #include <CpuTensor.h>
 #include <ModelLogic.h>
+#include <ModelConv1.h>
 #include <Model.h>
 
 int main() {
 
-	using GPT2 = NetworkLib::GPT2;
+	//using GPT2 = NetworkLib::GPT2;
 
-	GPT2::Diagnostics diag;
+//	GPT2::Diagnostics diag;
 	//diag.feedForwardSpeed1024();
 
 	//diag.feedForwardSpeed1024();
@@ -36,8 +37,11 @@ int main() {
 	//xorModel.run();
 	//NetworkLib::Model::Convolution1Comparison conv1Model;
 	//.run();
-	NetworkLib::Model::Convolution1Lottery conv1Lotto;
-	conv1Lotto.run();
+	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
+	//conv1Lotto.run();
+
+	NetworkLib::Model::MNIST mnistModel;
+	mnistModel.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

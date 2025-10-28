@@ -97,6 +97,7 @@
     <ClInclude Include="GpuTensor.h" />
     <ClInclude Include="kernel.h" />
     <ClInclude Include="Model.h" />
+    <ClInclude Include="ModelConv1.h" />
     <ClInclude Include="ModelLogic.h" />
     <ClInclude Include="CpuNetwork.h" />
     <ClInclude Include="CpuTensor.h" />

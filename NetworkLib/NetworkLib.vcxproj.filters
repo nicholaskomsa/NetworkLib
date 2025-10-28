@@ -66,6 +66,9 @@
     <ClInclude Include="NetworkSorter.h">
       <Filter>Network</Filter>
     </ClInclude>
+    <ClInclude Include="ModelConv1.h">
+      <Filter>Network</Filter>
+    </ClInclude>
     <ClInclude Include="Model.h">
       <Filter>Network</Filter>
     </ClInclude>
