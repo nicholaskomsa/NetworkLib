@@ -385,7 +385,7 @@ namespace NetworkLib {
 				mTrainSamplesMap = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
 				mTestSamplesMap = loadDigitsSamples(testImagesFileName, testLabelsFileName);
 			}
-			DigitSamplesMap loadDigitsSamples(std::string_view imageFileName, std::string_view labelFileName) {
+			DigitSamplesMap loadDigitsSamples(const std::string& imageFileName, const std::string& labelFileName) {
 
 				DigitSamplesMap digitsMap;
 					
@@ -406,8 +406,8 @@ namespace NetworkLib {
 					};
 
 				constexpr auto binaryIn = std::ios::in | std::ios::binary;
-				std::ifstream finImages(mMNISTFolder + trainImagesFileName, binaryIn)
-					, finLabels(mMNISTFolder + trainLabelsFileName, binaryIn);
+				std::ifstream finImages(mMNISTFolder + imageFileName, binaryIn)
+					, finLabels(mMNISTFolder + labelFileName, binaryIn);
 
 				if (finImages.fail()) {
 					std::println("failed to open");
