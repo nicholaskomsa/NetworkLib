@@ -47,7 +47,7 @@ namespace NetworkLib {
 				//	}};
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					,{ mOutputSize, ActivationFunction::Softmax }
+					, {  mOutputSize, ActivationFunction::Softmax }
 					}};
 
 				if (mPrintConsole) {

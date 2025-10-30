@@ -127,7 +127,7 @@ void Environment::vecAddVec(const GpuView1& a1, GpuView1& o1) {
 void Environment::matMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 	//cuda is in C++ style of row-major
 	//cublas wants Fortran style, col-major,
-	//mdspan has been configured to be layout_left - cublas correct
+	//mdspan has been configured to be layout_right - cublas correct
 
 	float alpha = 1.0f;
 	float beta = 0.0f;

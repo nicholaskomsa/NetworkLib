@@ -40,7 +40,7 @@ namespace NetworkLib {
 		namespace Tensor {
 
 			template<typename... Dimensions>
-			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, std::layout_left>;
+			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, std::layout_right>;
 
 			using Dynamic = std::integral_constant<size_t, std::dynamic_extent>;
 			template<std::size_t c>
