@@ -66,6 +66,7 @@ namespace NetworkLib {
 			for (auto& layerTemplate : mLayerTemplates) {
 
 				const auto n = layerTemplate.mNodeCount;
+
 				//weights + bias + batchSize * (outputs + activations)
 				std::size_t weightsSize;
 				switch (layerTemplate.mConvolutionType) {

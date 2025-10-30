@@ -41,10 +41,14 @@ namespace NetworkLib {
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 
+				//mNetworkTemplate = { mInputWidth, mBatchSize
+				//	, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
+				///,  { mOutputSize, ActivationFunction::Softmax } 
+				//	}};
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					, { ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::Softmax }}// { mOutputSize, ActivationFunction::Softmax } }
-				};
+					,{ mOutputSize, ActivationFunction::Softmax }
+					}};
 
 				if (mPrintConsole) {
 					std::println("{}","Creating Convolutional Network");
@@ -97,7 +101,6 @@ namespace NetworkLib {
 				c1GpuNetwork.download(c1Gpu);
 
 
-
 				auto& fc = fcModel.mTrainingManager.getNetwork(mId);
 				auto& c1 = mTrainingManager.getNetwork(mId);
 
@@ -118,6 +121,7 @@ namespace NetworkLib {
 
 				auto sVec = [&](Cpu::Tensor::View1 view)->std::string {
 					 std::stringstream sstr;
+					 sstr << std::setprecision(std::numeric_limits<float>::max_digits10);
 					 sstr << " [ ";
 
 					 for (auto n : std::views::iota(0ULL, Cpu::Tensor::area(view)))
@@ -143,8 +147,12 @@ namespace NetworkLib {
 
 			void run(bool print = true) override {
 				
+
+				mPrintConsole = print;
+
 				XOR xorModel;
 				
+				xorModel.mPrintConsole = print;
 				xorModel.create();
 				xorModel.calculateConvergence();
 				xorModel.train(1, true);

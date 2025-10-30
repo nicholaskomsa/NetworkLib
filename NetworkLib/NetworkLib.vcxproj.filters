@@ -107,6 +107,9 @@
     <ClCompile Include="CpuTensor.cpp">
       <Filter>Network</Filter>
     </ClCompile>
+    <ClCompile Include="TrainingManager.cpp">
+      <Filter>Network</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />

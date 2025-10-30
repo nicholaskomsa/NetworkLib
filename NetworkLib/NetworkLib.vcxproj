@@ -123,6 +123,7 @@
     <ClCompile Include="Gpt2Translator.cpp" />
     <ClCompile Include="Gpt2Tensor.cpp" />
     <ClCompile Include="GpuTensor.cpp" />
+    <ClCompile Include="TrainingManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="notes.txt" />

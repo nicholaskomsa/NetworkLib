@@ -51,7 +51,7 @@ void Environment::conv1(const GpuView3& w3, const GpuView1& i1, GpuView1& o1) {
 	auto kernelDepth = w3.mView.extent(2);
 	auto primesSize = o1.mView.extent(0);
 
-	for( auto kernel: std::views::iota(0ULL, kernelDepth))
+ 	for( auto kernel: std::views::iota(0ULL, kernelDepth))
 		Kernel::conv1(mStream, w3.mGpu, o1.mGpu, i1.mGpu, primesSize, kernelRows, kernelDepth, kernel);
 
 	commandQueueSync();
@@ -287,7 +287,7 @@ void Environment::batchedConv1VecMulVec(const GpuView3& w3, const GpuView2& e2, 
 	auto batchSize = eView.extent(1);
 	auto kernelRows = wView.extent(0);
 
-	fill(p2.flatten(),7);
+	fill(p2.flatten(),0);
 	for (auto b : std::views::iota(0ULL, batchSize)) {
 
 		GpuView1 e1 = e2.viewColumn(b);

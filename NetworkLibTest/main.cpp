@@ -30,18 +30,19 @@ int main() {
 	//xorLotteryModel.run();
 	//NetworkLib::Model::LogicLottery logicLotteryModel;
 	//logicLotteryModel.run();
+
 	//NetworkLib::Gpu::Environment::example();
 	//NetworkLib::Gpu::Environment::example2();
 
 	//NetworkLib::Model::XOR xorModel;
 	//xorModel.run();
-	//NetworkLib::Model::Convolution1Comparison conv1Model;
-	//.run();
+	NetworkLib::Model::Convolution1Comparison comparison;
+	comparison.run();
 	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
 	//conv1Lotto.run();
 
-	NetworkLib::Model::MNIST mnistModel;
-	mnistModel.run();
+	//NetworkLib::Model::MNIST mnistModel;
+	//mnistModel.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

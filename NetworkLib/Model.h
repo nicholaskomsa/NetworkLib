@@ -55,7 +55,7 @@ namespace NetworkLib {
 
 				mTrainingManager.create(1);
 				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
-				mBatchedSamplesView = mTrainingManager.mMNISTSamples.mMNISTSamples;
+			//	mBatchedSamplesView = mTrainingManager.mMNISTSamples.mMNISTSamples;
 
 				mGpuTask = &mTrainingManager.getGpuTask();
 			}
