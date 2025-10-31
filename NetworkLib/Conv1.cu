@@ -10,7 +10,7 @@
 namespace Kernel = NetworkLib::Gpu::Kernel;
 
 
-__global__ void cuConv1(float* seen, float* weights, float* primes, int kPrimesSize, int kernelRows , int kernelDepth, int kernel) {
+__global__ void cuConv1(float* seen, float* weights, float* primes, int kPrimesSize, int kernelRows, int kernelDepth, int kernel) {
 
     int p = blockIdx.x * blockDim.x + threadIdx.x; // output index
 

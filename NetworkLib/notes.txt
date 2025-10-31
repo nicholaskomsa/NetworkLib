@@ -1,28 +1,3 @@
 
 tensor was set to layout left, thought to be col_major which is cublas,
 however, it appears tensor should be layout_right for cublas and then cuda col_major_index is correct
-
-comparing layout_left to layout_right lottery
-
-2n
-121 with layout_right
-121 with layout_left
-
-100n 50n
-	
-with layout_left
-
-Rank: 1; Id: 880; Misses: 0; Mse: 0.00039002593;
-timing Calculate Network Convergence
-
-seen: [0, 0, 0, 1, 1, 0, 1, 1]
-desired: [1, 0, 0, 1, 0, 1, 1, 0]
-sought: [0.98040056, 0.019599406, 0.020428991, 0.979571, 0.018601153, 0.9813989, 0.979687, 0.020313071]
-output: [1.9979775, -1.9144845, -1.8247617, 2.0453978, -1.6873196, 2.2784357, 2.008621, -1.8673475]
-
-Mse: 0.00039002593
-Misses: 0
-Accuracy: 100
-        Calculate Network Convergence took 0
-
-Networks with zero misses: 1000

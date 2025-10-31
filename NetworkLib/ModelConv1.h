@@ -184,8 +184,7 @@ namespace NetworkLib {
 
 				compare(xorModel);
 
-				xorModel.destroy(); destroy();
-			}
+				xorModel.destroy(); destroy();   
 		};
 
 		class Convolution1Lottery {
