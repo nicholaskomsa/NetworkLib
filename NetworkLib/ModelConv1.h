@@ -47,7 +47,7 @@ namespace NetworkLib {
 				//	}};
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					, {  mOutputSize, ActivationFunction::Softmax }
+					, { ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::Softmax }
 					}};
 
 				if (mPrintConsole) {
@@ -111,6 +111,7 @@ namespace NetworkLib {
 	
 				auto c1Weights1 = c1.mWeights;
 				auto c1Outputs1 = c1.mOutputs;
+
 				auto c1Primes1 = Cpu::Tensor::flatten(c1.getPrimes());
 				auto c1Activations1 = c1.mActivations;
 
@@ -131,7 +132,7 @@ namespace NetworkLib {
 
 					return sstr.str();
 					};
-
+				/*
 				std::println("fc Weights: {}\nc1 Weights: {}\nMse : {}"
 					"\nfc Activations: {}\nc1 Activations: {}"
 					"\nfc Outputs: {}\nc1 Outputs: {}"
@@ -140,8 +141,28 @@ namespace NetworkLib {
 					, sVec(fcActivations1), sVec(c1Activations1)
 					, sVec(fcOutputs1), sVec(c1Outputs1)
 					, sVec(fcPrimes1), sVec(c1Primes1));
-			}
 
+					*/
+				auto c1OutputsTop1 = Cpu::Tensor::flatten(c1.getLayer(0).mOutputs)
+					, c1OutputsBot1 = Cpu::Tensor::flatten(c1.getLayer(1).mOutputs);
+
+				auto c1WeightsTop1 = Cpu::Tensor::flatten(c1.getLayer(0).mWeights)
+					, c1WeightsBot1 = Cpu::Tensor::flatten(c1.getLayer(1).mWeights);
+
+				auto fcOutputsTop1 = Cpu::Tensor::flatten(fc.getLayer(0).mOutputs)
+					, fcOutputsBot1 = Cpu::Tensor::flatten(fc.getLayer(1).mOutputs);
+
+				auto fcWeightsTop1 = Cpu::Tensor::flatten(fc.getLayer(0).mWeights)
+					, fcWeightsBot1 = Cpu::Tensor::flatten(fc.getLayer(1).mWeights);
+
+
+
+				std::println("\nTop\nFc Outputs: {}\nC1 Outputs: {}\nFc Weights: {}\nC1 Weights: {}\n"
+					"\nBot\nFc Outputs: {}\nC1 Outputs: {}\nFc Weights: {}\nC1 Weights: {}\n"
+
+					, sVec(fcOutputsTop1), sVec(c1OutputsTop1), sVec(fcWeightsTop1), sVec(c1WeightsTop1)
+					, sVec(fcOutputsBot1), sVec(c1OutputsBot1), sVec(fcWeightsBot1), sVec(c1WeightsBot1));
+			}
 
 			virtual ~Convolution1Comparison() = default;
 
@@ -149,24 +170,21 @@ namespace NetworkLib {
 				
 
 				mPrintConsole = print;
-
 				XOR xorModel;
-				
 				xorModel.mPrintConsole = print;
-				xorModel.create();
-				xorModel.calculateConvergence();
-				xorModel.train(1, true);
-				xorModel.calculateConvergence();
-				
-				create();
-				calculateConvergence();
-				train(1, true);
-				calculateConvergence();
+
+
+				mTrainNum = 5000;
+
+				xorModel.create(); create();
+
+				xorModel.train(mTrainNum, true); train(mTrainNum, true);
+
+				xorModel.calculateConvergence(); calculateConvergence();
 
 				compare(xorModel);
 
-				xorModel.destroy();
-				destroy();
+				xorModel.destroy(); destroy();
 			}
 		};
 
@@ -177,6 +195,7 @@ namespace NetworkLib {
 			std::size_t mId = 981;
 			TrainingManager mTrainingManager;
 			NetworksSorter mNetworksSorter;
+			NetworksTracker mNetworksTracker;
 
 			std::size_t mInputWidth = 2, mOutputSize = 2
 				, mTrainNum = 5000;
@@ -188,29 +207,72 @@ namespace NetworkLib {
 			std::size_t mMaxGpus = 2, mMaxNetworks = 1000;
 
 			bool mPrintConsole = false;
-		
-			void calculateConvergence() {
 
-				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView);
+			std::string mRecordFileName = "./LogicLottery.txt";
+
+			void clearRecord() {
+				std::ofstream fout(mRecordFileName, std::ios::out);
+			}
+			template<typename ...Args>
+			void record(const std::format_string<Args...>& format, Args&&... args) {
+
+				std::string text;
+
+				if constexpr (sizeof...(Args) == 0)
+					text = format.get();
+				else
+					text = std::format(format, std::forward<Args>(args)...);
+
+				std::cout << text << '\n';
+
+				std::ofstream fout(mRecordFileName, std::ios::app);
+				fout << text << '\n';
+			}
+
+			void calculateConvergence(TrainingManager::GpuBatchedSamplesView samples, const std::string& caption) {
+
+				mTrainingManager.calculateNetworksConvergence(samples);
 				mNetworksSorter.sortBySuperRadius();
 
 				if (mPrintConsole) {
 
+					record("\nConvergence Results for {}"
+						"\nNetworks sorted by SuperRadius:", caption);
+
+					auto recordNetwork = [&](std::size_t rank, auto& network) {
+						record("Rank: {}; Id: {}; Misses: {}; Mse: {};", rank, network.mId, network.mMisses, network.mMse);
+						};
+
 					auto& networksMap = mTrainingManager.mNetworksMap;
 
-					std::println("Networks sorted by SuperRadius: ");
+					auto recordTopAndBottomNetworks = [&]() {
 
-					for (std::size_t rank = 1; auto networkId : mNetworksSorter.mNetworksIds) {
-						auto& network = mTrainingManager.mNetworksMap[networkId];
-						std::println("Rank: {}; Network Id: {}; Misses: {}; Mse: {};", rank++, networkId, network.mMisses, network.mMse);
-					}
-					auto& bestNetwork = mNetworksSorter.getBest();
-					auto bestNetworkId = mNetworksSorter.getBestId();
-					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkId, bestNetwork.mMisses, bestNetwork.mMse);
+						std::size_t listSize = 5;
 
-					mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
+						auto best = mNetworksSorter.getTop(listSize);
+						for (std::size_t rank = 0; auto id : best) {
+							auto& network = networksMap[id];
+							recordNetwork(++rank, network);
+						}
 
-					auto printZeroMisses = [&]() {
+						auto worst = mNetworksSorter.getBottom(listSize);
+						for (std::size_t rank = networksMap.size() - listSize; auto id : worst | std::views::reverse) {
+							auto& network = networksMap[id];
+							recordNetwork(++rank, network);
+						}
+						record("\n");
+
+						};
+
+					auto recordBestNetwork = [&]() {
+
+						auto& bestNetwork = mNetworksSorter.getBest();
+						recordNetwork(1, bestNetwork);
+
+						mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
+						};
+
+					auto recordZeroMisses = [&]() {
 
 						auto zeroMissesCount = std::count_if(networksMap.begin(), networksMap.end(), [&](auto& networkPair) {
 
@@ -218,25 +280,36 @@ namespace NetworkLib {
 
 							});
 
-						std::println("\nNetworks with zero misses: {}", zeroMissesCount);
+						record("\nNetworks with zero misses: {}", zeroMissesCount);
 						};
-					printZeroMisses();
+
+
+					recordTopAndBottomNetworks();
+					recordBestNetwork();
+					recordZeroMisses();
 				}
 			}
+
 			void create() {
+
+				if (mPrintConsole)
+					record("Create Logic Lottery:"
+						"\nNetwork count: {}"
+						"\nTrain Num: {}", mMaxNetworks, mTrainNum);
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					, { mOutputSize, ActivationFunction::Softmax}}
+					, { ConvolutionType::Conv1,kernelSize, 2, ActivationFunction::Softmax}
+					}
 				};
 
 				auto createNetworks = [&]() {
 
-					for (auto id : std::views::iota(0ULL, mMaxNetworks))
-						mTrainingManager.addNetwork(id);
+					for (auto n : std::views::iota(0ULL, mMaxNetworks))
+						mTrainingManager.addNetwork();
 
 					mNetworksSorter.create(mTrainingManager.mNetworksMap);
 
@@ -257,35 +330,48 @@ namespace NetworkLib {
 					mTrainingManager.create(mMaxGpus);
 
 					};
-
 				createNetworks();
 
 				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
-				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
+
+				mNetworksTracker.create(mMaxNetworks);
+				mNetworksTracker.track(mTrainingManager.mNetworksMap);
 			}
 			void destroy() {
+
 				if (mPrintConsole)
 					std::println("destroying model");
 
 				mTrainingManager.destroy();
 			}
 
-			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.trainNetworks(trainNum, mBatchedSamplesView, mLearnRate, print);
+			void train(bool print = false) {
+
+				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+
+				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, print);
+
+				mNetworksTracker.track(mTrainingManager.mNetworksMap);
 			}
 
-			Cpu::Network& getNetwork() {
-				return mTrainingManager.getNetwork(mId);
+			void calculateLogicConvergences() {
+
+				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+
+				calculateConvergence(allSamples, "All Logic Samples");
+				calculateConvergence(orSamples, "OR Samples");
+				calculateConvergence(andSamples, "AND Samples");
+				calculateConvergence(xorSamples, "XOR Samples");
 			}
 			void run(bool print = true) {
 
 				mPrintConsole = print;
 
 				create();
-				calculateConvergence();
-				train(mTrainNum, true);
+				calculateLogicConvergences();
+				train(true);
+				calculateLogicConvergences();
 
-				calculateConvergence();
 				destroy();
 			}
 		};

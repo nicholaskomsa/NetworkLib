@@ -37,8 +37,8 @@ namespace NetworkLib {
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
 					, {{ 2, ActivationFunction::ReLU}
-					, { mOutputSize, ActivationFunction::Softmax} }
-						
+					, { mOutputSize, ActivationFunction::Softmax}
+					}
 				};
 
 				if (mPrintConsole) {
@@ -299,13 +299,14 @@ namespace NetworkLib {
 			void create() {
 
 				if (mPrintConsole) 
-					record("Create Logic Lottery:"
+					record("Create Logic Lottery Layout Left:"
 						"\nNetwork count: {}"
 						"\nTrain Num: {}", mMaxNetworks, mTrainNum);
 			
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputSize, mBatchSize
-					, {{ 2, ActivationFunction::ReLU}
+					, {{ 100, ActivationFunction::ReLU}
+					, { 50, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 

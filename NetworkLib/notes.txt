@@ -1,13 +1,28 @@
-timing Training Network
-0%      Training Network took 0
-timing Training Network
-0%      Training Network took 0
-fc Weights:  [ 0.809308 -0.249838 -0.751419 0.394221 -1.17486 -0.44788 -1.21532 0.477078 ]
-c1 Weights:  [ 0.807897 -0.24976 -0.747265 0.400369 -1.17401 -0.448729 -1.21629 0.47805 ]
-Mse : 7.5477146e-06
-fc Activations:  [ 0.0811403 0.935649 0 1.32987 0.890449 0.685811 0.13903 1.08003 0.0495585 0.950441 0.0275996 0.9724 0.0423182 0.957682 0.0376802 0.96232 ]
-c1 Activations:  [ 0.0811403 0.935649 0 1.33602 0.889037 0.188384 0.639277 0.588753 0.0494793 0.950521 0.0272528 0.972747 0.0931908 0.906809 0.0588284 0.941172 ]
-fc Outputs:  [ 0.0811403 0.935649 -0.670278 1.32987 0.890449 0.685811 0.13903 1.08003 -1.73487 1.21891 -2.11864 1.44332 -2.38206 0.737243 -1.97835 1.26186 ]
-c1 Outputs:  [ 0.0811403 0.935649 -0.16862 1.33602 0.889037 0.188384 0.639277 0.588753 -1.73571 1.21975 -2.12741 1.44755 -1.77529 0.499991 -1.96904 0.803463 ]
-fc Primes:  [ -0.950773 0.950773 0.0271903 -0.0271903 0.0418321 -0.0418321 -0.963071 0.963071 ]
-c1 Primes:  [ -0.950773 0.950773 0.0271903 -0.0271903 0.0931481 -0.0931481 -0.941133 0.941133 ]
+
+tensor was set to layout left, thought to be col_major which is cublas,
+however, it appears tensor should be layout_right for cublas and then cuda col_major_index is correct
+
+comparing layout_left to layout_right lottery
+
+2n
+121 with layout_right
+121 with layout_left
+
+100n 50n
+	
+with layout_left
+
+Rank: 1; Id: 880; Misses: 0; Mse: 0.00039002593;
+timing Calculate Network Convergence
+
+seen: [0, 0, 0, 1, 1, 0, 1, 1]
+desired: [1, 0, 0, 1, 0, 1, 1, 0]
+sought: [0.98040056, 0.019599406, 0.020428991, 0.979571, 0.018601153, 0.9813989, 0.979687, 0.020313071]
+output: [1.9979775, -1.9144845, -1.8247617, 2.0453978, -1.6873196, 2.2784357, 2.008621, -1.8673475]
+
+Mse: 0.00039002593
+Misses: 0
+Accuracy: 100
+        Calculate Network Convergence took 0
+
+Networks with zero misses: 1000

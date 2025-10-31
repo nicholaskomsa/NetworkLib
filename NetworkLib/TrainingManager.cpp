@@ -115,10 +115,11 @@ void TrainingManager::calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNe
 	auto& [gpu, gpuNetwork] = gpuTask;
 
 	gpuNetwork.mirror(cpuNetwork);
-
+	
 	gpu.resetMseResult();
+	
 	gpu.resetMissesResult();
-
+	
 	auto batchSize = samples.front().first.mView.extent(1);
 
 	for (const auto& [seen, desired] : samples) {
@@ -126,8 +127,9 @@ void TrainingManager::calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNe
 		auto sought = gpuNetwork.forward(gpu, seen);
 		auto output = gpuNetwork.getOutput();
 
+
 		gpu.mse(sought, desired);
-		gpu.score(sought, desired);
+			gpu.score(sought, desired);
 
 		if (print) {
 

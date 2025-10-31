@@ -13,10 +13,14 @@ __global__ void cuUpdateWeights(float* weights, const float* primes, const float
     int col = blockIdx.x * blockDim.x + threadIdx.x; // Column index
     int row = blockIdx.y * blockDim.y + threadIdx.y; // Row index
 
+    float prime_val = primes[row] * learnRate;
+
     if (col < c && row < r) {
         int index_col_major = row + col * r;
 
-        weights[index_col_major] -= primes[row] * seen[col] * learnRate;
+        weights[index_col_major] = __fmaf_rn(-prime_val, seen[col], weights[index_col_major]);
+
+       // weights[index_col_major] -= prime_val * seen[col];
     }
 }
 void Kernel::updateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int rows, int cols, float learnRate) {
@@ -34,12 +38,13 @@ __global__ void cuBatchedUpdateWeights(float* weights, const float* primes, cons
     int b = blockIdx.z;  // Each block handles one sample
 
     if (col < cols && row < rows && b < batchSize) {
-        float prime_val = primes[b * rows + row];   // primes[row, b]
-        float seen_val = seen[b * cols + col];     // seen[col, b]
+        float prime_val = primes[b * rows + row] * learnRate;   
+        float seen_val = seen[b * cols + col];     
 
         int index_col_major = row + col * rows;
 
-        atomicAdd(&weights[index_col_major], -learnRate * prime_val * seen_val);
+        float delta = __fmaf_rn(-prime_val, seen_val, 0.0f);
+        atomicAdd(&weights[index_col_major], delta);
     }
 }
 void Kernel::batchedUpdateWeights(cudaStream_t stream, float* weights, const float* primes, const float* seen, int rows, int cols, int batchSize, float learnRate) {

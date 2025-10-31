@@ -36,10 +36,10 @@ int main() {
 
 	//NetworkLib::Model::XOR xorModel;
 	//xorModel.run();
-	NetworkLib::Model::Convolution1Comparison comparison;
-	comparison.run();
-	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
-	//conv1Lotto.run();
+	//NetworkLib::Model::Convolution1Comparison comparison;
+	//comparison.run();
+	NetworkLib::Model::Convolution1Lottery conv1Lotto;
+	conv1Lotto.run();
 
 	//NetworkLib::Model::MNIST mnistModel;
 	//mnistModel.run();
