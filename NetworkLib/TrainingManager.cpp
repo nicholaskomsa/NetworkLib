@@ -230,6 +230,8 @@ TrainingManager::GpuBatchedSamples TrainingManager::createGpuBatchedSamplesSpace
 	auto batchNum = std::ceil(sampleNum / float(batchSize));
 	gpuBatchedSamples.reserve(batchNum);
 
+	//auto outputIdx = 1; // 1 integer is the output which is the outputidx
+
 	linkedSampleSpace.create(batchNum * batchSize * (inputSize + outputSize));
 	return gpuBatchedSamples;
 }

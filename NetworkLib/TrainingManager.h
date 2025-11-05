@@ -12,6 +12,12 @@ namespace NetworkLib {
 
 	class TrainingManager {
 	public:
+
+		using SingleOutput = Gpu::GpuView1;
+		using BatchedOutput = Gpu::GpuView2;
+
+		using BatchedSingleOutput = std::vector<SingleOutput>;
+
 		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
 		using CpuSample = std::pair<std::vector<float>, std::vector<float>>;
 		using CpuSamples = std::vector<CpuSample>;
@@ -127,6 +133,11 @@ namespace NetworkLib {
 				DigitsSamplesMap digitsMap;
 					
 				using HeadingType = std::uint32_t;
+				using LabelType = std::uint8_t;
+				using Image1Type = std::uint8_t;
+				using Image1 = std::vector<Image1Type>;
+				using FloatImage1 = std::vector<float>;
+	
 				auto readHeading = [](auto& filestream, HeadingType& h) {
 
 					filestream.read(reinterpret_cast<char*>(&h), sizeof(h));
@@ -166,11 +177,6 @@ namespace NetworkLib {
 				readHeading(finImages, rows);
 				readHeading(finImages, cols);
 
-				using LabelType = std::uint8_t;
-				using Image1Type = std::uint8_t;
-				using Image1 = std::vector<Image1Type>;
-				using FloatImage1 = std::vector<float>;
-				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
 
 				LabelType label;
 				Image1 image(rows * cols);
@@ -178,6 +184,7 @@ namespace NetworkLib {
 
 				std::println("Reading mnist x {} images", numImages);
 
+				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
 				for (auto i : std::views::iota(0UL, numImages)) {
 
 					finImages.read(reinterpret_cast<char*>(image.data()), image.size() * sizeof(Image1Type));

@@ -267,10 +267,10 @@ public:
 		Text value(insertX, mInsertY, fontFace);
 		value.setText(valueText);
 
-		mLabeledValues.push_back({ std::move(label), std::move(value) });
-		                 
 		mInsertY += std::max(label.mTotalPixelsHeight, value.mTotalPixelsHeight);
 
+		mLabeledValues.push_back({ std::move(label), std::move(value) });
+		                 
 		return mLabeledValues.size() - 1;
 	}
 
@@ -297,7 +297,7 @@ public:
 	QuadManager* mQuadManager;
 
 	FT_Library mFreeType;
-	FT_Face mMinscraftFontFace;
+	FT_Face mMinecraftFontFace;
 
 	using TextAreaReference = std::size_t;
 	std::vector<TextArea> mTextAreas;
@@ -310,13 +310,13 @@ public:
 		
 		FT_Init_FreeType(&mFreeType);
 
-		FT_New_Face(mFreeType, mMinecraftFontName, 0, &mMinscraftFontFace);
-		FT_Set_Pixel_Sizes(mMinscraftFontFace, 0, mFontSize);
+		FT_New_Face(mFreeType, mMinecraftFontName, 0, &mMinecraftFontFace);
+		FT_Set_Pixel_Sizes(mMinecraftFontFace, 0, mFontSize);
 	}
 
 	void destroy() {
 
-		FT_Done_Face(mMinscraftFontFace);       // Destroys the font face
+		FT_Done_Face(mMinecraftFontFace);       // Destroys the font face
 		FT_Done_FreeType(mFreeType);     // Shuts down the FreeType library
 	}
 
@@ -333,8 +333,8 @@ public:
 
 		auto& qm = *mQuadManager;
 		 
-		//glEnable(GL_BLEND);
-		//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 		for (auto& txtArea : mTextAreas)
 			txtArea.render(qm, updateLabels);

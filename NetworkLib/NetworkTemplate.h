@@ -30,6 +30,29 @@ namespace NetworkLib {
 			: mNodeCount(0), mActivationFunction(af)
 			, mConvolutionType(convType), mKernelWidth(kernelWidth), mKernelNumber(kernelNumber) {
 		}
+
+		operator std::string() {
+			
+			auto activationString = [&]()->std::string {
+				switch (mActivationFunction) {
+				case ActivationFunction::ReLU:
+					return "ReLU";
+				case ActivationFunction::Softmax:
+					return "Softmax";
+				}
+				};
+			
+			auto convolutionString = [&]()->std::string {
+				switch (mConvolutionType) {
+				case ConvolutionType::None:
+					return std::format("FC {}", mNodeCount);
+				case ConvolutionType::Conv1:
+					return std::format("C1 {}x{}", mKernelWidth, mKernelNumber);
+				}
+				};
+
+			return std::format("{} {}", convolutionString(), activationString());
+		}
 	};
 
 	using LayerTemplates = std::vector<LayerTemplate>;
@@ -90,6 +113,17 @@ namespace NetworkLib {
 				}
 
 			return size;
+		}
+
+		operator std::string() {
+
+			std::string shape;
+			for (std::string layerTemplate : mLayerTemplates)
+				shape += std::format("{}\n", layerTemplate);
+			
+			std::string text = std::format("Network Template: Input Size: {}; OutputSize: {}; BatchSize: {}\n"
+				"Shape:\n{}"
+				, mInputSize, mLayerTemplates.back().mNodeCount, mBatchSize, shape);
 		}
 	};
 }

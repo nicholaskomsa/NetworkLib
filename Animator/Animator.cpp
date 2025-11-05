@@ -306,7 +306,7 @@ void Animator::setup(FloatsView floats = {}) {
             mViewerQuadRef = mQuadManager.addIdentity();
 
             mTextManager.create(&mQuadManager, mTextScale);
-            auto& minecraftFont = mTextManager.mMinscraftFontFace;
+            auto& minecraftFont = mTextManager.mMinecraftFontFace;
 
             mTextAreaRef = mTextManager.addTextArea();
             auto& textArea = mTextManager.getTextArea(mTextAreaRef);
@@ -382,12 +382,6 @@ void Animator::run(StepFunction&& step) {
         lag += elapsedTime;
         while (lag >= mLengthOfStep) {
 
-            if( clock::now() - fpsOldTime >= 1s) {
-                fpsOldTime = clock::now();
-                textArea.updateLabeledValue(mFpsValueRef, std::to_string(fps));
-                fps = 0;
-			}
-
             textArea.updateLabeledValue(mTicksValueRef, std::to_string(tickCount));
             if (mCustomGuiRender) mCustomGuiRender();
 
@@ -400,6 +394,12 @@ void Animator::run(StepFunction&& step) {
             lag -= mLengthOfStep;
 
             ++tickCount;
+        }
+
+        if (clock::now() - fpsOldTime >= 1s) {
+            fpsOldTime = clock::now();
+            textArea.updateLabeledValue(mFpsValueRef, std::to_string(fps));
+            fps = 0;
         }
 
         doEvents();
@@ -506,8 +506,8 @@ void Animator::animateXORNetwork() {
 
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
 
-        mMseValueRef = textArea.addLabeledValue(mTextManager.mMinscraftFontFace, "Mse:", "    ");
-        mAccuracyValueRef = textArea.addLabeledValue(mTextManager.mMinscraftFontFace, "Accuracy:", "000" );
+        mMseValueRef = textArea.addLabeledValue(mTextManager.mMinecraftFontFace, "Mse:", "    ");
+        mAccuracyValueRef = textArea.addLabeledValue(mTextManager.mMinecraftFontFace, "Accuracy:", "000" );
         };
 
     mCustomGuiEvents = [&](bool& changeDimensions, bool& doConvert){
@@ -523,9 +523,9 @@ void Animator::animateXORNetwork() {
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
 
-       auto sampleNum = xorModel.mBatchedSamplesView.size() * xorModel.mBatchSize;
+        auto sampleNum = xorModel.mBatchedSamplesView.size() * xorModel.mBatchSize;
         float accuracy = (sampleNum - misses) / float(sampleNum) * 100.0f;
-        textArea.updateLabeledValue(mAccuracyValueRef, std::format("{}", accuracy));
+        textArea.updateLabeledValue(mAccuracyValueRef, std::to_string(accuracy));
         };
 
     setup(selectedFloatsView);

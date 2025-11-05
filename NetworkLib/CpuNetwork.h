@@ -12,9 +12,6 @@ namespace NetworkLib {
 
 	namespace Cpu {
 
-
-
-
 		class Network {
 		public:
 

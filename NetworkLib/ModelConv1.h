@@ -167,7 +167,7 @@ namespace NetworkLib {
 			virtual ~Convolution1Comparison() = default;
 
 			void run(bool print = true) override {
-				
+
 
 				mPrintConsole = print;
 				XOR xorModel;
@@ -184,7 +184,8 @@ namespace NetworkLib {
 
 				compare(xorModel);
 
-				xorModel.destroy(); destroy();   
+				xorModel.destroy(); destroy();
+			}
 		};
 
 		class Convolution1Lottery {
