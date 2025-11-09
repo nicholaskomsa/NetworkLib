@@ -107,18 +107,21 @@ namespace NetworkLib {
 
 		struct MNISTSamples {
 
+			std::string mMNISTFolder = "./mnist/";
+
 			Gpu::LinkedFloatSpace mFloatSpace;
 			GpuBatched2Samples mTrainBatched2Samples, mTestBatched2Samples;
 			GpuBatched2SamplesView mTrainSamplesView, mTestSamplesView;
-			std::string mMNISTFolder = "./mnist/";
-
 			Gpu::GpuView1 mOutputs1;
 			Gpu::GpuViews1 mOutputs;
 
-			using DigitsSamplesMap = std::map<std::uint8_t, std::vector<std::vector<float>>>;
-			DigitsSamplesMap mTestSamplesMap, mTrainSamplesMap;
+			using Images = std::vector<float>;
+			using ImageView = std::span<float>;
+			using DigitImagesMap = std::map<std::uint8_t, std::vector<ImageView>>;
+			Images mTrainDigitsSamples, mTestDigitsSamples;
+			DigitImagesMap mTestSamplesMap, mTrainSamplesMap;
 
-			std::size_t getSamplesNum(const DigitsSamplesMap& samplesMap) {
+			std::size_t getSamplesNum(const DigitImagesMap& samplesMap) {
 				return std::accumulate(samplesMap.begin(), samplesMap.end(), 0UL
 					, [](auto sum, const auto& pair) {
 						return sum + pair.second.size();
@@ -132,19 +135,17 @@ namespace NetworkLib {
 					, trainImagesFileName = "train-images.idx3-ubyte"
 					, trainLabelsFileName = "train-labels.idx1-ubyte";
 
-				mTrainSamplesMap = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
-				mTestSamplesMap = loadDigitsSamples(testImagesFileName, testLabelsFileName);
+				std::tie(mTrainSamplesMap, mTrainDigitsSamples) = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
+				std::tie(mTestSamplesMap, mTestDigitsSamples) = loadDigitsSamples(testImagesFileName, testLabelsFileName);
 			}
-			DigitsSamplesMap loadDigitsSamples(const std::string& imagesFileName, const std::string& labelsFileName) {
+			std::pair<DigitImagesMap, Images> loadDigitsSamples(const std::string& imagesFileName, const std::string& labelsFileName) {
 
-				DigitsSamplesMap digitsMap;
-					
 				using HeadingType = std::uint32_t;
 				using LabelType = std::uint8_t;
 				using Image1Type = std::uint8_t;
 				using Image1 = std::vector<Image1Type>;
 				using FloatImage1 = std::vector<float>;
-	
+
 				auto readHeading = [](auto& filestream, HeadingType& h) {
 
 					filestream.read(reinterpret_cast<char*>(&h), sizeof(h));
@@ -156,15 +157,15 @@ namespace NetworkLib {
 					HeadingType magicHeading;
 					readHeading(filestream, magicHeading);
 
-					if (magicHeading != magic) 
+					if (magicHeading != magic)
 						throw std::logic_error("Incorrect magic heading");
 					};
-				      
+
 				constexpr auto binaryIn = std::ios::in | std::ios::binary;
 				std::ifstream finImages(mMNISTFolder + imagesFileName, binaryIn)
 					, finLabels(mMNISTFolder + labelsFileName, binaryIn);
 
-				if (finImages.fail()) 
+				if (finImages.fail())
 					throw std::runtime_error(std::format("failed to open {}", imagesFileName));
 				if (finLabels.fail())
 					throw std::runtime_error(std::format("failed to open {}", labelsFileName));
@@ -180,29 +181,37 @@ namespace NetworkLib {
 
 				if (numImages != numLabels)
 					throw std::logic_error("image num should equal label num");
-				
+
 				readHeading(finImages, rows);
 				readHeading(finImages, cols);
 
+				auto imageSize = rows * cols;
 
 				LabelType label;
-				Image1 image(rows * cols);
-				FloatImage1 floatImage(rows * cols);
+				Image1 image1(imageSize);
+				DigitImagesMap digitsMap;
+				Images images;
+				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
+
+				images.resize(imageSize * numImages);
+				auto imagesIt = images.begin();
 
 				std::println("Reading mnist x {} images", numImages);
-
-				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
 				for (auto i : std::views::iota(0UL, numImages)) {
 
-					finImages.read(reinterpret_cast<char*>(image.data()), image.size() * sizeof(Image1Type));
+					finImages.read(reinterpret_cast<char*>(image1.data()), imageSize * sizeof(Image1Type));
 					finLabels.read(reinterpret_cast<char*>(&label), sizeof(label));
-						
-					std::transform(image.begin(), image.end(), floatImage.begin()
+
+					ImageView floatImage(imagesIt, imageSize);
+
+					std::transform(image1.begin(), image1.end(), floatImage.begin()
 						, [](auto i) { return i / normalizeFactor; });
 
 					digitsMap[label].push_back(floatImage);
+
+					std::advance(imagesIt, imageSize);
 				}
-				return digitsMap;
+				return { digitsMap, images };
 			}
 		
 			void create(NetworkTemplate& networkTemplate) {
