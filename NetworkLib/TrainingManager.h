@@ -217,20 +217,18 @@ namespace NetworkLib {
 
 				auto copyToGpu = [&]() {
 
-					auto trainSamplesNum = getSamplesNum(mTrainSamplesMap)
-						, testSamplesNum = getSamplesNum(mTestSamplesMap);
-
-					auto trainBatchNum = std::ceil(trainSamplesNum / float(batchSize));
-					auto testBatchNum = std::ceil(testSamplesNum / float(batchSize));
+					std::size_t trainSamplesNum = getSamplesNum(mTrainSamplesMap)
+						, testSamplesNum = getSamplesNum(mTestSamplesMap)
+						, trainBatchNum = std::ceil(trainSamplesNum / float(batchSize))
+						, testBatchNum = std::ceil(testSamplesNum / float(batchSize))
+						, outputClassesSize = outputSize * outputNum
+						, trainInputsSize = trainBatchNum * batchSize * inputSize
+						, testInputsSize = testBatchNum * batchSize * inputSize;
 
 					mTrainBatched2Samples.resize(trainBatchNum);
 					mTestBatched2Samples.resize(testBatchNum);
-					
-					std::size_t outputClassesSize = outputSize * outputNum
-						, trainInputSize = trainBatchNum * batchSize * inputSize
-						, testInputSize = testBatchNum * batchSize * inputSize;
-				
-					mFloatSpace.create(outputClassesSize + trainInputSize + testInputSize);
+
+					mFloatSpace.create(outputClassesSize + trainInputsSize + testInputsSize);
 					auto& gpuSampleSpace = mFloatSpace.mGpuSpace;
 					auto gpuSampleSpaceIt = gpuSampleSpace.begin();
  
@@ -293,11 +291,10 @@ namespace NetworkLib {
 					createOneHotOutputViews();
 					createInputs();
 
+					gpuSampleSpace.upload();
 					};
 
 				copyToGpu();
-
-				mFloatSpace.mGpuSpace.upload();
 			}
 
 
