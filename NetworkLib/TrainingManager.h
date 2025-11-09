@@ -260,7 +260,9 @@ namespace NetworkLib {
 							std::size_t imageCounter = 0;
 							std::uint8_t digitCounter = 0;
 
-							for(auto& [seenBatch, desired] : batchedSamples){
+							for(auto batch: std::views::iota(0ULL, batchedSamples.size())){
+								
+								auto& [seenBatch, desired] = batchedSamples[batch];
 
 								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
 
@@ -268,6 +270,8 @@ namespace NetworkLib {
 
 								auto& cpuImages = samplesMap.find(digit)->second;
 								desired = mOutputs[digit];
+
+								imageCounter = batch * batchSize;
 
 								for (auto b : std::views::iota(0ULL, batchSize)) {
 
