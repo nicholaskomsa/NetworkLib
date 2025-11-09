@@ -267,7 +267,7 @@ namespace NetworkLib {
 								auto digit = digitCounter++ % 10;
 
 								auto& cpuImages = samplesMap.find(digit)->second;
-								desired = mOutputs1.field(digit * outputSize, outputSize);
+								desired = mOutputs[digit];
 
 								for (auto b : std::views::iota(0ULL, batchSize)) {
 
