@@ -258,7 +258,7 @@ namespace NetworkLib {
 							auto inputSize = cpuImagesN.front().size();
 
 							std::size_t imageCounter = 0;
-							std::uint8_t digitCounter = 0;
+							std::uint8_t digit = 0;
 
 							for(auto batch: std::views::iota(0ULL, batchedSamples.size())){
 								
@@ -266,21 +266,22 @@ namespace NetworkLib {
 
 								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
 
-								auto digit = digitCounter++ % 10;
-
 								auto& cpuImages = samplesMap.find(digit)->second;
 								desired = mOutputs[digit];
-
-								imageCounter = batch * batchSize;
 
 								for (auto b : std::views::iota(0ULL, batchSize)) {
 
 									auto seen = seenBatch.viewColumn(b);
 
-									auto imageIdx = imageCounter++ % cpuImages.size();
+									auto imageIdx = (imageCounter + b) % cpuImages.size();
 									auto& image = cpuImages[imageIdx];
 
 									std::copy(image.begin(), image.end(), seen.begin());
+								}
+
+								if (++digit == 10) {
+									imageCounter += batchSize;
+									digit = 0;
 								}
 							}
 							};
