@@ -230,9 +230,8 @@ TrainingManager::GpuBatchedSamples TrainingManager::createGpuBatchedSamplesSpace
 	auto batchNum = std::ceil(sampleNum / float(batchSize));
 	gpuBatchedSamples.reserve(batchNum);
 
-	//auto outputIdx = 1; // 1 integer is the output which is the outputidx
-
-	linkedSampleSpace.create(batchNum * batchSize * (inputSize + outputSize));
+	auto inputOutputPairs = batchNum * batchSize * (inputSize + outputSize);
+	linkedSampleSpace.create(inputOutputPairs);
 	return gpuBatchedSamples;
 }
 
@@ -277,27 +276,24 @@ TrainingManager::GpuBatchedSamplesView TrainingManager::advanceGpuBatchedSamples
 	return { gpuSamples.begin() + viewStart, gpuSamples.size() - viewStart };
 }
 
-TrainingManager::GpuBatchedSamples TrainingManager::createGpuBatchedSamplesSpaceSharedOutput(Gpu::LinkedFloatSpace& linkedSampleSpace
-	, std::size_t inputSize, std::size_t sampleNum, std::size_t outputSize, std::size_t outputNum, std::size_t batchSize) {
 
-	GpuBatchedSamples gpuBatchedSamples;
-	auto batchNum = std::ceil(sampleNum / float(batchSize));
-	gpuBatchedSamples.reserve(batchNum);
-	linkedSampleSpace.create(batchNum * batchSize * inputSize
-		+ outputSize * outputNum); //shared output space
 
-	return gpuBatchedSamples;
-}
-
-void TrainingManager::advanceGpuViews(Gpu::LinkedFloatSpace& linkedSampleSpace
-	, float*& begin, GpuViews& gpuViews, std::size_t outputSize) {
+Gpu::GpuView1 TrainingManager::advanceGpuViews(Gpu::LinkedFloatSpace& linkedSampleSpace
+	, float*& begin, Gpu::GpuViews1& gpuViews, std::size_t outputSize) {
 
 	auto& gpuSampleSpace = linkedSampleSpace.mGpuSpace;
 
+	auto start = begin;
+
 	for (auto& gpuView : gpuViews)
 		gpuSampleSpace.advance(gpuView, begin, outputSize);
-}
 
+	auto end = begin;
+
+	Gpu::GpuView1 gpuView1;
+	gpuSampleSpace.advance(gpuView1, start, std::distance(start, end));
+	return gpuView1;
+}
 
 void LogicSamples::create(NetworkTemplate& networkTemplate) {
 
@@ -305,6 +301,7 @@ void LogicSamples::create(NetworkTemplate& networkTemplate) {
 		, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
 	auto batchSize = networkTemplate.mBatchSize;
 	auto sampleNum = 4 * 3; //XOR, AND, OR all have 4 samples
+
 	mLogicSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
 		, inputSize, outputSize, sampleNum, batchSize);
 

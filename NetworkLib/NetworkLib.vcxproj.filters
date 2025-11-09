@@ -1,20 +1,34 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
-    <CudaCompile Include="GeneralKernel.cu" />
-    <CudaCompile Include="FullConnect.cu" />
-    <CudaCompile Include="Conv1.cu" />
+    <CudaCompile Include="Conv1.cu">
+      <Filter>cuda</Filter>
+    </CudaCompile>
+    <CudaCompile Include="FullConnect.cu">
+      <Filter>cuda</Filter>
+    </CudaCompile>
+    <CudaCompile Include="GeneralKernel.cu">
+      <Filter>cuda</Filter>
+    </CudaCompile>
+    <CudaCompile Include="kernel.cu">
+      <Filter>cuda</Filter>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Gpt">
       <UniqueIdentifier>{ccdcc16a-697f-4b51-bf1f-2c89a90a730a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Algorithms">
+      <UniqueIdentifier>{cce24ee4-7847-4f0e-b575-dbce6a8dbf17}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Network">
       <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Algorithms">
-      <UniqueIdentifier>{cce24ee4-7847-4f0e-b575-dbce6a8dbf17}</UniqueIdentifier>
+    <Filter Include="Model">
+      <UniqueIdentifier>{42031481-3d08-410c-9031-e601dfc03e29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cuda">
+      <UniqueIdentifier>{ae8809eb-ae77-4748-870f-96eb6a64b5e5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -37,9 +51,6 @@
       <Filter>Gpt</Filter>
     </ClInclude>
     <ClInclude Include="CpuTensor.h">
-      <Filter>Network</Filter>
-    </ClInclude>
-    <ClInclude Include="ModelLogic.h">
       <Filter>Network</Filter>
     </ClInclude>
     <ClInclude Include="GpuNetwork.h">
@@ -66,11 +77,14 @@
     <ClInclude Include="NetworkSorter.h">
       <Filter>Network</Filter>
     </ClInclude>
-    <ClInclude Include="ModelConv1.h">
-      <Filter>Network</Filter>
-    </ClInclude>
     <ClInclude Include="Model.h">
-      <Filter>Network</Filter>
+      <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelConv1.h">
+      <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="ModelLogic.h">
+      <Filter>Model</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

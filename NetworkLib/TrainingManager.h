@@ -13,23 +13,34 @@ namespace NetworkLib {
 	class TrainingManager {
 	public:
 
-		using SingleOutput = Gpu::GpuView1;
+		using SharedOutput = Gpu::GpuView1;
+		using SharedOutputIdx = Gpu::Int;
 		using BatchedOutput = Gpu::GpuView2;
 
-		using BatchedSingleOutput = std::vector<SingleOutput>;
+		using BatchedSharedOutputsIdx = std::vector<SharedOutputIdx>;
+		using BatchedSharedOutputs = std::vector<SharedOutput>;
 
 		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
 		using CpuSample = std::pair<std::vector<float>, std::vector<float>>;
+		using CpuSample2 = std::pair< std::vector<float>, std::vector<std::size_t>>;
+
 		using CpuSamples = std::vector<CpuSample>;
-		using GpuViews = std::vector<Gpu::GpuView1>;
+		using CpuSamples2 = std::vector<CpuSample2>;
 
 		using CpuBatchedSample = std::pair<Cpu::View2, Cpu::View2>;
 		using CpuBatchedSamples = std::vector<CpuBatchedSample>;
 		using CpuBatchedSamplesView = std::span<CpuBatchedSample>;
 
+		//all batched samples have different output
 		using GpuBatchedSample = std::pair<Gpu::GpuView2, Gpu::GpuView2>;
 		using GpuBatchedSamples = std::vector<GpuBatchedSample>;
 		using GpuBatchedSamplesView = std::span<GpuBatchedSample>;
+
+		//all batched2 samples share the same output
+		using GpuBatched2Sample = std::pair<Gpu::GpuView2, Gpu::GpuView1>;
+		using GpuBatched2Samples = std::vector<GpuBatched2Sample>;
+		using GpuBatched2SamplesView = std::span<GpuBatched2Sample>;
+
 
 		Cpu::NetworksMap mNetworksMap;
 		Cpu::Network::Id mNetworksIdCounter = 0;
@@ -72,12 +83,9 @@ namespace NetworkLib {
 			, float*& begin, GpuBatchedSamples& gpuSamples, const CpuSamples& cpuSamples
 			, std::size_t batchSize = 1);
 
-		static GpuBatchedSamples createGpuBatchedSamplesSpaceSharedOutput(Gpu::LinkedFloatSpace& linkedSampleSpace
-			, std::size_t inputSize, std::size_t sampleNum, std::size_t outputSize, std::size_t outputNum, std::size_t batchSize = 1);
-
-		static void advanceGpuViews(Gpu::LinkedFloatSpace& linkedSampleSpace
-			, float*& begin, GpuViews& gpuViews, std::size_t outputSize);
-
+		static Gpu::GpuView1 advanceGpuViews(Gpu::LinkedFloatSpace& linkedSampleSpace
+			, float*& begin, Gpu::GpuViews1& gpuViews, std::size_t outputSize);
+		
 		struct LogicSamples {
 
 			Gpu::LinkedFloatSpace mFloatSpace;
@@ -100,17 +108,16 @@ namespace NetworkLib {
 		struct MNISTSamples {
 
 			Gpu::LinkedFloatSpace mFloatSpace;
-			GpuBatchedSamples mMNISTSamples;
+			GpuBatched2Samples mTrainBatched2Samples, mTestBatched2Samples;
+			GpuBatched2SamplesView mTrainSamplesView, mTestSamplesView;
 			std::string mMNISTFolder = "./mnist/";
 
-			GpuViews mOutputs;
+			Gpu::GpuView1 mOutputs1;
+			Gpu::GpuViews1 mOutputs;
 
 			using DigitsSamplesMap = std::map<std::uint8_t, std::vector<std::vector<float>>>;
 			DigitsSamplesMap mTestSamplesMap, mTrainSamplesMap;
 
-			using GpuDigitSamplesMap = std::map<std::uint8_t, std::vector<GpuBatchedSamplesView>>;
-			GpuDigitSamplesMap mGpuTrainSamplesMap, mGpuTestSamplesMap;
-			
 			std::size_t getSamplesNum(const DigitsSamplesMap& samplesMap) {
 				return std::accumulate(samplesMap.begin(), samplesMap.end(), 0UL
 					, [](auto sum, const auto& pair) {
@@ -204,54 +211,97 @@ namespace NetworkLib {
 					, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
 				auto batchSize = networkTemplate.mBatchSize;
 
-				loadAllDigitsSamples();
+				constexpr auto outputNum = 10; //digits 0-9
 
-				auto outputNum = 10; //digits 0-9
-				mOutputs.resize(outputNum);
+				loadAllDigitsSamples();   
 
-				auto sampleNum = getSamplesNum(mTrainSamplesMap) + getSamplesNum(mTestSamplesMap);
+				auto copyToGpu = [&]() {
 
-				mMNISTSamples = TrainingManager::createGpuBatchedSamplesSpaceSharedOutput(mFloatSpace
-					, inputSize, sampleNum, outputSize, outputNum, batchSize);
+					auto trainSamplesNum = getSamplesNum(mTrainSamplesMap)
+						, testSamplesNum = getSamplesNum(mTestSamplesMap);
 
-				auto begin = mFloatSpace.mGpuSpace.begin();
-				 
-				auto createOutputViews = [&]() {
-					//first, setup the GpuOutputs for each digit
-					TrainingManager::advanceGpuViews(mFloatSpace, begin, mOutputs, outputSize);
+					auto trainBatchNum = std::ceil(trainSamplesNum / float(batchSize));
+					auto testBatchNum = std::ceil(testSamplesNum / float(batchSize));
 
-					std::vector<float> desired(outputSize);
-					for (std::size_t digit = 0; auto output : mOutputs) {
-
-						std::fill(desired.begin(), desired.end(), 0ULL);
-
-						desired[digit] = 1.0f;
-						std::copy(desired.begin(), desired.end(), output.begin());
-					}
-					};
-				createOutputViews();
-
-				for( auto& [digit, samples] : mTrainSamplesMap ) {
-
-					auto output = mOutputs[digit];
-
-					//auto gpuBatchedSamplesView = TrainingManager::advanceGpuBatchedSamplesSharedOutput(mFloatSpace, begin
-					//	, mMNISTSamples, output, samples, batchSize);
-
-					//mGpuTrainSamplesMap[digit].push_back(gpuBatchedSamplesView);
-				}
-
-
-				//mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, andSamples, batchSize);
-			//	mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, orSamples, batchSize);
-			//	mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, xorSamples, batchSize);
+					mTrainBatched2Samples.resize(trainBatchNum);
+					mTestBatched2Samples.resize(testBatchNum);
+					
+					std::size_t outputClassesSize = outputSize * outputNum
+						, trainInputSize = trainBatchNum * batchSize * inputSize
+						, testInputSize = testBatchNum * batchSize * inputSize;
 				
+					mFloatSpace.create(outputClassesSize + trainInputSize + testInputSize);
+					auto& gpuSampleSpace = mFloatSpace.mGpuSpace;
+					auto gpuSampleSpaceIt = gpuSampleSpace.begin();
+ 
+					auto createOneHotOutputViews = [&]() {
+
+						mOutputs.resize(outputNum);
+
+						//first, setup the GpuOutputs for each digit as one hot output
+						mOutputs1 = TrainingManager::advanceGpuViews(mFloatSpace, gpuSampleSpaceIt, mOutputs, outputSize);
+
+						std::vector<float> desired(outputSize);
+						for (std::size_t digit = 0; auto output : mOutputs) {
+
+							std::fill(desired.begin(), desired.end(), 0ULL);
+							desired[digit++] = 1.0f;
+							std::copy(desired.begin(), desired.end(), output.begin());
+						}
+						};
+
+					auto createInputs = [&]() {
+
+						auto setSamples = [&](const auto& samplesMap, GpuBatched2Samples& batchedSamples) {
+
+							auto& cpuImagesN = samplesMap.begin()->second;
+							auto inputSize = cpuImagesN.front().size();
+
+							std::size_t imageCounter = 0;
+							std::uint8_t digitCounter = 0;
+
+							for(auto& [seenBatch, desired] : batchedSamples){
+
+								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
+
+								auto digit = digitCounter++ % 10;
+
+								auto& cpuImages = samplesMap.find(digit)->second;
+								desired = mOutputs1.field(digit * outputSize, outputSize);
+
+								for (auto b : std::views::iota(0ULL, batchSize)) {
+
+									auto seen = seenBatch.viewColumn(b);
+
+									auto imageIdx = imageCounter++ % cpuImages.size();
+									auto& image = cpuImages[imageIdx];
+
+									std::copy(image.begin(), image.end(), seen.begin());
+								}
+							}
+							};
+							
+						setSamples(mTrainSamplesMap, mTrainBatched2Samples);
+						setSamples(mTestSamplesMap, mTestBatched2Samples);
+					};
+
+					createOneHotOutputViews();
+					createInputs();
+
+					};
+
+				copyToGpu();
 
 				mFloatSpace.mGpuSpace.upload();
 			}
+
+
+
+
 			void destroy() {
 				mFloatSpace.destroy();
 			}
+
 
 		} mMNISTSamples;
 

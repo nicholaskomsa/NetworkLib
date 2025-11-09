@@ -34,8 +34,8 @@ int main() {
 	//NetworkLib::Gpu::Environment::example();
 	//NetworkLib::Gpu::Environment::example2();
 
-	NetworkLib::Model::XOR xorModel;
-	xorModel.run();
+	//NetworkLib::Model::XOR xorModel;
+	//xorModel.run();
 	//NetworkLib::Model::LogicLottery logicLotto;
 	//logicLotto.run();
 	//NetworkLib::Model::Convolution1Comparison comparison;
@@ -43,8 +43,8 @@ int main() {
 	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
 	//conv1Lotto.run();
 
-	//NetworkLib::Model::MNIST mnistModel;
-	//mnistModel.run();
+	NetworkLib::Model::MNIST mnistModel;
+	mnistModel.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

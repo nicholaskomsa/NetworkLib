@@ -73,6 +73,18 @@ namespace NetworkLib {
 					, mCpu
 				};
 			}
+			GpuView<Cpu::Tensor::View1> field(std::size_t offset, std::size_t size) const {
+				
+				auto cpuView = Cpu::Tensor::field(mView, offset, size);
+
+				auto gpu = mGpu + offset;
+
+				return {
+						 cpuView
+						, gpu
+						, cpuView.data_handle()
+				};
+			}
 			GpuView<Cpu::Tensor::View1> viewColumn( Coordinate col) const{
 
 				Error::checkBounds(col, mView.extent(1));
@@ -114,6 +126,9 @@ namespace NetworkLib {
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
 		using GpuView3 = GpuView<Cpu::Tensor::View3>;
 
+		using GpuViews1 = std::vector<Gpu::GpuView1>;
+		using GpuViews1View = std::span<Gpu::GpuView1>;
+		 
 		struct Float {
 			float* mGpu = nullptr, * mCpu = nullptr;
 

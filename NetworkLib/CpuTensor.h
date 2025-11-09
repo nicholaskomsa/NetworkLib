@@ -149,7 +149,15 @@ namespace NetworkLib {
 			FloatsView view(ViewType v) {
 				return FloatsView(v.data_handle(), area(v));
 			}
-		}
+
+			static View1 field(const View1 v, std::size_t offset, std::size_t size) {
+				
+				if (offset + size > v.extent(0))
+					Error::checkBounds(offset + size, v.extent(0));
+
+				return View1(v.data_handle() + offset, std::array{size});
+			}
+		}	
 
 		using View1 = Tensor::View1;
 		using View2 = Tensor::View2;

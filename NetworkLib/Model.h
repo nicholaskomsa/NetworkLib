@@ -38,10 +38,10 @@ namespace NetworkLib {
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 
-				mNetworkTemplate = { mInputWidth, mBatchSize
+				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
 					, {{ 100, ActivationFunction::ReLU }
 					, { 50, ActivationFunction::ReLU }
-					, { 10, ActivationFunction::Softmax }}
+					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 
 				if (mPrintConsole) {
@@ -55,7 +55,8 @@ namespace NetworkLib {
 
 				mTrainingManager.create(1);
 				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
-			//	mBatchedSamplesView = mTrainingManager.mMNISTSamples.mMNISTSamples;
+				
+				//mBatchedSamplesView = mTrainingManager.mMNISTSamples.mTrainBatched2Samples;
 
 				mGpuTask = &mTrainingManager.getGpuTask();
 			}

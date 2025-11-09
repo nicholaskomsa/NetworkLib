@@ -10,37 +10,38 @@
 namespace Kernel = NetworkLib::Gpu::Kernel;
 
 
-__global__ void cuConv1(float* seen, float* weights, float* primes, int kPrimesSize, int kernelRows, int kernelDepth, int kernel) {
+__global__ void cuConv1(float* seen, float* weights, float* output, int kPrimesSize, int kernelRows, int kernelDepth, int kernel) {
 
-    int p = blockIdx.x * blockDim.x + threadIdx.x; // output index
+    int o = blockIdx.x * blockDim.x + threadIdx.x; // output index
 
-    if (p < kPrimesSize) {
+    if (o < kPrimesSize) {
         int col = 0, kernelCols = 1;
-        int idx =  kPrimesSize*kernel+p;
-        //p = 0 always in test case
+        int idx =  kPrimesSize*kernel + o;
+        //o = 0 always in test case
         //k varies 0-1
 
         float sum = 0.0f;
 
-        for (int row = 0; row < kernelRows; ++row) {
-            int index_col_major = row * (kernelCols * kernelDepth) + col * kernelDepth + kernel;
-          //  sum += weights[index_col_major] * seen[p + row];
-            sum = __fmaf_rn(weights[index_col_major], seen[p + row], sum);
+        for (int row = 0; row < kernelRows; ++row) {  
+
+            int index_col_major = row*(kernelCols*kernelDepth) + col*kernelDepth + kernel;
+    
+            sum = __fmaf_rn(weights[index_col_major], seen[o + row], sum);//sum += weights[index_col_major] * seen[o + row];
         }
-        primes[idx] = sum;
+        output[idx] = sum;
     }
 }
-void Kernel::conv1(cudaStream_t stream, float* weights, float* primes, float* seen, int primesSize, int kernelRows, int kernelDepth, int kernel) {
+void Kernel::conv1(cudaStream_t stream, float* weights, float* output, float* seen, int primesSize, int kernelRows, int kernelDepth, int kernel) {
     int kprimesSize = std::max(1, primesSize / kernelDepth);
     int tx = std::min(32, kprimesSize);       // threads per block in x ? output positions
 
     dim3 threadsPerBlock(tx);
     dim3 numBlocks((kprimesSize + tx - 1) / tx);
 
-    cuConv1<<<numBlocks, threadsPerBlock, 0, stream>>>(seen, weights, primes, kprimesSize, kernelRows, kernelDepth, kernel);
+    cuConv1<<<numBlocks, threadsPerBlock, 0, stream>>>(seen, weights, output, kprimesSize, kernelRows, kernelDepth, kernel);
 
 }
-__global__ void cuBatchedConv1(float* seen, float* weights, float* primes, int primesSize, int kernelWidth, int kernelDepth, int batchSize) {
+__global__ void cuBatchedConv1(float* seen, float* weights, float* output, int primesSize, int kernelWidth, int kernelDepth, int batchSize) {
     /*
     int p = blockIdx.x * blockDim.x + threadIdx.x; // output index
     int k = blockIdx.y * blockDim.y + threadIdx.y; // kernel index
@@ -149,7 +150,6 @@ __global__ void cuConv1UpdateKernel(float* seen, float* weights, float* primes, 
         int idx = kPrimesSize* kernel + p;
 
         float prime_val = primes[idx] * learnRate / kPrimesSize;
-        
 
         for (int row = 0; row < kernelRows; ++row) {
 
