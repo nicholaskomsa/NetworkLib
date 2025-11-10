@@ -40,11 +40,12 @@ namespace NetworkLib {
 			void resetMissesResult();
 			int getMissesResult();
 
-			void mse(const GpuView2& sought, const GpuView2& desired);
-			void mse(const GpuView2& sought, const GpuView1& desired);
+			//squared error
+			void sqe(const GpuView2& sought, const GpuView2& desired);
+			void sqe(const GpuView2& sought, const GpuView1& desired);
 
-			float getMseResult();
-			void resetMseResult();
+			float getSqeResult();
+			void resetSqeResult();
 			void downloadConvergenceResults(bool doSync=true);
 
 			void relu(const GpuView1& o1, GpuView1& a1);
@@ -88,7 +89,7 @@ namespace NetworkLib {
 			static std::mutex mCommandMutex;
 
 			Gpu::LinkedFloatSpace mLinkedFloatSpace;
-			Float mMseResult;
+			Float mSqeResult;
 			Int mMissesResult;
 		};
 	}

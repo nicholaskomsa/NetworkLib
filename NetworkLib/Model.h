@@ -45,7 +45,7 @@ namespace NetworkLib {
 				};
 
 				if (mPrintConsole) 
-					std::println("{}", "Creating MNIST Network");
+					std::puts("Creating MNIST Network");
 
 				mTrainingManager.addNetwork(mId);
 				auto& network = mTrainingManager.getNetwork(mId);

@@ -23,7 +23,7 @@ void Environment::create() {
 	auto& gpuSpace = mLinkedFloatSpace.mGpuSpace;
 
 	auto begin = gpuSpace.begin();
-	gpuSpace.advance(mMseResult, begin);
+	gpuSpace.advance(mSqeResult, begin);
 	gpuSpace.advance(mMissesResult, begin);
 
 }
@@ -328,27 +328,27 @@ void Environment::score(const GpuView2& sought, const GpuView2& desired) {
 	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
-void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
+void Environment::sqe(const GpuView2& sought, const GpuView2& desired) {
 
 	int desiredSize = desired.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
-	Kernel::mse2(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, desiredSize, batchSize);
+	Kernel::sqe2(mStream, sought.mGpu, desired.mGpu, mSqeResult.mGpu, desiredSize, batchSize);
 	commandQueueSync();
 
 }
-void Environment::mse(const GpuView2& sought, const GpuView1& desired) {
+void Environment::sqe(const GpuView2& sought, const GpuView1& desired) {
 
 	int desiredSize = desired.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
-	Kernel::mse(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, desiredSize, batchSize);
+	Kernel::sqe(mStream, sought.mGpu, desired.mGpu, mSqeResult.mGpu, desiredSize, batchSize);
 	commandQueueSync();
 }
-float Environment::getMseResult() {
-	return mMseResult;
+float Environment::getSqeResult() {
+	return mSqeResult;
 }
-void Environment::resetMseResult() {
-	mMseResult = 0.0f;
-	mMseResult.upload();
+void Environment::resetSqeResult() {
+	mSqeResult = 0.0f;
+	mSqeResult.upload();
 }
 void Environment::resetMissesResult() {
 	mMissesResult = 0;;
@@ -360,7 +360,7 @@ int Environment::getMissesResult() {
 
 void Environment::downloadConvergenceResults(bool doSync) {
 	mMissesResult.downloadAsync(mStream);
-	mMseResult.downloadAsync(mStream);
+	mSqeResult.downloadAsync(mStream);
 	if (doSync)
 		sync();
 	commandQueueSync(2);

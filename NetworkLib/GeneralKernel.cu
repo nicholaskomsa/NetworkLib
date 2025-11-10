@@ -149,7 +149,7 @@ __global__ void cuDiff(const float* desired, const float* sought, float* primes,
         primes[i] = sought[i] - desired[i];
 }
 void Kernel::diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size) {
-    cuDiff << <1, size, 0, stream >> > (desired, sought, primes, size);
+    cuDiff<<<1, size, 0, stream>>>(desired, sought, primes, size);
 }
 __global__ void cuDiff2(const float* desired, const float* sought, float* primes, int sought2Size, int desired1Size) {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -157,7 +157,7 @@ __global__ void cuDiff2(const float* desired, const float* sought, float* primes
         primes[i] = sought[i] - desired[i % desired1Size];
 }
 void Kernel::diff2(cudaStream_t stream, const float* desired, const float* sought, float* primes, int sought2Size, int desired1Size) {
-    cuDiff2 << <1, sought2Size, 0, stream >> > (desired, sought, primes, sought2Size, desired1Size);
+    cuDiff2<<<1, sought2Size, 0, stream>>>(desired, sought, primes, sought2Size, desired1Size);
 }
 __global__ void cuBatchedCopy(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
@@ -176,11 +176,11 @@ void Kernel::batchedCopy(cudaStream_t stream, const float* src, float* dst, int 
     dim3 grid(blocksPerRow, batchSize);
     dim3 block(threadsPerBlock);
 
-    cuBatchedCopy << <grid, block, 0, stream >> > (src, dst, size, batchSize);
+    cuBatchedCopy<<<grid, block, 0, stream>>>(src, dst, size, batchSize);
 }
-__global__ void cuMse(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+__global__ void cuSquaredError(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
    
-    //sought2, desired1
+    //sought2, desired1, normalized in calculateconvergence
 
     extern __shared__ float partialSum[]; // shared memory per block
 
@@ -213,7 +213,9 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
     
 }
 
-void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+void Kernel::sqe(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+
+    //this takes a batched input and a single output, and reduce into result
 
     int threadsPerBlock = std::min(256, desiredSize);
     int blocksPerBatch = (desiredSize + threadsPerBlock - 1) / threadsPerBlock;
@@ -221,14 +223,13 @@ void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired,
     dim3 block(threadsPerBlock);
     size_t sharedMemSize = threadsPerBlock * sizeof(float);
 
-    cuMse<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
-    //normalize later after mse reduced
+    cuSquaredError<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
 }
 
-__global__ void cuMse2(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+__global__ void cuSquaredError2(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
     extern __shared__ float partialSum[]; // shared memory per block
 
-    //sought2, desired2
+    //sought2, desired2, normalized in calculateconvergence
 
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;
@@ -258,15 +259,14 @@ __global__ void cuMse2(const float* sought, const float* desired, float* result,
         atomicAdd(result, partialSum[0]);
     
 }
-void Kernel::mse2(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+void Kernel::sqe2(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
     int threadsPerBlock = std::min(256, desiredSize);
     int blocksPerBatch = (desiredSize + threadsPerBlock - 1) / threadsPerBlock;
     dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
     dim3 block(threadsPerBlock);
     size_t sharedMemSize = threadsPerBlock * sizeof(float);
 
-    cuMse2 << <grid, block, sharedMemSize, stream >> > (sought, desired, result, desiredSize, batchSize);
-    //normalize later on cpu in calculateconvergence
+    cuSquaredError2<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
 }
 __global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
 

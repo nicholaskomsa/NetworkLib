@@ -112,14 +112,14 @@ namespace NetworkLib {
 
 			gpuNetwork.mirror(cpuNetwork);
 
-			gpu.resetMseResult();
+			gpu.resetSqeResult();
 			gpu.resetMissesResult();
 
 			for (const auto& [seen, desired] : samples) {
 
 				auto sought = gpuNetwork.forward(gpu, seen);
 
-				gpu.mse(sought, desired);
+				gpu.sqe(sought, desired);
 			//	gpu.score(sought, desired);
 
 				if (print) {
@@ -146,8 +146,8 @@ namespace NetworkLib {
 			auto desiredSize = samples.front().second.mView.extent(0);
 
 			gpu.downloadConvergenceResults();
-			//normalise mse 
-			cpuNetwork.mMse = gpu.getMseResult() / (desiredSize * batchSize * samples.size());
+			//normalise to get sqe -> mse 
+			cpuNetwork.mMse = gpu.getSqeResult() / (desiredSize * batchSize * samples.size());
 			cpuNetwork.mMisses = gpu.getMissesResult();
 
 			if (print) {
