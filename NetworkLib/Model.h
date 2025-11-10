@@ -14,7 +14,7 @@ namespace NetworkLib {
 
 		class MNIST {
 		public:
-			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
+			TrainingManager::GpuBatched2SamplesView mBatched2SamplesView;
 			NetworkTemplate mNetworkTemplate;
 			std::size_t mId = 981;
 			TrainingManager mTrainingManager;
@@ -31,7 +31,7 @@ namespace NetworkLib {
 			void calculateConvergence() {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
+				//mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatched2SamplesView, mPrintConsole);
 			}
 			void create() {
 
@@ -44,9 +44,8 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 
-				if (mPrintConsole) {
+				if (mPrintConsole) 
 					std::println("{}", "Creating MNIST Network");
-				}
 
 				mTrainingManager.addNetwork(mId);
 				auto& network = mTrainingManager.getNetwork(mId);
@@ -56,7 +55,7 @@ namespace NetworkLib {
 				mTrainingManager.create(1);
 				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
 				
-				//mBatchedSamplesView = mTrainingManager.mMNISTSamples.mTrainBatched2Samples;
+				mBatched2SamplesView = mTrainingManager.mMNISTSamples.mTrainBatched2Samples;
 
 				mGpuTask = &mTrainingManager.getGpuTask();
 			}
@@ -65,7 +64,7 @@ namespace NetworkLib {
 			}
 
 			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, print);
+				mTrainingManager.train(*mGpuTask, trainNum, mBatched2SamplesView, mLearnRate, print);
 			}
 
 			Cpu::Network& getNetwork() {

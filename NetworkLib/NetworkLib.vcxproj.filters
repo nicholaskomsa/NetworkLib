@@ -24,11 +24,11 @@
     <Filter Include="Network">
       <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Model">
-      <UniqueIdentifier>{42031481-3d08-410c-9031-e601dfc03e29}</UniqueIdentifier>
-    </Filter>
     <Filter Include="cuda">
       <UniqueIdentifier>{ae8809eb-ae77-4748-870f-96eb6a64b5e5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Model">
+      <UniqueIdentifier>{42031481-3d08-410c-9031-e601dfc03e29}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

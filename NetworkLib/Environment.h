@@ -41,6 +41,8 @@ namespace NetworkLib {
 			int getMissesResult();
 
 			void mse(const GpuView2& sought, const GpuView2& desired);
+			void mse(const GpuView2& sought, const GpuView1& desired);
+
 			float getMseResult();
 			void resetMseResult();
 			void downloadConvergenceResults(bool doSync=true);
@@ -58,6 +60,9 @@ namespace NetworkLib {
 			void batchedBroadcast(const GpuView1& source, GpuView2& dest);
 			void batchedBroadcastAdd(const GpuView1& source, GpuView2& dest);
 			void batchedDiff(const GpuView2& desired2, const GpuView2& sought2, GpuView2& primes2);
+			void batched2Diff(const GpuView1& desired1, const GpuView2& sought2, GpuView2& primes2);
+
+
 			void batchedUpdateWeights(const GpuView2& seen, GpuView3& weights, const GpuView2& primes, float learnRate);
 			void activationFunction(LayerTemplate::ActivationFunction af, const GpuView1& o1, GpuView1& a1);
 			void batchedActivationFunction(LayerTemplate::ActivationFunction af, const GpuView2& o2, GpuView2& a2);
@@ -65,7 +70,9 @@ namespace NetworkLib {
 			void batchedActivationFunctionPrime(LayerTemplate::ActivationFunction af, const GpuView2& a2, GpuView2& p2);
 			void errorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired, const GpuView1& sought, GpuView1& p1);
 			void batchedErrorFunction(LayerTemplate::ActivationFunction af, const GpuView2& desired2, const GpuView2& sought2, GpuView2& p2);
-		
+			void batched2ErrorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired1, const GpuView2& sought2, GpuView2& p2);
+
+
 			void sync();
 			void deviceSync();
 			void commandQueueSync(std::size_t commandCount = 1);

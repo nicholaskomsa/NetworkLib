@@ -184,150 +184,89 @@ namespace NetworkLib {
 				updateWeights();
 			}
 
+			void batchedErrorFunction(Environment& env, const GpuView2& desiredBatch){
+				const auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
+				auto& back = mLayers.back();
+				const auto soughtBatch = back.mActivations;
+				auto af = layerTemplates.back().mActivationFunction;
+				//output layer makes a comparison between desired and sought
+				env.batchedErrorFunction(af, desiredBatch, soughtBatch, back.mPrimes);
+			}
+			void batched2ErrorFunction(Environment& env, const GpuView1& desired) {
+				const auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
+				auto& back = mLayers.back();
+				const auto soughtBatch = back.mActivations;
+				auto af = layerTemplates.back().mActivationFunction;
+				//output layer makes a comparison between desired and sought
+				env.batched2ErrorFunction(af, desired, soughtBatch, back.mPrimes);
+			}
+			void batchedBackwardHiddenLayers(Environment& env) {
+
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
+				for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
+
+					auto& layer = mLayers[l];
+					auto& nextLayer = mLayers[l + 1];
+					auto& layerTemplate = layerTemplates[l];
+					auto& nextLayerTemplate = layerTemplates[l + 1];
+
+					auto af = layerTemplate.mActivationFunction;
+					auto ct = nextLayerTemplate.mConvolutionType;
+
+					switch (ct) {
+					case LayerTemplate::ConvolutionType::Conv1:
+						env.batchedConv1VecMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+						break;
+					case LayerTemplate::ConvolutionType::None:
+						env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
+						break;
+					}
+
+					env.batchedActivationFunctionPrime(af, layer.mOutputs, layer.mPrimes);
+				}
+			}
+			void batchedUpdateWeights(Environment& env, const GpuView2& seenBatch, float learnRate) {
+
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
+				auto update = [&](std::size_t l) {
+
+					auto& layer = mLayers[l];
+					auto& prevActivations = (l == 0) ?
+						seenBatch : mLayers[l - 1].mActivations;
+					auto& layerTemplate = layerTemplates[l];
+
+					auto ct = layerTemplate.mConvolutionType;
+					switch (ct) {
+					case LayerTemplate::ConvolutionType::Conv1:
+						env.batchedConv1UpdateKernel(layer.mWeights, prevActivations, layer.mPrimes, learnRate);
+						break;
+					case LayerTemplate::ConvolutionType::None:
+						env.batchedUpdateWeights(prevActivations, layer.mWeights, layer.mPrimes, learnRate);
+						break;
+					}
+					};
+
+				for (auto l : std::views::iota(0ULL, mLayers.size()))
+					update(l);
+			}
 			void backward(Environment& env, const GpuView2& seenBatch, const GpuView2& desiredBatch, float learnRate) {
 
-				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
-
-				auto backLayer = [&]() {
-
-					auto& back = mLayers.back();
-					const auto soughtBatch = back.mActivations;
-					auto af = layerTemplates.back().mActivationFunction;
-					//output layer makes a comparison between desired and sought
-					env.batchedErrorFunction(af, desiredBatch, soughtBatch, back.mPrimes);
-					};
-
-				auto hiddenLayers = [&]() {
-
-					for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
-
-						auto& layer = mLayers[l];
-						auto& nextLayer = mLayers[l + 1];
-						auto& layerTemplate = layerTemplates[l];
-						auto& nextLayerTemplate = layerTemplates[l + 1];
-
-						auto af = layerTemplate.mActivationFunction;
-						auto ct = nextLayerTemplate.mConvolutionType;
-
-						switch (ct) {
-						case LayerTemplate::ConvolutionType::Conv1:
-							env.batchedConv1VecMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
-							break;
-						case LayerTemplate::ConvolutionType::None:
-							env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
-							break;
-						}
-						
-						env.batchedActivationFunctionPrime(af, layer.mOutputs, layer.mPrimes);
-					}
-					};
-
-				auto updateWeights = [&]() {
-
-					auto update = [&](std::size_t l) {
-
-						auto& layer = mLayers[l];
-						auto& prevActivations = ( l == 0 ) ?
-							seenBatch : mLayers[l - 1].mActivations;
-						auto& layerTemplate = layerTemplates[l];
-
-						auto ct = layerTemplate.mConvolutionType;
-						switch (ct) {
-						case LayerTemplate::ConvolutionType::Conv1:
-							env.batchedConv1UpdateKernel(layer.mWeights, prevActivations, layer.mPrimes, learnRate);
-							break;
-						case LayerTemplate::ConvolutionType::None:
-							env.batchedUpdateWeights(prevActivations, layer.mWeights, layer.mPrimes, learnRate);
-							break;
-						}
-						};
-
-					for (auto l : std::views::iota(0ULL, mLayers.size()))
-						update(l);
-
-					};
-
-				backLayer();
-				hiddenLayers();
-				updateWeights();
+				batchedErrorFunction(env, desiredBatch);
+				batchedBackwardHiddenLayers(env);
+				batchedUpdateWeights(env, seenBatch, learnRate);
 			}
 
+			void backward(Environment& env, const GpuView2& seenBatch, const Gpu::GpuView1& desired, float learnRate) {
 
-			void backward(Environment& env, const GpuView2& seenBatch, const GpuViews1View&  desiredBatch, float learnRate) {
-
-				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
-
-				auto backLayer = [&]() {
-
-					auto& back = mLayers.back();
-					const auto soughtBatch = back.mActivations;
-					auto af = layerTemplates.back().mActivationFunction;
-					//output layer makes a comparison between desired and sought
-					for( auto b : std::views::iota(0ULL, soughtBatch.mView.extent(1)) ) {
-						auto desired1 = desiredBatch[b];
-						auto sought1 = soughtBatch.viewColumn(b);
-						auto p1 = back.mPrimes.viewColumn(b);
-						env.errorFunction(af, desired1, sought1, p1);
-					}
-
-					};
-
-				auto hiddenLayers = [&]() {
-
-					for (auto l : std::views::iota(0ULL, mLayers.size() - 1) | std::views::reverse) {
-
-						auto& layer = mLayers[l];
-						auto& nextLayer = mLayers[l + 1];
-						auto& layerTemplate = layerTemplates[l];
-						auto& nextLayerTemplate = layerTemplates[l + 1];
-
-						auto af = layerTemplate.mActivationFunction;
-						auto ct = nextLayerTemplate.mConvolutionType;
-
-						switch (ct) {
-						case LayerTemplate::ConvolutionType::Conv1:
-							env.batchedConv1VecMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
-							break;
-						case LayerTemplate::ConvolutionType::None:
-							env.batchedMatTMulVec(nextLayer.mWeights, nextLayer.mPrimes, layer.mPrimes);
-							break;
-						}
-
-						env.batchedActivationFunctionPrime(af, layer.mOutputs, layer.mPrimes);
-					}
-					};
-
-				auto updateWeights = [&]() {
-
-					auto update = [&](std::size_t l) {
-
-						auto& layer = mLayers[l];
-						auto& prevActivations = (l == 0) ?
-							seenBatch : mLayers[l - 1].mActivations;
-						auto& layerTemplate = layerTemplates[l];
-
-						auto ct = layerTemplate.mConvolutionType;
-						switch (ct) {
-						case LayerTemplate::ConvolutionType::Conv1:
-							env.batchedConv1UpdateKernel(layer.mWeights, prevActivations, layer.mPrimes, learnRate);
-							break;
-						case LayerTemplate::ConvolutionType::None:
-							env.batchedUpdateWeights(prevActivations, layer.mWeights, layer.mPrimes, learnRate);
-							break;
-						}
-						};
-
-					for (auto l : std::views::iota(0ULL, mLayers.size()))
-						update(l);
-
-					};
-
-				backLayer();
-				hiddenLayers();
-				updateWeights();
+				batched2ErrorFunction(env, desired);
+				batchedBackwardHiddenLayers(env);
+				batchedUpdateWeights(env, seenBatch, learnRate);
 			}
 
-			
 			GpuView2 getSought() {
 				return mLayers.back().mActivations;
 			}

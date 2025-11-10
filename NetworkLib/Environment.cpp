@@ -328,11 +328,19 @@ void Environment::score(const GpuView2& sought, const GpuView2& desired) {
 	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
-void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
+void Environment::mse2(const GpuView2& sought, const GpuView2& desired) {
 
-	int size = sought.mView.extent(0);
+	int desiredSize = desired.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
-	Kernel::mse(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, size, batchSize);
+	Kernel::mse2(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, desiredSize, batchSize);
+	commandQueueSync();
+
+}
+void Environment::mse(const GpuView2& sought, const GpuView1& desired) {
+
+	int desiredSize = desired.mView.extent(0);
+	int batchSize = sought.mView.extent(1);
+	Kernel::mse(mStream, sought.mGpu, desired.mGpu, mMseResult.mGpu, desiredSize, batchSize);
 	commandQueueSync();
 }
 float Environment::getMseResult() {
@@ -425,6 +433,10 @@ void Environment::batchedDiff(const GpuView2& desired2, const GpuView2& sought2,
 	Kernel::diff(mStream, desired2.mGpu, sought2.mGpu, primes2.mGpu, desired2.mSize);
 	commandQueueSync();
 }
+void Environment::batched2Diff(const GpuView1& desired1, const GpuView2& sought2, GpuView2& primes2) {
+	Kernel::diff2(mStream, desired1.mGpu, sought2.mGpu, primes2.mGpu, sought2.mSize, desired1.mSize);
+	commandQueueSync();
+}
 void Environment::batchedUpdateWeights(const GpuView2& seen, GpuView3& weights, const GpuView2& primes, float learnRate) {
 
 	int rows = weights.mView.extent(0);
@@ -503,6 +515,19 @@ void Environment::errorFunction(LayerTemplate::ActivationFunction af, const GpuV
 		[[fallthrouh]];
 	default:
 		diff(desired, sought, p1);
+		return;
+	}
+}
+
+void Environment::batched2ErrorFunction(LayerTemplate::ActivationFunction af, const GpuView1& desired1, const GpuView2& sought2, GpuView2& p2) {
+	switch (af) {
+	case LayerTemplate::ActivationFunction::Softmax:
+		//softmax-cross-entropy is a diff
+		[[fallthrouh]];
+	case LayerTemplate::ActivationFunction::None:
+		[[fallthrouh]];
+	default:
+		batched2Diff(desired1, sought2, p2);
 		return;
 	}
 }

@@ -151,6 +151,14 @@ __global__ void cuDiff(const float* desired, const float* sought, float* primes,
 void Kernel::diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size) {
     cuDiff << <1, size, 0, stream >> > (desired, sought, primes, size);
 }
+__global__ void cuDiff2(const float* desired, const float* sought, float* primes, int sought2Size, int desired1Size) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < sought2Size)
+        primes[i] = sought[i] - desired[i % desired1Size];
+}
+void Kernel::diff2(cudaStream_t stream, const float* desired, const float* sought, float* primes, int sought2Size, int desired1Size) {
+    cuDiff2 << <1, sought2Size, 0, stream >> > (desired, sought, primes, sought2Size, desired1Size);
+}
 __global__ void cuBatchedCopy(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;
@@ -170,7 +178,10 @@ void Kernel::batchedCopy(cudaStream_t stream, const float* src, float* dst, int 
 
     cuBatchedCopy << <grid, block, 0, stream >> > (src, dst, size, batchSize);
 }
-__global__ void cuMse(const float* sought, const float* desired, float* result, int size, int batchSize) {
+__global__ void cuMse(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+   
+    //sought2, desired1
+
     extern __shared__ float partialSum[]; // shared memory per block
 
     int row = threadIdx.x + blockIdx.x * blockDim.x;
@@ -179,8 +190,59 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
 
     float localSum = 0.0f;
 
-    if (row < size && col < batchSize) {
-        int i = row + col * size; // column-major offset
+    if (row < desiredSize && col < batchSize) {
+        int i = row + col * desiredSize; // column-major offset
+        float diff = sought[i] - desired[row];
+        localSum = diff * diff;
+    }
+
+    partialSum[tid] = localSum;
+    __syncthreads();
+
+    // Block-level reduction
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            partialSum[tid] += partialSum[tid + stride];
+
+        __syncthreads();
+    }
+
+    // Accumulate per-batch sum into global result
+    if (tid == 0) 
+        atomicAdd(result, partialSum[0]);
+    
+}
+__global__ void cuNormalizeMSE(float* result, int desiredSize, int batchSize) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        int total = desiredSize * batchSize;
+        *result /= total;
+    }
+}
+void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+
+    int threadsPerBlock = std::min(256, desiredSize);
+    int blocksPerBatch = (desiredSize + threadsPerBlock - 1) / threadsPerBlock;
+    dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
+    dim3 block(threadsPerBlock);
+    size_t sharedMemSize = threadsPerBlock * sizeof(float);
+
+    cuMse<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
+    //normalize later after mse reduced
+}
+
+__global__ void cuMse2(const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+    extern __shared__ float partialSum[]; // shared memory per block
+
+    //sought2, desired2
+
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+    int tid = threadIdx.x;
+
+    float localSum = 0.0f;
+
+    if (row < desiredSize && col < batchSize) {
+        int i = row + col * desiredSize; // column-major offset
         float diff = sought[i] - desired[i];
         localSum = diff * diff;
     }
@@ -197,20 +259,19 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
     }
 
     // Accumulate per-batch sum into global result
-    if (tid == 0) {
-        float batchMse = partialSum[0] / size / batchSize;
-        atomicAdd(result, batchMse);
-    }
+    if (tid == 0) 
+        atomicAdd(result, partialSum[0]);
+    
 }
-void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int size, int batchSize) {
-
-    int threadsPerBlock = std::min(256, size);;
-    int blocksPerBatch = (size + threadsPerBlock - 1) / threadsPerBlock;
+void Kernel::mse2(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
+    int threadsPerBlock = std::min(256, desiredSize);
+    int blocksPerBatch = (desiredSize + threadsPerBlock - 1) / threadsPerBlock;
     dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
     dim3 block(threadsPerBlock);
     size_t sharedMemSize = threadsPerBlock * sizeof(float);
 
-    cuMse << <grid, block, sharedMemSize, stream >> > (sought, desired, result, size, batchSize);
+    cuMse2 << <grid, block, sharedMemSize, stream >> > (sought, desired, result, desiredSize, batchSize);
+    //normalize later
 }
 __global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
 

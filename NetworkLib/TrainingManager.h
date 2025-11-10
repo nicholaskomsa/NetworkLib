@@ -3,6 +3,7 @@
 #include "GpuTensor.h"
 #include "GpuNetwork.h"
 #include "NetworkSorter.h"
+#include "Algorithms.h"
 
 #include <fstream>
 #include <map>
@@ -12,13 +13,6 @@ namespace NetworkLib {
 
 	class TrainingManager {
 	public:
-
-		using SharedOutput = Gpu::GpuView1;
-		using SharedOutputIdx = Gpu::Int;
-		using BatchedOutput = Gpu::GpuView2;
-
-		using BatchedSharedOutputsIdx = std::vector<SharedOutputIdx>;
-		using BatchedSharedOutputs = std::vector<SharedOutput>;
 
 		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
 		using CpuSample = std::pair<std::vector<float>, std::vector<float>>;
@@ -65,16 +59,131 @@ namespace NetworkLib {
 		Cpu::Network& getNetwork(std::size_t id);
 		GpuTask& getGpuTask(std::size_t idx = 0);
 
-		void train(GpuTask& gpuTask, std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print = false);
-		void trainNetworks(std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print = false);
-
-		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print = false);
-		void calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print = false);
-		
 		void forEachNetwork(Cpu::NetworksMap& networks, auto&& functor);
 
-		void calculateNetworksConvergence(Cpu::NetworksMap& networks, GpuBatchedSamplesView samples, bool print = false);
-		void calculateNetworksConvergence(GpuBatchedSamplesView samples, bool print = false);
+		template<typename SamplesViewType>
+		void train(GpuTask& gpuTask, std::size_t trainNum, const SamplesViewType& samples, float learnRate, bool print = false) {
+			
+			auto& [gpu, gpuNetwork] = gpuTask;
+
+			time<seconds>("Training Network", [&]() {
+
+				for (auto generation : std::views::iota(0ULL, trainNum)) {
+
+					const auto& [seen, desired] = samples[generation % samples.size()];
+
+					gpuNetwork.forward(gpu, seen);
+					gpuNetwork.backward(gpu, seen, desired, learnRate);
+
+					if (print)
+						printProgress(generation, trainNum);
+				}
+
+				gpuNetwork.download(gpu);
+
+				}, print);
+		}
+		template<typename SamplesViewType>
+		void trainNetworks(std::size_t trainNum, const SamplesViewType& samples, float learnRate, bool print = false){
+
+			time<seconds>("Training Networks", [&]() {
+
+				std::atomic<std::size_t> progress = 0;
+
+				forEachNetwork(mNetworksMap, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
+
+					auto& [gpu, gpuNetwork] = gpuTask;
+					gpuNetwork.mirror(cpuNetwork);
+
+					train(gpuTask, trainNum, samples, learnRate, false);
+
+					if (print)
+						printProgress(++progress, mNetworksMap.size());
+
+					});
+
+				}, print);
+		}
+
+		template<typename SamplesViewType>
+		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, bool print = false) {
+
+			auto& [gpu, gpuNetwork] = gpuTask;
+
+			gpuNetwork.mirror(cpuNetwork);
+
+			gpu.resetMseResult();
+			gpu.resetMissesResult();
+
+			for (const auto& [seen, desired] : samples) {
+
+				auto sought = gpuNetwork.forward(gpu, seen);
+
+				gpu.mse(sought, desired);
+			//	gpu.score(sought, desired);
+
+				if (print) {
+
+					auto output = gpuNetwork.getOutput();
+
+					sought.downloadAsync(gpu);
+					output.downloadAsync(gpu);
+					gpu.sync();
+
+					std::println("\nseen: {}"
+						"\ndesired: {}"
+						"\nsought: {}"
+						"\noutput: {}"
+						, seen
+						, desired
+						, sought
+						, output
+					);
+				}
+			}
+
+			auto batchSize = samples.front().first.mView.extent(1);
+			auto desiredSize = samples.front().second.mView.extent(0);
+
+			gpu.downloadConvergenceResults();
+			cpuNetwork.mMse = gpu.getMseResult() / (desiredSize * batchSize * samples.size());
+			cpuNetwork.mMisses = gpu.getMissesResult();
+
+			if (print) {
+
+				auto sampleNum = samples.size() * batchSize;
+
+				std::println("\nMse: {}"
+					"\nMisses: {}"
+					"\nAccuracy: {}"
+					, cpuNetwork.mMse
+					, cpuNetwork.mMisses
+					, (sampleNum - cpuNetwork.mMisses) / float(sampleNum) * 100.0f
+				);
+			}
+		}
+		template<typename SamplesViewType>
+		void calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, bool print=false) {
+
+			time<seconds>("Calculate Network Convergence", [&]() {
+
+				calculateConvergence(gpuTask, cpuNetwork, samples, print);
+
+				}, print);
+		}
+		template<typename SamplesViewType>
+		void calculateNetworksConvergence(Cpu::NetworksMap& networks, const SamplesViewType& samples, bool print = false) {
+
+			time<seconds>("Calculate Networks Convergence", [&]() {
+				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
+					calculateConvergence(gpuTask, cpuNetwork, samples, print);
+					});
+				}, print);
+		}
+		template<typename SamplesViewType>
+		void calculateNetworksConvergence(const SamplesViewType& samples, bool print = false) {
+			calculateNetworksConvergence(mNetworksMap, samples, print);
+		}
 
 		static GpuBatchedSamples createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
 			, std::size_t inputSize, std::size_t outputSize, std::size_t sampleNum, std::size_t batchSize = 1);
@@ -285,8 +394,8 @@ namespace NetworkLib {
 
 									std::copy(image.begin(), image.end(), seen.begin());
 								}
-
-								if (++digit == 10) {
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+								if (++digit == outputNum) {
 									imageCounter += batchSize;
 									digit = 0;
 								}

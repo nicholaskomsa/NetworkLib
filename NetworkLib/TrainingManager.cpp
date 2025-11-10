@@ -68,112 +68,6 @@ TrainingManager::GpuTask& TrainingManager::getGpuTask(std::size_t idx) {
 	return std::any_cast<GpuTask&>(section.mAny);
 }
 
-void TrainingManager::train(GpuTask& gpuTask, std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print) {
-
-	auto& [gpu, gpuNetwork] = gpuTask;
-
-	time<seconds>("Training Network", [&]() {
-
-		for (auto generation : std::views::iota(0ULL, trainNum)) {
-
-			const auto& [seen, desired] = samples[generation % samples.size()];
-
-			gpuNetwork.forward(gpu, seen);
-			gpuNetwork.backward(gpu, seen, desired, learnRate);
-
-			if (print)
-				printProgress(generation, trainNum);
-		}
-
-		gpuNetwork.download(gpu);
-
-		}, print);
-}
-void TrainingManager::trainNetworks(std::size_t trainNum, GpuBatchedSamplesView samples, float learnRate, bool print) {
-
-	time<seconds>("Training Networks", [&]() {
-
-		std::atomic<std::size_t> progress = 0;
-
-		forEachNetwork(mNetworksMap, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
-
-			auto& [gpu, gpuNetwork] = gpuTask;
-			gpuNetwork.mirror(cpuNetwork);
-
-			train(gpuTask, trainNum, samples, learnRate, false);
-
-			if (print)
-				printProgress(++progress, mNetworksMap.size());
-
-			});
-
-		}, print);
-}
-
-void TrainingManager::calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print) {
-
-	auto& [gpu, gpuNetwork] = gpuTask;
-
-	gpuNetwork.mirror(cpuNetwork);
-	
-	gpu.resetMseResult();
-	
-	gpu.resetMissesResult();
-	
-	auto batchSize = samples.front().first.mView.extent(1);
-
-	for (const auto& [seen, desired] : samples) {
-
-		auto sought = gpuNetwork.forward(gpu, seen);
-		auto output = gpuNetwork.getOutput();
-
-
-		gpu.mse(sought, desired);
-			gpu.score(sought, desired);
-
-		if (print) {
-
-			sought.downloadAsync(gpu);
-			output.downloadAsync(gpu);
-			gpu.sync();
-
-			std::println("\nseen: {}"
-				"\ndesired: {}"
-				"\nsought: {}"
-				"\noutput: {}"
-				, seen
-				, desired
-				, sought
-				, output
-			);
-		}
-	}
-
-	gpu.downloadConvergenceResults();
-	cpuNetwork.mMse = gpu.getMseResult();
-	cpuNetwork.mMisses = gpu.getMissesResult();
-
-	if (print) {
-
-		auto sampleNum = samples.size() * batchSize;
-
-		std::println("\nMse: {}"
-			"\nMisses: {}"
-			"\nAccuracy: {}"
-			, cpuNetwork.mMse
-			, cpuNetwork.mMisses
-			, (sampleNum - cpuNetwork.mMisses) / float(sampleNum) * 100.0f
-		);
-	}
-}
-void TrainingManager::calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const TrainingManager::GpuBatchedSamplesView samples, bool print) {
-
-	time<seconds>("Calculate Network Convergence", [&]() {
-
-		calculateConvergence(gpuTask, cpuNetwork, samples, print);
-
-		}, print);
-}
 
 void TrainingManager::forEachNetwork(Cpu::NetworksMap& networks, auto&& functor) {
 
@@ -209,19 +103,8 @@ void TrainingManager::forEachNetwork(Cpu::NetworksMap& networks, auto&& functor)
 		});
 }
 
-void TrainingManager::calculateNetworksConvergence(Cpu::NetworksMap& networks, GpuBatchedSamplesView samples, bool print) {
 
-	time<seconds>("Calculate Networks Convergence", [&]() {
-		forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
-			calculateConvergence(gpuTask, cpuNetwork, samples, print);
-			});
-		}, print);
-}
 
-void TrainingManager::calculateNetworksConvergence(GpuBatchedSamplesView samples, bool print) {
-
-	calculateNetworksConvergence(mNetworksMap, samples, print);
-}
 
 TrainingManager::GpuBatchedSamples TrainingManager::createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
 	, std::size_t inputSize, std::size_t outputSize, std::size_t sampleNum, std::size_t batchSize) {
