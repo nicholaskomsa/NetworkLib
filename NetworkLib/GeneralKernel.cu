@@ -212,12 +212,7 @@ __global__ void cuMse(const float* sought, const float* desired, float* result, 
         atomicAdd(result, partialSum[0]);
     
 }
-__global__ void cuNormalizeMSE(float* result, int desiredSize, int batchSize) {
-    if (threadIdx.x == 0 && blockIdx.x == 0) {
-        int total = desiredSize * batchSize;
-        *result /= total;
-    }
-}
+
 void Kernel::mse(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize) {
 
     int threadsPerBlock = std::min(256, desiredSize);
@@ -271,7 +266,7 @@ void Kernel::mse2(cudaStream_t stream, const float* sought, const float* desired
     size_t sharedMemSize = threadsPerBlock * sizeof(float);
 
     cuMse2 << <grid, block, sharedMemSize, stream >> > (sought, desired, result, desiredSize, batchSize);
-    //normalize later
+    //normalize later on cpu in calculateconvergence
 }
 __global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
 

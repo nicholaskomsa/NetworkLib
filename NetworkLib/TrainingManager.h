@@ -146,6 +146,7 @@ namespace NetworkLib {
 			auto desiredSize = samples.front().second.mView.extent(0);
 
 			gpu.downloadConvergenceResults();
+			//normalise mse 
 			cpuNetwork.mMse = gpu.getMseResult() / (desiredSize * batchSize * samples.size());
 			cpuNetwork.mMisses = gpu.getMissesResult();
 
@@ -369,9 +370,6 @@ namespace NetworkLib {
 					auto createInputs = [&]() {
 
 						auto setSamples = [&](const auto& samplesMap, GpuBatched2Samples& batchedSamples) {
-
-							auto& cpuImagesN = samplesMap.begin()->second;
-							auto inputSize = cpuImagesN.front().size();
 
 							std::size_t imageCounter = 0;
 							std::uint8_t digit = 0;

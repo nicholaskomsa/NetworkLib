@@ -31,7 +31,7 @@ namespace NetworkLib {
 			void calculateConvergence() {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				//mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatched2SamplesView, mPrintConsole);
+				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatched2SamplesView, mPrintConsole);
 			}
 			void create() {
 

@@ -328,7 +328,7 @@ void Environment::score(const GpuView2& sought, const GpuView2& desired) {
 	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
-void Environment::mse2(const GpuView2& sought, const GpuView2& desired) {
+void Environment::mse(const GpuView2& sought, const GpuView2& desired) {
 
 	int desiredSize = desired.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
