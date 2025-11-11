@@ -268,13 +268,8 @@ void Kernel::sqe2(cudaStream_t stream, const float* sought, const float* desired
 
     cuSquaredError2<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
 }
-__global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
 
-    int batch = blockIdx.x * blockDim.x + threadIdx.x;
-    if (batch >= batchSize) return;
-
-    const float* sought = soughtBatch + batch * size;
-    const float* desired = desiredBatch + batch * size;
+__device__ bool kMiss(const float* sought, const float* desired, int size, int* misses) {
 
     int maxSoughtIdx = 0;
     int maxDesiredIdx = 0;
@@ -291,34 +286,58 @@ __global__ void cuScore(const float* soughtBatch, const float* desiredBatch, int
             maxDesiredIdx = i;
         }
     }
-
-    if (maxSoughtIdx != maxDesiredIdx) {
+    if( maxSoughtIdx != maxDesiredIdx)
         atomicAdd(misses, 1);
-    }
 }
-void Kernel::score(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
+__global__ void cuScore(const float* soughtBatch, const float* desired, int* misses, int size, int batchSize) {
+
+    int batch = blockIdx.x * blockDim.x + threadIdx.x;
+    if (batch >= batchSize) return;
+
+    const float* sought = soughtBatch + batch * size;
+
+    kMiss(sought, desired, size, misses);
+}
+void Kernel::score(cudaStream_t stream, const float* soughtBatch, const float* desired, int* misses, int size, int batchSize) {
 
     int threadsPerBlock = std::min(256, size);
     int blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
 
-    cuScore<<<blocks, threadsPerBlock, 0, stream>>>(soughtBatch, desiredBatch, misses, size, batchSize);
+    cuScore<<<blocks, threadsPerBlock, 0, stream>>>(soughtBatch, desired, misses, size, batchSize);
+}
+
+__global__ void cuScore2(const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
+
+    int batch = blockIdx.x * blockDim.x + threadIdx.x;
+    if (batch >= batchSize) return;
+
+    const float* sought = soughtBatch + batch * size;
+    const float* desired = desiredBatch + batch * size;
+
+    kMiss(sought, desired, size, misses);
+}
+void Kernel::score2(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize) {
+
+    int threadsPerBlock = std::min(256, size);
+    int blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+
+    cuScore2<<<blocks, threadsPerBlock, 0, stream>>>(soughtBatch, desiredBatch, misses, size, batchSize);
 }
 
 __global__ void cuBroadcastVectorToColumns(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;
 
-    if (row < size && col < batchSize) {
+    if (row < size && col < batchSize)
         dst[row + col * size] = src[row];  // column-major offset
-    }
+    
 }
 __global__ void cuBroadcastVectorToColumnsAdd(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;
 
-    if (row < size && col < batchSize) {
+    if (row < size && col < batchSize)
         dst[row + col * size] += src[row];  // column-major offset
-    }
 }
 void Kernel::batchedBroadcast(cudaStream_t stream, const float* src, float* dst, int size, int batchSize) {
     int threadsPerBlock = std::min(size, 256);

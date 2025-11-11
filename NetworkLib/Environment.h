@@ -37,6 +37,8 @@ namespace NetworkLib {
 			void matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
 
 			void score(const GpuView2& sought, const GpuView2& desired);
+			void score(const GpuView2& sought, const GpuView1& desired);
+
 			void resetMissesResult();
 			int getMissesResult();
 

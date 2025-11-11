@@ -120,7 +120,7 @@ namespace NetworkLib {
 				auto sought = gpuNetwork.forward(gpu, seen);
 
 				gpu.sqe(sought, desired);
-			//	gpu.score(sought, desired);
+				gpu.score(sought, desired);
 
 				if (print) {
 
@@ -254,7 +254,6 @@ namespace NetworkLib {
 				using LabelType = std::uint8_t;
 				using Image1Type = std::uint8_t;
 				using Image1 = std::vector<Image1Type>;
-				using FloatImage1 = std::vector<float>;
 
 				auto readHeading = [](auto& filestream, HeadingType& h) {
 
@@ -321,7 +320,7 @@ namespace NetworkLib {
 
 					std::advance(imagesIt, imageSize);
 				}
-				return { digitsMap, images };
+				return { std::move(digitsMap), std::move(images) };
 			}
 		
 			void create(NetworkTemplate& networkTemplate) {
@@ -389,6 +388,9 @@ namespace NetworkLib {
 
 									auto imageIdx = (imageCounter + b) % cpuImages.size();
 									auto& image = cpuImages[imageIdx];
+
+									auto seenSize = seen.mSize;
+									auto imageSize = image.size();
 
 									std::copy(image.begin(), image.end(), seen.begin());
 								}

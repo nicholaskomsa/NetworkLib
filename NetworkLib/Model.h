@@ -53,7 +53,7 @@ namespace NetworkLib {
 				network.initializeId(mId);
 
 				mTrainingManager.create(1);
-				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
+  				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
 				
 				mBatched2SamplesView = mTrainingManager.mMNISTSamples.mTrainBatched2Samples;
 
