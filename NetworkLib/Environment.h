@@ -36,15 +36,17 @@ namespace NetworkLib {
 			void batchedMatTMulVec(const GpuView3& w3, const GpuView2& i2, GpuView2& o2);
 			void matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o1);
 
-			void score(const GpuView2& sought, const GpuView2& desired);
-			void score(const GpuView2& sought, const GpuView1& desired);
+			void score(const GpuView1& sought, const GpuView1& desired); // 1:1
+			void score(const GpuView2& sought, const GpuView1& desired); // batch:1
+			void score(const GpuView2& sought, const GpuView2& desired); // batch:batch
 
 			void resetMissesResult();
 			int getMissesResult();
 
 			//squared error
-			void sqe(const GpuView2& sought, const GpuView2& desired);
+			void sqe(const GpuView1& sought, const GpuView1& desired);
 			void sqe(const GpuView2& sought, const GpuView1& desired);
+			void sqe(const GpuView2& sought, const GpuView2& desired);
 
 			float getSqeResult();
 			void resetSqeResult();

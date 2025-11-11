@@ -335,6 +335,20 @@ void Environment::score(const GpuView2& sought, const GpuView1& desired) {
 	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
+void Environment::score(const GpuView1& sought, const GpuView1& desired) {
+	int size = sought.mView.extent(0);
+	int batchSize = 1;
+	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
+	commandQueueSync();
+}
+void Environment::sqe(const GpuView1& sought, const GpuView1& desired) {
+
+	int desiredSize = desired.mView.extent(0);
+	int batchSize = 1;
+	Kernel::sqe2(mStream, sought.mGpu, desired.mGpu, mSqeResult.mGpu, desiredSize, batchSize);
+	commandQueueSync();
+
+}
 void Environment::sqe(const GpuView2& sought, const GpuView2& desired) {
 
 	int desiredSize = desired.mView.extent(0);

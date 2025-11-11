@@ -14,7 +14,7 @@ namespace NetworkLib {
 	class TrainingManager {
 	public:
 
-		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
+
 		using CpuSample = std::pair<std::vector<float>, std::vector<float>>;
 		using CpuSample2 = std::pair< std::vector<float>, std::vector<std::size_t>>;
 
@@ -24,6 +24,11 @@ namespace NetworkLib {
 		using CpuBatchedSample = std::pair<Cpu::View2, Cpu::View2>;
 		using CpuBatchedSamples = std::vector<CpuBatchedSample>;
 		using CpuBatchedSamplesView = std::span<CpuBatchedSample>;
+
+		//one input one output not batched
+		using GpuSample = std::pair<Gpu::GpuView1, Gpu::GpuView1>;
+		using GpuSamples = std::vector<GpuSample>;
+		using GpuSamplesView = std::span<GpuSample>;
 
 		//all batched samples have different output
 		using GpuBatchedSample = std::pair<Gpu::GpuView2, Gpu::GpuView2>;
@@ -142,8 +147,16 @@ namespace NetworkLib {
 				}
 			}
 
-			auto batchSize = samples.front().first.mView.extent(1);
-			auto desiredSize = samples.front().second.mView.extent(0);
+			const auto& aSample = samples.front();
+			auto& [aSeen, aDesired] = aSample;
+
+			int batchSize = 0;
+			if (aSeen.mView.rank() == 1)
+				batchSize = 1;
+			else
+				batchSize = aSeen.mView.extent(1);
+
+			auto desiredSize = aDesired.mView.extent(0);
 
 			gpu.downloadConvergenceResults();
 			//normalise to get sqe -> mse 
@@ -220,8 +233,10 @@ namespace NetworkLib {
 			std::string mMNISTFolder = "./mnist/";
 
 			Gpu::LinkedFloatSpace mFloatSpace;
-			GpuBatched2Samples mTrainBatched2Samples, mTestBatched2Samples;
-			GpuBatched2SamplesView mTrainSamplesView, mTestSamplesView;
+
+			GpuBatched2Samples mTrainBatched2Samples;			
+			GpuSamples mTestSamples;
+
 			Gpu::GpuView1 mOutputs1;
 			Gpu::GpuViews1 mOutputs;
 
@@ -335,16 +350,20 @@ namespace NetworkLib {
 
 				auto copyToGpu = [&]() {
 
+					//training samples need to be valid for an entire batch for training so
+					//to complete all training data in this fashion, some may be duplicated with %
+
+					//test data has a batchsize of 1 so that it fits perfectly
+
 					std::size_t trainSamplesNum = getSamplesNum(mTrainSamplesMap)
 						, testSamplesNum = getSamplesNum(mTestSamplesMap)
 						, trainBatchNum = std::ceil(trainSamplesNum / float(batchSize))
-						, testBatchNum = std::ceil(testSamplesNum / float(batchSize))
 						, outputClassesSize = outputSize * outputNum
 						, trainInputsSize = trainBatchNum * batchSize * inputSize
-						, testInputsSize = testBatchNum * batchSize * inputSize;
+						, testInputsSize = testSamplesNum * inputSize;
 
 					mTrainBatched2Samples.resize(trainBatchNum);
-					mTestBatched2Samples.resize(testBatchNum);
+					mTestSamples.resize(testSamplesNum);
 
 					mFloatSpace.create(outputClassesSize + trainInputsSize + testInputsSize);
 					auto& gpuSampleSpace = mFloatSpace.mGpuSpace;
@@ -368,7 +387,7 @@ namespace NetworkLib {
 
 					auto createInputs = [&]() {
 
-						auto setSamples = [&](const auto& samplesMap, GpuBatched2Samples& batchedSamples) {
+						auto setTrainingData = [&](const auto& samplesMap, GpuBatched2Samples& batchedSamples) {
 
 							std::size_t imageCounter = 0;
 							std::uint8_t digit = 0;
@@ -386,19 +405,13 @@ namespace NetworkLib {
 
 									auto seen = seenBatch.viewColumn(b);
 
-									auto idx = imageCounter + b;
-									if (idx < cpuImages.size()) {
-										auto imageIdx = (imageCounter + b) % cpuImages.size();
-										auto& image = cpuImages[imageIdx];
+									auto imageIdx = (imageCounter + b) % cpuImages.size();
+									auto& image = cpuImages[imageIdx];
 
-										auto seenSize = seen.mSize;
-										auto imageSize = image.size();
+									auto seenSize = seen.mSize;
+									auto imageSize = image.size();
 
-										std::copy(image.begin(), image.end(), seen.begin());
-									}
-									else //blank image
-										std::fill(seen.begin(), seen.end(), 0.0f);
-									
+									std::copy(image.begin(), image.end(), seen.begin());
 								}
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 								if (++digit == outputNum) {
@@ -406,11 +419,38 @@ namespace NetworkLib {
 									digit = 0;
 								}
 							}
-							};
+
+						};
 							
-						setSamples(mTrainSamplesMap, mTrainBatched2Samples);
-						setSamples(mTestSamplesMap, mTestBatched2Samples);
-					};
+						auto setTestData = [&](const auto& samplesMap, GpuSamples& samples) {
+
+							auto samplesIt = samples.begin();
+
+							for (auto digit : std::views::iota(0, 10)) {
+
+								auto& cpuImages = samplesMap.find(digit)->second;
+								auto output = mOutputs[digit];
+
+								for (auto idx : std::views::iota(0ULL, cpuImages.size())) {
+
+									auto& [seen, desired] = *samplesIt;
+
+									desired = output;
+
+									gpuSampleSpace.advance(seen, gpuSampleSpaceIt, inputSize);
+
+									auto& image = cpuImages[idx];
+
+									std::copy(image.begin(), image.end(), seen.begin());
+
+									std::advance(samplesIt, 1);
+								}
+							}
+							};
+
+						setTrainingData(mTrainSamplesMap, mTrainBatched2Samples);
+						setTestData(mTestSamplesMap, mTestSamples);
+						};
 
 					createOneHotOutputViews();
 					createInputs();
