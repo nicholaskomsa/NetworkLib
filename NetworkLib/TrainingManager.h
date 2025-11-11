@@ -62,13 +62,13 @@ namespace NetworkLib {
 		void forEachNetwork(Cpu::NetworksMap& networks, auto&& functor);
 
 		template<typename SamplesViewType>
-		void train(GpuTask& gpuTask, std::size_t trainNum, const SamplesViewType& samples, float learnRate, bool print = false) {
+		void train(GpuTask& gpuTask, std::size_t trainNum, const SamplesViewType& samples, float learnRate, std::size_t offset = 0, bool print = false) {
 			
 			auto& [gpu, gpuNetwork] = gpuTask;
 
 			time<seconds>("Training Network", [&]() {
 
-				for (auto generation : std::views::iota(0ULL, trainNum)) {
+				for (auto generation : std::views::iota(offset, offset + trainNum)) {
 
 					const auto& [seen, desired] = samples[generation % samples.size()];
 
@@ -84,7 +84,7 @@ namespace NetworkLib {
 				}, print);
 		}
 		template<typename SamplesViewType>
-		void trainNetworks(std::size_t trainNum, const SamplesViewType& samples, float learnRate, bool print = false){
+		void trainNetworks(std::size_t trainNum, const SamplesViewType& samples, float learnRate, std::size_t offset, bool print = false) {
 
 			time<seconds>("Training Networks", [&]() {
 
@@ -95,7 +95,7 @@ namespace NetworkLib {
 					auto& [gpu, gpuNetwork] = gpuTask;
 					gpuNetwork.mirror(cpuNetwork);
 
-					train(gpuTask, trainNum, samples, learnRate, false);
+					train(gpuTask, trainNum, samples, learnRate, offset, false);
 
 					if (print)
 						printProgress(++progress, mNetworksMap.size());
@@ -386,13 +386,19 @@ namespace NetworkLib {
 
 									auto seen = seenBatch.viewColumn(b);
 
-									auto imageIdx = (imageCounter + b) % cpuImages.size();
-									auto& image = cpuImages[imageIdx];
+									auto idx = imageCounter + b;
+									if (idx < cpuImages.size()) {
+										auto imageIdx = (imageCounter + b) % cpuImages.size();
+										auto& image = cpuImages[imageIdx];
 
-									auto seenSize = seen.mSize;
-									auto imageSize = image.size();
+										auto seenSize = seen.mSize;
+										auto imageSize = image.size();
 
-									std::copy(image.begin(), image.end(), seen.begin());
+										std::copy(image.begin(), image.end(), seen.begin());
+									}
+									else //blank image
+										std::fill(seen.begin(), seen.end(), 0.0f);
+									
 								}
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 								if (++digit == outputNum) {

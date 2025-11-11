@@ -70,7 +70,7 @@ namespace NetworkLib {
 			}
 
 			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, print);
+				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, 0, print);
 			}
 
 			Cpu::Network& getNetwork() {
@@ -349,7 +349,7 @@ namespace NetworkLib {
 
 				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
 
-				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, print);
+				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, 0, print);
 
 				mNetworksTracker.track(mTrainingManager.mNetworksMap);
 			}

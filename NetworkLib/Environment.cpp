@@ -325,14 +325,14 @@ void Environment::matTMulVec(const GpuView3& w3, const GpuView1& i1, GpuView1& o
 void Environment::score(const GpuView2& sought, const GpuView2& desired) {
 	int size = sought.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
-	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
+	Kernel::score2(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
 
 void Environment::score(const GpuView2& sought, const GpuView1& desired) {
 	int size = sought.mView.extent(0);
 	int batchSize = sought.mView.extent(1);
-	Kernel::score2(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
+	Kernel::score(mStream, sought.mGpu, desired.mGpu, mMissesResult.mGpu, size, batchSize);
 	commandQueueSync();
 }
 void Environment::sqe(const GpuView2& sought, const GpuView2& desired) {

@@ -38,7 +38,7 @@ __global__ void cuBatchedUpdateWeights(float* weights, const float* primes, cons
     int b = blockIdx.z;  // Each block handles one sample
 
     if (col < cols && row < rows && b < batchSize) {
-        float prime_val = primes[b * rows + row] * learnRate;   
+        float prime_val = primes[b * rows + row] * learnRate / batchSize;   
         float seen_val = seen[b * cols + col];     
 
         int index_col_major = row + col * rows;

@@ -14,24 +14,29 @@ namespace NetworkLib {
 
 		class MNIST {
 		public:
-			TrainingManager::GpuBatched2SamplesView mBatched2SamplesView;
+			TrainingManager::GpuBatched2SamplesView mTrainBatched2SamplesView, mTestBatched2SamplesView;
 			NetworkTemplate mNetworkTemplate;
 			std::size_t mId = 981;
 			TrainingManager mTrainingManager;
 			TrainingManager::GpuTask* mGpuTask = nullptr;
 
 			std::size_t mInputWidth = 28, mInputHeight = 28, mOutputSize = 10
-				, mTrainNum = 5000;
+				, mTrainNum = 1;
 
 			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
 
 			bool mPrintConsole = false;
 
-			void calculateConvergence() {
+			void calculateConvergence(const auto& batched2SamplesView) {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatched2SamplesView, mPrintConsole);
+				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, batched2SamplesView, false);
+
+				auto samplesNum = batched2SamplesView.size()* mBatchSize;
+				auto accuracy = (samplesNum - cpuNetwork.mMisses) / float(samplesNum) * 100.0f;
+
+				std::println("Id: {}; Misses: {}; Accuracy: {:.2}%; Mse: {};", cpuNetwork.mId, cpuNetwork.mMisses, accuracy, cpuNetwork.mMse);
 			}
 			void create() {
 
@@ -53,9 +58,13 @@ namespace NetworkLib {
 				network.initializeId(mId);
 
 				mTrainingManager.create(1);
-  				mTrainingManager.mMNISTSamples.create(mNetworkTemplate);
+
+				auto& mnistSamples = mTrainingManager.mMNISTSamples;
+
+				mnistSamples.create(mNetworkTemplate);
 				
-				mBatched2SamplesView = mTrainingManager.mMNISTSamples.mTrainBatched2Samples;
+				mTrainBatched2SamplesView = mnistSamples.mTrainBatched2Samples;
+				mTestBatched2SamplesView = mnistSamples.mTestBatched2Samples;
 
 				mGpuTask = &mTrainingManager.getGpuTask();
 			}
@@ -64,21 +73,23 @@ namespace NetworkLib {
 			}
 
 			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.train(*mGpuTask, trainNum, mBatched2SamplesView, mLearnRate, print);
+				mTrainingManager.train(*mGpuTask, trainNum, mTrainBatched2SamplesView, mLearnRate, 0, print);
 			}
 
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);
 			}
-			virtual void run(bool print = true) {
+			void run(bool print = true) {
 
 				mPrintConsole = print;
 
 				create();
-				calculateConvergence();
-				train(mTrainNum, true);
+				calculateConvergence(mTestBatched2SamplesView);
 
-				calculateConvergence();
+				auto totalTrainNum = mTrainNum * mBatchSize * mTrainBatched2SamplesView.size();
+				train(totalTrainNum, true);
+
+				calculateConvergence(mTestBatched2SamplesView);
 				destroy();
 			}
 		};
