@@ -138,6 +138,7 @@ namespace NetworkLib {
 				mMse = 0.0f;
 			}
 			void score(View2 soughtBatch, View2 desiredBatch) {
+				/*
 				for (auto batch : std::views::iota(0ULL, soughtBatch.extent(1))) {
 				
 					auto sought = Tensor::viewColumn(soughtBatch, batch);
@@ -157,6 +158,7 @@ namespace NetworkLib {
 					if (maxSoughtIndex != maxDesiredIndex)
 						++mMisses;
 				}
+				*/
 			}
 			static float mse( const View1& sought, const View1& desired) {
 				float sum = 0.0f;
@@ -219,13 +221,13 @@ namespace NetworkLib {
 
 				const View1 forward(const View1& input, std::size_t batch = 0) {
 
-					auto activations1 = Tensor::viewColumn(mOutputs, batch);
+					//auto activations1 = Tensor::viewColumn(mOutputs, batch);
 
-					return activations1;
+					//return activations1;
+					return {};
 				}
 				const View2& forward(const View2& input) {
-
-					return mActivations;
+					return {};
 				}
 
 				View3 mWeights;
@@ -250,6 +252,7 @@ namespace NetworkLib {
 			
 			float mMse = 0.0f;
 			std::size_t mMisses = 0;
+			float mAccuracy = 0.0f;
 
 			using Id = std::size_t;
 			Id mId = 0;

@@ -13,12 +13,19 @@ namespace NetworkLib {
 
 		template<typename T>
 		concept ViewConcept = Cpu::Tensor::ViewConcept<T>;
+		
+		template<typename T>
+		concept IntViewConcept = Cpu::Tensor::IntViewConcept<T>;
 
 		template<ViewConcept ViewType>
 		struct GpuView {
 			ViewType mView;
 			float* mGpu = nullptr, * mCpu = nullptr;
 			Dimension mSize = 0;
+
+			using ViewDataType = typename ViewType::element_type;
+
+			using CpuView1 = std::mdspan<ViewDataType, std::extents<Dimension, std::dynamic_extent>, Cpu::Tensor::CUBlasColMajor>;
 
 			GpuView() = default;
 			GpuView(ViewType view, float* gpu, float* cpu) 
@@ -85,23 +92,24 @@ namespace NetworkLib {
 						, cpuView.data_handle()
 				};
 			}
-			GpuView<Cpu::Tensor::View1> viewColumn( Coordinate col) const{
+
+			GpuView<CpuView1> viewColumn( Coordinate col) const {
 
 				Error::checkBounds(col, mView.extent(1));
 
-				auto cpuView = Cpu::Tensor::viewColumn(mView, col);
+				CpuView1 cpuView = Cpu::Tensor::viewColumn<CpuView1>(mView, col);
 
 				int rows = mView.extent(0);
 				std::size_t offset = col * rows;
 				auto gpu = mGpu + offset;
 
-				return {
+				return GpuView<CpuView1>{
 					 cpuView
 					, gpu
-					, cpuView.data_handle()
+					, reinterpret_cast<float*>(cpuView.data_handle())
 				};
-
 			}
+
 			GpuView<Cpu::Tensor::View2> viewDepth(Coordinate depth) const {
 
 				Error::checkBounds(depth, mView.extent(2));
@@ -126,6 +134,10 @@ namespace NetworkLib {
 		using GpuView2 = GpuView<Cpu::Tensor::View2>;
 		using GpuView3 = GpuView<Cpu::Tensor::View3>;
 
+		using GpuIntView1 = GpuView<Cpu::Tensor::IntView1>;
+		using GpuIntView2 = GpuView<Cpu::Tensor::IntView2>;
+		using GpuIntView3 = GpuView<Cpu::Tensor::IntView3>;
+
 		using GpuViews1 = std::vector<Gpu::GpuView1>;
 		using GpuViews1View = std::span<Gpu::GpuView1>;
 		 
@@ -147,6 +159,7 @@ namespace NetworkLib {
 			operator int() const;
 			Int& operator=(int v);
 		};
+
 		struct FloatSpace1 {
 			
 			GpuView1 mView;
@@ -160,7 +173,7 @@ namespace NetworkLib {
 
 			template<ViewConcept ViewType>
 			float* getGpu(ViewType& view) {
-				return getGpu(view.data_handle());
+				return getGpu(reinterpret_cast<float*>(view.data_handle()));
 			}
 
 			float* begin();

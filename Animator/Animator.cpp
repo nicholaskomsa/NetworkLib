@@ -10,6 +10,7 @@
 #include <Gpt2.h>
 #include <Serializer.h>
 #include <ModelLogic.h>
+#include <Model.h>
 
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}
@@ -542,4 +543,86 @@ void Animator::animateXORNetwork() {
     run(step);
 
     xorModel.destroy();
+}
+
+void Animator::animateMNISTNetwork() {
+
+    NetworkLib::Model::MNIST mnistModel;
+    mnistModel.create();
+
+	using Clock = std::chrono::high_resolution_clock;
+
+	std::future<void> convergenceFuture;
+    constexpr auto convergencePeriod = 1s;
+	auto convergenceTime = Clock::now() - convergencePeriod;
+
+    auto periodicCalculateConvergence = [&]() {
+
+        if (convergenceFuture.valid() && convergenceFuture.wait_for(0s) != std::future_status::ready) return;
+  
+		auto now = Clock::now();
+		auto elapsed = now - convergenceTime;
+        if (elapsed >= convergencePeriod) {
+
+            convergenceFuture = std::async(std::launch::async, [&]() {
+                mnistModel.calculateConvergence();
+                convergenceTime = Clock::now();
+				});
+        }
+
+		};
+
+    auto& [gpu, gpuNetwork] = *mnistModel.mGpuTaskTrain;
+
+    std::size_t generation = 0;
+
+    auto selectedView = gpuNetwork.mWeights;
+    auto selectedFloatsView = NetworkLib::Cpu::Tensor::view(selectedView.mView);
+
+    auto [frameWidth, frameHeight] = FloatSpaceConvert::getDimensions(selectedFloatsView.size(), Animator::mAspectRatio);
+    mFrameWidth = frameWidth;
+    mFrameHeight = frameHeight;
+
+    TextArea::LabeledValueReference mMseValueRef, mAccuracyValueRef;
+
+	std::size_t trainingOffset = 0;
+
+    mCreateCustomGui = [&]() {
+
+        auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+
+        mMseValueRef = textArea.addLabeledValue(mTextManager.mMinecraftFontFace, "Mse:", "    ");
+        mAccuracyValueRef = textArea.addLabeledValue(mTextManager.mMinecraftFontFace, "Test Accuracy:", "000");
+        };
+
+    mCustomGuiEvents = [&](bool& changeDimensions, bool& doConvert) {
+
+        };
+
+    mCustomGuiRender = [&]() {
+
+        auto& network = mnistModel.getNetwork();
+        float mse = network.mMse
+            , misses = network.mMisses
+            , accuracy = network.mAccuracy;
+
+        auto& textArea = mTextManager.getTextArea(mTextAreaRef);
+        textArea.updateLabeledValue(mMseValueRef, std::to_string(mse));
+
+        textArea.updateLabeledValue(mAccuracyValueRef, std::to_string(accuracy));
+        };
+
+    setup(selectedFloatsView);
+
+    auto step = [&](auto floats) {
+
+        mnistModel.train(10, trainingOffset++);
+
+        periodicCalculateConvergence();
+        return true;
+        };
+
+    run(step);
+
+    mnistModel.destroy();
 }

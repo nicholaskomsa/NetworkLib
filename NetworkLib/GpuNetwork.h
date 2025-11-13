@@ -116,8 +116,8 @@ namespace NetworkLib {
 				auto backLayer = [&]() {
 
 					auto& back = mLayers.back();
-					const auto sought = back.mActivations.viewColumn(batch);
-					auto p1 = back.mPrimes.viewColumn(batch);
+					const Gpu::GpuView1 sought = back.mActivations.viewColumn(batch);
+					Gpu::GpuView1 p1 = back.mPrimes.viewColumn(batch);
 					auto af = layerTemplates.back().mActivationFunction;
 					//output layer makes a comparison between desired and sought
 					env.errorFunction(af, desired, sought, p1);

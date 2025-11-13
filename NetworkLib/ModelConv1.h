@@ -34,7 +34,7 @@ namespace NetworkLib {
 			void calculateConvergence() {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
+				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
 			}
 			void create() {
 
@@ -269,7 +269,7 @@ namespace NetworkLib {
 						auto& bestNetwork = mNetworksSorter.getBest();
 						recordNetwork(1, bestNetwork);
 
-						mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
+						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
 						};
 
 					auto recordZeroMisses = [&]() {

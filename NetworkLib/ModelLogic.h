@@ -29,7 +29,7 @@ namespace NetworkLib {
 			void calculateConvergence() {
 
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateNetworkConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
+				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
 
 			}
 			void create() {
@@ -119,7 +119,7 @@ namespace NetworkLib {
 					auto bestNetworkId = mNetworksSorter.getBestId();
 					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkId, bestNetwork.mMisses, bestNetwork.mMse);
 
-					mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
+					mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, true);
 				
 					auto printZeroMisses = [&]() {
 
@@ -277,7 +277,7 @@ namespace NetworkLib {
 						auto& bestNetwork = mNetworksSorter.getBest();
 						recordNetwork(1, bestNetwork);
 
-						mTrainingManager.calculateNetworkConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
+						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
 					};
 					
 					auto recordZeroMisses = [&]() {

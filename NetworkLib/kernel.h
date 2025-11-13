@@ -15,9 +15,11 @@ namespace NetworkLib {
 
 			void sqe(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize);
 			void sqe2(cudaStream_t stream, const float* sought, const float* desired, float* result, int desiredSize, int batchSize);
+			void sqe3(cudaStream_t stream, const float* sought, const int* desiredIdxs, const float* desiredGroup, float* result, int desiredSize, int batchSize);
 
 			void score(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize);
 			void score2(cudaStream_t stream, const float* soughtBatch, const float* desiredBatch, int* misses, int size, int batchSize);
+			void score3(cudaStream_t stream, const float* soughtBatch, const int* desiredBatch,  const float* desiredGroup, int* misses, int size, int batchSize);
 
 			void diff(cudaStream_t stream, const float* desired, const float* sought, float* primes, int size);
 			void diff2(cudaStream_t stream, const float* desired, const float* sought, float* primes, int sought2Size, int desired1Size);

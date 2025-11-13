@@ -39,8 +39,13 @@ namespace NetworkLib {
 
 		namespace Tensor {
 
+			using CUBlasColMajor = std::layout_right;
+
 			template<typename... Dimensions>
-			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, std::layout_right>;
+			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
+
+			template<typename... Dimensions>
+			using IntView = std::mdspan<int, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
 
 			using Dynamic = std::integral_constant<size_t, std::dynamic_extent>;
 			template<std::size_t c>
@@ -49,6 +54,10 @@ namespace NetworkLib {
 			using View1 = View<Dynamic>;
 			using View2 = View<Dynamic, Dynamic>;
 			using View3 = View<Dynamic, Dynamic, Dynamic>;
+
+			using IntView1 = IntView<Dynamic>;
+			using IntView2 = IntView<Dynamic, Dynamic>;
+			using IntView3 = IntView<Dynamic, Dynamic, Dynamic>;
 
 			//match mdspans
 			template<typename T>
@@ -67,6 +76,24 @@ namespace NetworkLib {
 			template<typename T>
 			concept FixedViewConcept = ViewConcept<T> &&
 				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 0);
+
+			template<typename T>
+			concept IntViewConcept = ViewConcept<T> &&
+				std::same_as<typename T::element_type, int>;
+
+			template<typename T>
+			concept OneDimensionalConcept = ViewConcept<T> &&
+				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 1);
+
+			template<typename T>
+			concept TwoDimensionalConcept = ViewConcept<T> &&
+				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 2);
+
+			template<typename T>
+			concept ThreeDimensionalConcept = ViewConcept<T> &&
+				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 3);
+
+
 
 			template<typename T>
 			concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
@@ -91,14 +118,16 @@ namespace NetworkLib {
 
 			template<DynamicViewConcept ViewType, typename... Dimensions>
 			void advance(ViewType& view, float*& begin, Dimensions ...dimensions) {
-
-				view = ViewType(&*begin, std::array{ dimensions... });
+				using ViewDataType = typename ViewType::element_type;
+				view = ViewType(&*reinterpret_cast<ViewDataType*>(begin), std::array{ dimensions... });
 				begin += area(view);
 			}
 			template<FixedViewConcept ViewType>
 			void advance(ViewType& view, float*& begin) {
-
-				view = ViewType(&*begin);
+				//the floatspace can convert to int views here
+				//this view data type will be either int or float both have same sized
+				using ViewDataType = typename ViewType::element_type;
+				view = ViewType(&*reinterpret_cast<ViewDataType*>(begin));
 				begin += area(view);
 			}
 
@@ -116,14 +145,14 @@ namespace NetworkLib {
 
 				return result;
 			}
-
-			static View1 viewColumn(const View2 v2, Coordinate col) {
+			
+			template<OneDimensionalConcept View1Type, TwoDimensionalConcept View2Type>
+			View1Type viewColumn(const View2Type v2, Coordinate col) {
 
 				auto rows = v2.extent(0);
 				auto offset = rows * col;
 				auto cpu = v2.data_handle() + offset;
-
-				return View1(cpu, std::array{ rows });
+				return View1Type(cpu, std::array{ rows });
 			}
 			static View2 viewDepth(const View3 v2, Coordinate depth) {
 
@@ -150,6 +179,11 @@ namespace NetworkLib {
 				return FloatsView(v.data_handle(), area(v));
 			}
 
+			template<IntViewConcept IntViewType, ViewConcept FromType>
+			IntViewType toIntType(FromType v) {
+				return ViewTypeTo(v.data_handle(), std::array{ getShape(v) });
+			}
+
 			static View1 field(const View1 v, std::size_t offset, std::size_t size) {
 				
 				if (offset + size > v.extent(0))
@@ -162,6 +196,10 @@ namespace NetworkLib {
 		using View1 = Tensor::View1;
 		using View2 = Tensor::View2;
 		using View3 = Tensor::View3;
+
+		using IntView1 = Tensor::IntView1;
+		using IntView2 = Tensor::IntView2;
+		using IntView3 = Tensor::IntView3;
 
 		class FloatSpace1 {
 		public:

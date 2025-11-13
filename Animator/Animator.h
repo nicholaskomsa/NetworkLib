@@ -110,6 +110,7 @@ public:
     void viewChatGPT2();
     void animateChatGPT2();
     void animateXORNetwork();
+    void animateMNISTNetwork();
 
     void floatSpaceConvert() {
 

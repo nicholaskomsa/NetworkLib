@@ -13,7 +13,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
        //animator.animateMT19937();
        // animator.animateChatGPT2();
-        animator.animateXORNetwork();
+        //animator.animateXORNetwork();
+        animator.animateMNISTNetwork();
     }
     catch (const Animator::Error& e) {
         MessageBoxA(nullptr, e.what(), "Animator Error", MB_OK | MB_ICONERROR);

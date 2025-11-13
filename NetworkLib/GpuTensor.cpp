@@ -102,6 +102,7 @@ void FloatSpace1::advance(Int& i, float*& begin) {
 	i = { gpu, cpu };
 	++begin;
 }
+
 void FloatSpace1::upload() {
 	mView.upload();
 }

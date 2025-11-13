@@ -16,10 +16,7 @@ namespace NetworkLib {
 
 
 		using CpuSample = std::pair<std::vector<float>, std::vector<float>>;
-		using CpuSample2 = std::pair< std::vector<float>, std::vector<std::size_t>>;
-
 		using CpuSamples = std::vector<CpuSample>;
-		using CpuSamples2 = std::vector<CpuSample2>;
 
 		using CpuBatchedSample = std::pair<Cpu::View2, Cpu::View2>;
 		using CpuBatchedSamples = std::vector<CpuBatchedSample>;
@@ -39,6 +36,11 @@ namespace NetworkLib {
 		using GpuBatched2Sample = std::pair<Gpu::GpuView2, Gpu::GpuView1>;
 		using GpuBatched2Samples = std::vector<GpuBatched2Sample>;
 		using GpuBatched2SamplesView = std::span<GpuBatched2Sample>;
+
+		//all batched3 samples have unique ouputs like batched except they are output idx instead of (2D/inline output)
+		using GpuBatched3Sample = std::pair<Gpu::GpuView2, Gpu::GpuIntView2>;
+		using GpuBatched3Samples = std::vector<GpuBatched3Sample>;
+		using GpuBatched3SamplesView = std::span<GpuBatched3Sample>;
 
 
 		Cpu::NetworksMap mNetworksMap;
@@ -109,6 +111,59 @@ namespace NetworkLib {
 
 				}, print);
 		}
+		
+		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const GpuBatched3SamplesView& samples, std::size_t trueSampleNum, const Gpu::GpuView2& desiredGroup, bool print = false) {
+
+			auto& [gpu, gpuNetwork] = gpuTask;
+
+			gpuNetwork.mirror(cpuNetwork);
+
+			gpu.resetSqeResult();
+			gpu.resetMissesResult();
+
+			Gpu::GpuView2 sought;
+
+			for (const auto& [seen, desired] : samples) {
+
+				sought = gpuNetwork.forward(gpu, seen);
+
+				gpu.sqe(sought, desired, desiredGroup);
+				gpu.score(sought, desired, desiredGroup);
+			}
+
+			auto calculateVariables = [&]() {
+				const auto& aSample = samples.front();
+				auto& aSeen = aSample.first;
+
+				//work with either gpuview1 or gpuview2
+				int batchSize = 0;
+				if (aSeen.mView.rank() == 1)
+					batchSize = 1;
+				else
+					batchSize = aSeen.mView.extent(1);
+
+				auto soughtSize = sought.mView.extent(0);
+
+				gpu.downloadConvergenceResults();
+
+				//normalise to get sqe -> mse 
+				cpuNetwork.mMse = gpu.getSqeResult() / (soughtSize * trueSampleNum);
+				cpuNetwork.mMisses = gpu.getMissesResult();
+				cpuNetwork.mAccuracy = (trueSampleNum - cpuNetwork.mMisses) / float(trueSampleNum) * 100.0f;
+
+				};
+
+			calculateVariables();
+			
+			if (print) {
+
+
+				std::println("Mse: {}; Misses: {}; Accuracy: {};"
+					, cpuNetwork.mMse, cpuNetwork.mMisses, cpuNetwork.mAccuracy
+				);
+			}
+		}
+
 
 		template<typename SamplesViewType>
 		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, bool print = false) {
@@ -176,15 +231,7 @@ namespace NetworkLib {
 				);
 			}
 		}
-		template<typename SamplesViewType>
-		void calculateNetworkConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, bool print=false) {
-
-			time<seconds>("Calculate Network Convergence", [&]() {
-
-				calculateConvergence(gpuTask, cpuNetwork, samples, print);
-
-				}, print);
-		}
+ 
 		template<typename SamplesViewType>
 		void calculateNetworksConvergence(Cpu::NetworksMap& networks, const SamplesViewType& samples, bool print = false) {
 
@@ -235,10 +282,10 @@ namespace NetworkLib {
 			Gpu::LinkedFloatSpace mFloatSpace;
 
 			GpuBatched2Samples mTrainBatched2Samples;			
-			GpuSamples mTestSamples;
+			GpuBatched3Samples mTestBatched3Samples;
 
-			Gpu::GpuView1 mOutputs1;
-			Gpu::GpuViews1 mOutputs;
+			Gpu::GpuView2 mOutputs;
+			Gpu::GpuIntView2 mTestBatched3Idx;
 
 			using Images = std::vector<float>;
 			using ImageView = std::span<float>;
@@ -344,44 +391,46 @@ namespace NetworkLib {
 					, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
 				auto batchSize = networkTemplate.mBatchSize;
 
-				constexpr auto outputNum = 10; //digits 0-9
+				constexpr std::size_t outputNum = 10; //digits 0-9
 
 				loadAllDigitsSamples();   
 
 				auto copyToGpu = [&]() {
 
-					//training samples need to be valid for an entire batch for training so
-					//to complete all training data in this fashion, some may be duplicated with %
+					//training samples need to be valid for an entire batch2 for training so
+					//to complete all training data in this fashion (digit-stripe), some may be duplicated with %
+					//until all images are included
 
-					//test data has a batchsize of 1 so that it fits perfectly
+					//test data has a batched3 type so that it fits with no duplication
+
 
 					std::size_t trainSamplesNum = getSamplesNum(mTrainSamplesMap)
 						, testSamplesNum = getSamplesNum(mTestSamplesMap)
 						, trainBatchNum = std::ceil(trainSamplesNum / float(batchSize))
+						, testBatchNum = std::ceil(testSamplesNum / float(batchSize))
 						, outputClassesSize = outputSize * outputNum
 						, trainInputsSize = trainBatchNum * batchSize * inputSize
-						, testInputsSize = testSamplesNum * inputSize;
+						, testInputsSize = testBatchNum * batchSize * inputSize
+						, testOutputBatchSize = testBatchNum * batchSize * 1;
 
 					mTrainBatched2Samples.resize(trainBatchNum);
-					mTestSamples.resize(testSamplesNum);
+					mTestBatched3Samples.resize(testBatchNum);
 
-					mFloatSpace.create(outputClassesSize + trainInputsSize + testInputsSize);
+					mFloatSpace.create(outputClassesSize + trainInputsSize + testInputsSize + testOutputBatchSize);
 					auto& gpuSampleSpace = mFloatSpace.mGpuSpace;
 					auto gpuSampleSpaceIt = gpuSampleSpace.begin();
  
 					auto createOneHotOutputViews = [&]() {
 
-						mOutputs.resize(outputNum);
-
 						//first, setup the GpuOutputs for each digit as one hot output
-						mOutputs1 = TrainingManager::advanceGpuViews(mFloatSpace, gpuSampleSpaceIt, mOutputs, outputSize);
+						gpuSampleSpace.advance(mOutputs, gpuSampleSpaceIt, outputSize, outputNum);
 
-						std::vector<float> desired(outputSize);
-						for (std::size_t digit = 0; auto output : mOutputs) {
+						for (auto outputIdx : std::views::iota(0ULL, outputNum)) {
+
+							auto desired = mOutputs.viewColumn(outputIdx);
 
 							std::fill(desired.begin(), desired.end(), 0ULL);
-							desired[digit++] = 1.0f;
-							std::copy(desired.begin(), desired.end(), output.begin());
+							desired.mView[outputIdx] = 1.0f;
 						}
 						};
 
@@ -390,7 +439,7 @@ namespace NetworkLib {
 						auto setTrainingData = [&](const auto& samplesMap, GpuBatched2Samples& batchedSamples) {
 
 							std::size_t imageCounter = 0;
-							std::uint8_t digit = 0;
+							std::size_t digit = 0;
 
 							for(auto batch: std::views::iota(0ULL, batchedSamples.size())){
 								
@@ -399,7 +448,7 @@ namespace NetworkLib {
 								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
 
 								auto& cpuImages = samplesMap.find(digit)->second;
-								desired = mOutputs[digit];
+								desired = mOutputs.viewColumn(digit);
 
 								for (auto b : std::views::iota(0ULL, batchSize)) {
 
@@ -422,34 +471,48 @@ namespace NetworkLib {
 
 						};
 							
-						auto setTestData = [&](const auto& samplesMap, GpuSamples& samples) {
+						auto setTestData = [&](const auto& samplesMap, GpuBatched3Samples& batched3Samples) {
 
-							auto samplesIt = samples.begin();
+							std::size_t sampleCounter = 0;
+
+							for (auto& [seenBatch, desiredBatch] : batched3Samples) {
+								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
+								gpuSampleSpace.advance(desiredBatch, gpuSampleSpaceIt, 1ULL, batchSize);
+							}
 
 							for (auto digit : std::views::iota(0, 10)) {
 
-								auto& cpuImages = samplesMap.find(digit)->second;
-								auto output = mOutputs[digit];
+								auto& cpuImages = samplesMap.find(digit)->second; 
+								auto imagesSize = cpuImages.size();
+								std::size_t imageCounter = 0;
 
-								for (auto idx : std::views::iota(0ULL, cpuImages.size())) {
+								while(imageCounter < imagesSize){
+									
+									auto batchIdx = sampleCounter / batchSize;
 
-									auto& [seen, desired] = *samplesIt;
+									auto& [seenBatch, desiredBatch] = batched3Samples[batchIdx];
+	
+									auto partialSize = std::min(batchSize, imagesSize - imageCounter);
+									for (auto b : std::views::iota(0ULL, partialSize)) {
 
-									desired = output;
+										Gpu::GpuView1 seen = seenBatch.viewColumn(b);
+										Gpu::GpuIntView1 desired = desiredBatch.viewColumn(b);
 
-									gpuSampleSpace.advance(seen, gpuSampleSpaceIt, inputSize);
+										auto& image = cpuImages[imageCounter++];
 
-									auto& image = cpuImages[idx];
+										std::copy(image.begin(), image.end(), seen.begin());
+										desired.mView[0] = digit;
 
-									std::copy(image.begin(), image.end(), seen.begin());
-
-									std::advance(samplesIt, 1);
+										++sampleCounter;
+									}
 								}
 							}
+							auto completedBatches = sampleCounter / batchSize;
+
 							};
 
 						setTrainingData(mTrainSamplesMap, mTrainBatched2Samples);
-						setTestData(mTestSamplesMap, mTestSamples);
+						setTestData(mTestSamplesMap, mTestBatched3Samples);
 						};
 
 					createOneHotOutputViews();

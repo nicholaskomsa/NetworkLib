@@ -269,6 +269,51 @@ void Kernel::sqe2(cudaStream_t stream, const float* sought, const float* desired
     cuSquaredError2<<<grid, block, sharedMemSize, stream>>>(sought, desired, result, desiredSize, batchSize);
 }
 
+__global__ void cuSquaredError3(const float* sought, const int* desiredIdxs, const float* desiredGroup, float* result, int desiredSize, int batchSize) {
+    extern __shared__ float partialSum[]; // shared memory per block
+
+    //sought2, desiredIdx2, normalized in calculateconvergence
+
+    int row = threadIdx.x + blockIdx.x * blockDim.x;
+    int col = blockIdx.y;
+    int tid = threadIdx.x;
+
+    float localSum = 0.0f;
+
+	const float* desired = desiredGroup + desiredIdxs[col] * desiredSize;
+
+    if (row < desiredSize && col < batchSize) {
+        int i = row + col * desiredSize; // column-major offset
+        float diff = sought[i] - desired[row];
+        localSum = diff * diff;
+    }
+
+    partialSum[tid] = localSum;
+    __syncthreads();
+
+    // Block-level reduction
+    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
+        if (tid < stride)
+            partialSum[tid] += partialSum[tid + stride];
+
+        __syncthreads();
+    }
+
+    // Accumulate per-batch sum into global result
+    if (tid == 0)
+        atomicAdd(result, partialSum[0]);
+
+}
+void Kernel::sqe3(cudaStream_t stream, const float* sought, const int* desired, const float* desiredGroup, float* result, int desiredSize, int batchSize) {
+    int threadsPerBlock = std::min(256, desiredSize);
+    int blocksPerBatch = (desiredSize + threadsPerBlock - 1) / threadsPerBlock;
+    dim3 grid(blocksPerBatch, batchSize);   // one block per batch row
+    dim3 block(threadsPerBlock);
+    size_t sharedMemSize = threadsPerBlock * sizeof(float);
+
+    cuSquaredError3<<<grid, block, sharedMemSize, stream>>>(sought, desired, desiredGroup, result, desiredSize, batchSize);
+}
+
 __device__ bool kMiss(const float* sought, const float* desired, int size, int* misses) {
 
     int maxSoughtIdx = 0;
@@ -324,6 +369,40 @@ void Kernel::score2(cudaStream_t stream, const float* soughtBatch, const float* 
     cuScore2<<<blocks, threadsPerBlock, 0, stream>>>(soughtBatch, desiredBatch, misses, size, batchSize);
 }
 
+__global__ void cuScore3(const float* soughtBatch, const int* desiredBatch, const float* desiredGroup, int* misses, int size, int batchSize) {
+
+    int batch = blockIdx.x * blockDim.x + threadIdx.x;
+    if (batch >= batchSize) return;
+
+    const float* sought = soughtBatch + batch * size;
+    const int& desiredIdx = *(desiredBatch + batch);
+	const float* desired = desiredGroup + desiredIdx * size;
+
+    int maxSoughtIdx = 0;
+    int maxDesiredIdx = 0;
+    float maxSoughtVal = sought[0];
+    float maxDesiredVal = desired[0];
+
+    for (int i = 1; i < size; ++i) {
+        if (sought[i] > maxSoughtVal) {
+            maxSoughtVal = sought[i];
+            maxSoughtIdx = i;
+        }
+        if (desired[i] > maxDesiredVal) {
+            maxDesiredVal = desired[i];
+            maxDesiredIdx = i;
+        }
+    }
+    if (maxSoughtIdx != maxDesiredIdx)
+        atomicAdd(misses, 1);
+}
+void Kernel::score3(cudaStream_t stream, const float* soughtBatch, const int* desiredBatch, const float* desiredGroup, int* misses, int size, int batchSize) {
+
+    int threadsPerBlock = std::min(256, size);
+    int blocks = (batchSize + threadsPerBlock - 1) / threadsPerBlock;
+
+    cuScore3<<<blocks, threadsPerBlock, 0, stream>>>(soughtBatch, desiredBatch, desiredGroup, misses, size, batchSize);
+}
 __global__ void cuBroadcastVectorToColumns(const float* src, float* dst, int size, int batchSize) {
     int row = threadIdx.x + blockIdx.x * blockDim.x;
     int col = blockIdx.y;

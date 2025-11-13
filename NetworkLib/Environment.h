@@ -39,6 +39,7 @@ namespace NetworkLib {
 			void score(const GpuView1& sought, const GpuView1& desired); // 1:1
 			void score(const GpuView2& sought, const GpuView1& desired); // batch:1
 			void score(const GpuView2& sought, const GpuView2& desired); // batch:batch
+			void score(const GpuView2& sought, const GpuIntView2& desired, const GpuView2& desiredGroup); // batch:batch idx into group
 
 			void resetMissesResult();
 			int getMissesResult();
@@ -47,6 +48,7 @@ namespace NetworkLib {
 			void sqe(const GpuView1& sought, const GpuView1& desired);
 			void sqe(const GpuView2& sought, const GpuView1& desired);
 			void sqe(const GpuView2& sought, const GpuView2& desired);
+			void sqe(const GpuView2& sought, const GpuIntView2& desired, const GpuView2& desiredGroup);
 
 			float getSqeResult();
 			void resetSqeResult();
