@@ -51,8 +51,9 @@ namespace NetworkLib {
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 
 				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
-					, {{ 100, ActivationFunction::ReLU }
-					, { 50, ActivationFunction::ReLU }
+					, {{ 1000, ActivationFunction::ReLU }
+					, { 500, ActivationFunction::ReLU }
+					, { 250, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 

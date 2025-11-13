@@ -558,16 +558,19 @@ void Animator::animateMNISTNetwork() {
 
     auto periodicCalculateConvergence = [&]() {
 
-        if (convergenceFuture.valid() && convergenceFuture.wait_for(0s) != std::future_status::ready) return;
-  
+        auto convergenceDone = [&]()->bool{
+            return convergenceFuture.valid() && convergenceFuture.wait_for(0s) == std::future_status::ready;
+            };
+
 		auto now = Clock::now();
 		auto elapsed = now - convergenceTime;
         if (elapsed >= convergencePeriod) {
 
-            convergenceFuture = std::async(std::launch::async, [&]() {
-                mnistModel.calculateConvergence();
-                convergenceTime = Clock::now();
-				});
+            if (!convergenceFuture.valid() || convergenceDone() )
+                convergenceFuture = std::async(std::launch::async, [&]() {
+                    mnistModel.calculateConvergence();
+                    convergenceTime = Clock::now();
+				    });
         }
 
 		};
@@ -616,7 +619,8 @@ void Animator::animateMNISTNetwork() {
 
     auto step = [&](auto floats) {
 
-        mnistModel.train(10, trainingOffset++);
+        mnistModel.train(10, trainingOffset);
+        trainingOffset += 10;
 
         periodicCalculateConvergence();
         return true;
