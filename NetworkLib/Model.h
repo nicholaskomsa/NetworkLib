@@ -43,7 +43,7 @@ namespace NetworkLib {
 				auto& trainNetwork = mTrainingManager.getNetwork(mId);
 				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
 
-				//we calculate convergence on 
+				//we calculate convergence on a diff gpu so copy to it
 				auto copyToConvergenceNetwork = [&]() {
 					std::scoped_lock lock(mNetworkMutex);
 					//copy train network to convergence network
