@@ -393,6 +393,9 @@ __global__ void cuScore3(const float* soughtBatch, const int* desiredBatch, cons
             maxDesiredIdx = i;
         }
     }
+    //if the desired is invalid (blank), then skip it
+    if (maxDesiredIdx == 0 && maxSoughtVal == 0.0f) return;
+
     if (maxSoughtIdx != maxDesiredIdx)
         atomicAdd(misses, 1);
 }
