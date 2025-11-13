@@ -43,14 +43,16 @@ namespace NetworkLib {
 				auto& trainNetwork = mTrainingManager.getNetwork(mId);
 				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
 
-				//we calculate convergence on gpu2
-				{
+				//we calculate convergence on 
+				auto copyToConvergenceNetwork = [&]() {
 					std::scoped_lock lock(mNetworkMutex);
 					//copy train network to convergence network
 					ccNetwork.mirror(trainNetwork);
-				}
+					};
 
 				time<milliseconds>("Calculating Convergence", [&]() {
+
+					copyToConvergenceNetwork();
 
 					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
 						, mTestBatched3SamplesView, 10000ULL, mTestBatched3DesiredGroup, print);
