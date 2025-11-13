@@ -70,7 +70,7 @@ namespace NetworkLib {
 			}
 
 			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, 0, print);
+				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, 0, true, print);
 			}
 
 			Cpu::Network& getNetwork() {

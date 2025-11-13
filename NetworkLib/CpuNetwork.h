@@ -83,6 +83,17 @@ namespace NetworkLib {
 				mFloats.destroy();
 			}
 
+			void mirror(const Network& other) {
+
+				auto weights = Tensor::view(mWeights)
+					, otherWeights = Tensor::view(other.mWeights);
+				auto bias = Tensor::view(mBias)
+					, otherBias = Tensor::view(other.mBias);
+
+				std::copy(otherWeights.begin(), otherWeights.end(), weights.begin() );
+				std::copy(otherBias.begin(), otherBias.end(), bias.begin());	
+			}
+
 
 			void initializeId(std::size_t id) {
 				mId = id;

@@ -69,7 +69,7 @@ namespace NetworkLib {
 		void forEachNetwork(Cpu::NetworksMap& networks, auto&& functor);
 
 		template<typename SamplesViewType>
-		void train(GpuTask& gpuTask, std::size_t trainNum, const SamplesViewType& samples, float learnRate, std::size_t offset = 0, bool print = false) {
+		void train(GpuTask& gpuTask, std::size_t trainNum, const SamplesViewType& samples, float learnRate, std::size_t offset = 0, bool download=true, bool print = false) {
 			
 			auto& [gpu, gpuNetwork] = gpuTask;
 
@@ -85,8 +85,8 @@ namespace NetworkLib {
 					if (print)
 						printProgress(generation, trainNum);
 				}
-
-				gpuNetwork.download(gpu);
+				if( download)
+					gpuNetwork.download(gpu);
 
 				}, print);
 		}
@@ -102,7 +102,7 @@ namespace NetworkLib {
 					auto& [gpu, gpuNetwork] = gpuTask;
 					gpuNetwork.mirror(cpuNetwork);
 
-					train(gpuTask, trainNum, samples, learnRate, offset, false);
+					train(gpuTask, trainNum, samples, learnRate, offset, true, false);
 
 					if (print)
 						printProgress(++progress, mNetworksMap.size());

@@ -21,8 +21,11 @@ namespace NetworkLib {
 
 			NetworkTemplate mNetworkTemplate;
 			std::size_t mId = 981;
+			std::size_t mConvergenceNetworkId = 0;
+
 			TrainingManager mTrainingManager;
 			TrainingManager::GpuTask* mGpuTaskTrain = nullptr, * mGpuTaskConvergence = nullptr;
+			std::mutex mNetworkMutex;
 
 			std::size_t mInputWidth = 28, mInputHeight = 28, mOutputSize = 10
 				, mTrainNum = 1;
@@ -32,15 +35,24 @@ namespace NetworkLib {
 
 			bool mPrintConsole = false;
 
+			MNIST() = default;
+			MNIST& operator()(const MNIST&) = delete;
+
 			void calculateConvergence(bool print=false) {
+
+				auto& trainNetwork = mTrainingManager.getNetwork(mId);
+				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
+
 				//we calculate convergence on gpu2
+				{
+					std::scoped_lock lock(mNetworkMutex);
+					//copy train network to convergence network
+					ccNetwork.mirror(trainNetwork);
+				}
 
 				time<milliseconds>("Calculating Convergence", [&]() {
 
-					auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-
-
-					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, cpuNetwork
+					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
 						, mTestBatched3SamplesView, 10000ULL, mTestBatched3DesiredGroup, print);
 
 					}, print);
@@ -65,6 +77,10 @@ namespace NetworkLib {
 				network.create(&mNetworkTemplate, true);
 				network.initializeId(mId);
 
+				mTrainingManager.addNetwork(mConvergenceNetworkId);
+				auto& ccnetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
+				ccnetwork.create(&mNetworkTemplate, true);
+
 				mTrainingManager.create(2);
 
 				auto& mnistSamples = mTrainingManager.mMNISTSamples;
@@ -83,11 +99,19 @@ namespace NetworkLib {
 			}
 
 			void train(std::size_t trainNum = 1, std::size_t offset =0, bool print = false) {
-				mTrainingManager.train(*mGpuTaskTrain, trainNum, mTrainBatched2SamplesView, mLearnRate, offset, print);
+
+				mTrainingManager.train(*mGpuTaskTrain, trainNum, mTrainBatched2SamplesView, mLearnRate, offset, false, print);
+
+				//we need to synchronize with cc because that thread wants this data
+				std::scoped_lock lock(mNetworkMutex);
+				mGpuTaskTrain->mGpuNetwork.download(mGpuTaskTrain->mGpu);
 			}
 
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);
+			}
+			Cpu::Network& getConvergenceNetwork() {
+				return mTrainingManager.getNetwork(mConvergenceNetworkId);
 			}
 			void run(bool print = true) {
 

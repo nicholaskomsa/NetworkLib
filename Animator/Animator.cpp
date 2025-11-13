@@ -576,6 +576,7 @@ void Animator::animateMNISTNetwork() {
 		};
 
     auto& [gpu, gpuNetwork] = *mnistModel.mGpuTaskTrain;
+	auto& [gpu2, gpuCCNetwork] = *mnistModel.mGpuTaskConvergence;
 
     std::size_t generation = 0;
 
@@ -604,7 +605,7 @@ void Animator::animateMNISTNetwork() {
 
     mCustomGuiRender = [&]() {
 
-        auto& network = mnistModel.getNetwork();
+        auto& network = mnistModel.getConvergenceNetwork();
         float mse = network.mMse
             , misses = network.mMisses
             , accuracy = network.mAccuracy;
