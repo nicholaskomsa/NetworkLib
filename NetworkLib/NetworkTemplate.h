@@ -21,7 +21,7 @@ namespace NetworkLib {
 		} mConvolutionType = ConvolutionType::None;
 
 		std::size_t mKernelWidth = 0, mKernelHeight = 0;
-		std::size_t mKernelNumber = 0;
+		std::size_t mKernelNumber = 1; // default of 1 used by FC too
 
 		LayerTemplate(std::size_t nodeCount, ActivationFunction af) 
 			: mNodeCount(nodeCount), mActivationFunction(af){}

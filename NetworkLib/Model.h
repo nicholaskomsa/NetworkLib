@@ -36,8 +36,7 @@ namespace NetworkLib {
 			bool mPrintConsole = false;
 
 			MNIST() = default;
-			MNIST& operator()(const MNIST&) = delete;
-
+	
 			void calculateConvergence(bool print=false) {
 
 				auto& trainNetwork = mTrainingManager.getNetwork(mId);
@@ -66,9 +65,10 @@ namespace NetworkLib {
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
-
+				
 				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
-					, {{ 1000, ActivationFunction::ReLU }
+					, {{ ConvolutionType::Conv1, 3, 10, ActivationFunction::ReLU }
+					, {  1000, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 
@@ -123,7 +123,7 @@ namespace NetworkLib {
 				create();
 				calculateConvergence(true);
 
-				auto totalTrainNum = mTrainNum * mBatchSize * mTrainBatched2SamplesView.size();
+				auto totalTrainNum = mTrainNum * mTrainBatched2SamplesView.size();
 				train(totalTrainNum, 0, true);
 
 				calculateConvergence(true);

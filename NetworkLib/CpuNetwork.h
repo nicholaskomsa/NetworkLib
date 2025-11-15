@@ -117,11 +117,17 @@ namespace NetworkLib {
 					for (auto l : section.mIotaView) {
 
 						auto& layer = mLayers[l];
+						auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+			
+						std::size_t inputSize = 0;
+						std::size_t kernelNum = layerTemplates[l].mKernelNumber;
 
-						std::size_t inputSize = (l == 0) ?
-							mNetworkTemplate->mInputSize : mLayers[l - 1].mBias.extent(0);
-
-						layer.applyKHScaleUniform(inputSize);
+						if (l == 0)
+							inputSize = mNetworkTemplate->mInputSize;
+						else
+							inputSize = mLayers[l - 1].mBias.extent(0);
+						
+						layer.applyKHScaleUniform(inputSize, kernelNum);
 					}
 					});
 			}
@@ -220,9 +226,11 @@ namespace NetworkLib {
 						});
 				}
 
-				void applyKHScaleUniform(std::size_t inputSize) {
+				void applyKHScaleUniform(std::size_t inputSize, std::size_t kernelNum) {
 
-					auto scale = std::sqrtf(6.0f / (inputSize + mBias.extent(0)));
+					auto nodeLength = mBias.extent(0) / kernelNum;
+
+					auto scale = std::sqrtf(6.0f / (inputSize + nodeLength));
 
 					auto weights = Tensor::view(mWeights);
 
