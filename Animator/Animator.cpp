@@ -576,9 +576,6 @@ void Animator::animateMNISTNetwork() {
 		};
 
     auto& [gpu, gpuNetwork] = *mnistModel.mGpuTaskTrain;
-	auto& [gpu2, gpuCCNetwork] = *mnistModel.mGpuTaskConvergence;
-
-    std::size_t generation = 0;
 
     auto selectedView = gpuNetwork.mWeights;
     auto selectedFloatsView = NetworkLib::Cpu::Tensor::view(selectedView.mView);
@@ -627,6 +624,7 @@ void Animator::animateMNISTNetwork() {
         return true;
         };
 
+    mPaused = true;
     run(step);
 
     mnistModel.destroy();

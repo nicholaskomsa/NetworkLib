@@ -188,6 +188,8 @@ void LogicSamples::create(NetworkTemplate& networkTemplate) {
 	mLogicSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
 		, inputSize, outputSize, sampleNum, batchSize);
 
+	mTrueSampleNum = outputSize * batchSize;
+
 	auto begin = mFloatSpace.mGpuSpace.begin();
 
 	CpuSamples andSamples = {

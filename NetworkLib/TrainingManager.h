@@ -132,19 +132,10 @@ namespace NetworkLib {
 			}
 
 			auto calculateVariables = [&]() {
-				const auto& aSample = samples.front();
-				auto& aSeen = aSample.first;
-
-				//work with either gpuview1 or gpuview2
-				int batchSize = 0;
-				if (aSeen.mView.rank() == 1)
-					batchSize = 1;
-				else
-					batchSize = aSeen.mView.extent(1);
+				
+				gpu.downloadConvergenceResults();
 
 				auto soughtSize = sought.mView.extent(0);
-
-				gpu.downloadConvergenceResults();
 
 				//normalise to get sqe -> mse 
 				cpuNetwork.mMse = gpu.getSqeResult() / (soughtSize * trueSampleNum);
@@ -155,18 +146,15 @@ namespace NetworkLib {
 
 			calculateVariables();
 			
-			if (print) {
-
-
+			if (print)
 				std::println("Mse: {}; Misses: {}; Accuracy: {};"
 					, cpuNetwork.mMse, cpuNetwork.mMisses, cpuNetwork.mAccuracy
 				);
-			}
 		}
 
 
 		template<typename SamplesViewType>
-		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, bool print = false) {
+		void calculateConvergence(GpuTask& gpuTask, Cpu::Network& cpuNetwork, const SamplesViewType& samples, std::size_t trueSampleNum, bool print = false) {
 
 			auto& [gpu, gpuNetwork] = gpuTask;
 
@@ -181,69 +169,42 @@ namespace NetworkLib {
 
 				gpu.sqe(sought, desired);
 				gpu.score(sought, desired);
-
-				if (print) {
-
-					auto output = gpuNetwork.getOutput();
-
-					sought.downloadAsync(gpu);
-					output.downloadAsync(gpu);
-					gpu.sync();
-
-					std::println("\nseen: {}"
-						"\ndesired: {}"
-						"\nsought: {}"
-						"\noutput: {}"
-						, seen
-						, desired
-						, sought
-						, output
-					);
-				}
 			}
 
-			const auto& aSample = samples.front();
-			auto& [aSeen, aDesired] = aSample;
+			auto calculateVariables = [&]() {
 
-			int batchSize = 0;
-			if (aSeen.mView.rank() == 1)
-				batchSize = 1;
-			else
-				batchSize = aSeen.mView.extent(1);
+				gpu.downloadConvergenceResults();
 
-			auto desiredSize = aDesired.mView.extent(0);
+				auto soughtSize = cpuNetwork.getSought().extent(0);
 
-			gpu.downloadConvergenceResults();
-			//normalise to get sqe -> mse 
-			cpuNetwork.mMse = gpu.getSqeResult() / (desiredSize * batchSize * samples.size());
-			cpuNetwork.mMisses = gpu.getMissesResult();
+				//normalise to get sqe -> mse 
+				cpuNetwork.mMse = gpu.getSqeResult() / (soughtSize * trueSampleNum);
+				cpuNetwork.mMisses = gpu.getMissesResult();
+				cpuNetwork.mAccuracy = (trueSampleNum - cpuNetwork.mMisses) / float(trueSampleNum) * 100.0f;
 
-			if (print) {
+				};
 
-				auto sampleNum = samples.size() * batchSize;
 
-				std::println("\nMse: {}"
-					"\nMisses: {}"
-					"\nAccuracy: {}"
-					, cpuNetwork.mMse
-					, cpuNetwork.mMisses
-					, (sampleNum - cpuNetwork.mMisses) / float(sampleNum) * 100.0f
+			calculateVariables();
+
+			if (print) 
+				std::println("Mse: {}; Misses: {}; Accuracy: {};"
+					, cpuNetwork.mMse, cpuNetwork.mMisses, cpuNetwork.mAccuracy
 				);
-			}
 		}
  
 		template<typename SamplesViewType>
-		void calculateNetworksConvergence(Cpu::NetworksMap& networks, const SamplesViewType& samples, bool print = false) {
+		void calculateNetworksConvergence(Cpu::NetworksMap& networks, const SamplesViewType& samples, std::size_t trueSampleNum, bool print = false) {
 
 			time<seconds>("Calculate Networks Convergence", [&]() {
 				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
-					calculateConvergence(gpuTask, cpuNetwork, samples, print);
+					calculateConvergence(gpuTask, cpuNetwork, samples, trueSampleNum, print);
 					});
 				}, print);
 		}
 		template<typename SamplesViewType>
-		void calculateNetworksConvergence(const SamplesViewType& samples, bool print = false) {
-			calculateNetworksConvergence(mNetworksMap, samples, print);
+		void calculateNetworksConvergence(const SamplesViewType& samples, std::size_t trueSampleNum, bool print = false) {
+			calculateNetworksConvergence(mNetworksMap, samples, trueSampleNum, print);
 		}
 
 		static GpuBatchedSamples createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
@@ -265,6 +226,8 @@ namespace NetworkLib {
 			GpuBatchedSamplesView mANDSamples;
 			GpuBatchedSamplesView mORSamples;
 
+			std::size_t mTrueSampleNum = 0;
+
 			void create(NetworkTemplate& networkTemplate);
 			void destroy();
 			struct SamplesGroup {
@@ -283,6 +246,7 @@ namespace NetworkLib {
 
 			GpuBatched2Samples mTrainBatched2Samples;			
 			GpuBatched3Samples mTestBatched3Samples;
+			std::size_t mTrueTrainSamplesNum, mTrueTestSamplesNum;
 
 			Gpu::GpuView2 mOutputs;
 			Gpu::GpuIntView2 mTestBatched3Idx;
@@ -292,6 +256,7 @@ namespace NetworkLib {
 			using DigitImagesMap = std::map<std::uint8_t, std::vector<ImageView>>;
 			Images mTrainDigitsSamples, mTestDigitsSamples;
 			DigitImagesMap mTestSamplesMap, mTrainSamplesMap;
+
 
 			std::size_t getSamplesNum(const DigitImagesMap& samplesMap) {
 				return std::accumulate(samplesMap.begin(), samplesMap.end(), 0UL
@@ -467,6 +432,9 @@ namespace NetworkLib {
 									imageCounter += batchSize;
 									digit = 0;
 								}
+
+								mTrueTrainSamplesNum = getSamplesNum(mTrainSamplesMap);
+
 							}
 
 						};
@@ -507,7 +475,9 @@ namespace NetworkLib {
 									}
 								}
 							}
+
 							auto completedBatches = sampleCounter / batchSize;
+							mTrueTestSamplesNum = getSamplesNum(mTestSamplesMap);
 
 							};
 

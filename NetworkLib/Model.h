@@ -54,8 +54,11 @@ namespace NetworkLib {
 
 					copyToConvergenceNetwork();
 
+
+					auto trueSampleNum = mTrainingManager.mMNISTSamples.mTrueTestSamplesNum;
+
 					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
-						, mTestBatched3SamplesView, 10000ULL, mTestBatched3DesiredGroup, print);
+						, mTestBatched3SamplesView, trueSampleNum, mTestBatched3DesiredGroup, print);
 
 					}, print);
 			}
@@ -66,8 +69,6 @@ namespace NetworkLib {
 
 				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
 					, {{ 1000, ActivationFunction::ReLU }
-					, { 500, ActivationFunction::ReLU }
-					, { 250, ActivationFunction::ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 

@@ -32,9 +32,9 @@ namespace NetworkLib {
 			virtual ~Convolution1() = default;
 
 			void calculateConvergence() {
-
+				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, mPrintConsole);
+				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, mPrintConsole);
 			}
 			void create() {
 
@@ -231,7 +231,8 @@ namespace NetworkLib {
 
 			void calculateConvergence(TrainingManager::GpuBatchedSamplesView samples, const std::string& caption) {
 
-				mTrainingManager.calculateNetworksConvergence(samples);
+				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+				mTrainingManager.calculateNetworksConvergence(samples, trueSampleNum);
 				mNetworksSorter.sortBySuperRadius();
 
 				if (mPrintConsole) {
@@ -269,7 +270,9 @@ namespace NetworkLib {
 						auto& bestNetwork = mNetworksSorter.getBest();
 						recordNetwork(1, bestNetwork);
 
-						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, true);
+						auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+
+						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, trueSampleNum, true);
 						};
 
 					auto recordZeroMisses = [&]() {

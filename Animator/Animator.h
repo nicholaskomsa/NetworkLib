@@ -44,7 +44,7 @@ private:
     FloatsView mFloats;
 
     using ColorizeMode = FloatSpaceConvert::ColorizeMode;
-    ColorizeMode mColorizeMode = ColorizeMode::ROYGBIV;
+    ColorizeMode mColorizeMode = ColorizeMode::NICKRGB;
     using Stripes = std::array<const std::size_t, 6>;
     Stripes mStripes = { 1,2,10,50,100,1000 };
     Stripes::iterator mSelectedStripes;
