@@ -28,9 +28,9 @@ namespace NetworkLib {
 			std::mutex mNetworkMutex;
 
 			std::size_t mInputWidth = 28, mInputHeight = 28, mOutputSize = 10
-				, mTrainNum = 1;
+				, mTrainNum = 100;
 
-			std::size_t mBatchSize = 1;
+			std::size_t mBatchSize = 4;
 			float mLearnRate = 0.002f;
 
 			bool mPrintConsole = false;
@@ -65,10 +65,10 @@ namespace NetworkLib {
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
-				
+				constexpr auto ReLU = ActivationFunction::ReLU;
+
 				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
-					, {{ ConvolutionType::Conv1, 3, 10, ActivationFunction::ReLU }
-					, {  1000, ActivationFunction::ReLU }
+					, {{ ConvolutionType::Conv1, 3, 10, ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 

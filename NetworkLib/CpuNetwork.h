@@ -111,14 +111,15 @@ namespace NetworkLib {
 
 			void applyKHScales() {
 
+				auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
+
 				Parallel parallel(mLayers.size());
 				parallel([&](auto& section) {
 
 					for (auto l : section.mIotaView) {
 
 						auto& layer = mLayers[l];
-						auto& layerTemplates = mNetworkTemplate->mLayerTemplates;
-			
+	
 						std::size_t inputSize = 0;
 						std::size_t kernelNum = layerTemplates[l].mKernelNumber;
 
