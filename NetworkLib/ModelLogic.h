@@ -2,63 +2,124 @@
 #include <random>
 #include <fstream>
 
-#include "Algorithms.h"
+#include "Model.h"
 
-#include "TrainingManager.h"
 
 namespace NetworkLib {
 
 	namespace Model {
 
-		class XOR {
+		struct LogicSamples {
+
+			Gpu::LinkedFloatSpace mFloatSpace;
+
+			TrainingManager::GpuBatchedSamples mLogicSamples;
+			TrainingManager::GpuBatchedSamplesView mXORSamples, mANDSamples, mORSamples;
+
+			std::size_t mTrueSampleNum = 0;
+
+			struct SamplesViewGroup {
+				TrainingManager::GpuBatchedSamplesView mXOR, mOR, mAND, mAll;
+			};
+
+			void create(NetworkTemplate& networkTemplate) {
+
+				auto inputSize = networkTemplate.mInputSize
+					, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
+				auto batchSize = networkTemplate.mBatchSize;
+				auto sampleNum = 4 * 3; //XOR, AND, OR all have 4 samples
+
+				mLogicSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
+					, inputSize, outputSize, sampleNum, batchSize);
+
+				mTrueSampleNum = outputSize * batchSize;
+
+				auto begin = mFloatSpace.mGpuSpace.begin();
+
+				TrainingManager::CpuSamples andSamples = {
+					{{ 0,0 }, {1,0}},
+					{{ 0,1 }, {1,0}},
+					{{ 1,0 }, {1,0}},
+					{{ 1,1 }, {0,1}}
+				}, xorSamples = {
+					{{0,0}, {1,0}},
+					{{0,1}, {0,1}},
+					{{1,0}, {0,1}},
+					{{1,1}, {1,0}}
+				}, orSamples = {
+					{{0,0}, {1,0}},
+					{{0,1}, {0,1}},
+					{{1,0}, {0,1}},
+					{{1,1}, {0,1}}
+				};
+
+				mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, andSamples, batchSize);
+				mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, orSamples, batchSize);
+				mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, xorSamples, batchSize);
+
+				mFloatSpace.mGpuSpace.upload();
+			}
+
+			void destroy() {
+				mFloatSpace.destroy();
+			}
+
+			SamplesViewGroup getSamples() {
+				return { mXORSamples, mORSamples, mANDSamples, mLogicSamples };
+			}
+		};
+
+		class XOR : public Model {
 		public:
+			LogicSamples mLogicSamples;
+			
 			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
-			NetworkTemplate mNetworkTemplate;
+
 			std::size_t mId = 981;
-			TrainingManager mTrainingManager;
 			TrainingManager::GpuTask* mGpuTask = nullptr;
 
-			std::size_t mInputSize = 2, mOutputSize = 2
-				, mTrainNum = 5000;
+			XOR(): Model("mnist.txt", 2, 1, 2, 4, 1) {}
 
-			std::size_t mBatchSize = 4;
-			float mLearnRate = 0.002f;
-
-			bool mPrintConsole = false;
-
-			void calculateConvergence() {
-				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+			void calculateConvergence(bool print=false) {
+				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, mPrintConsole);
+				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, print);
 
 			}
 			void create() {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
-				mNetworkTemplate = { mInputSize, mBatchSize
+				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ 1000, ActivationFunction::ReLU}
 					, { 500, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}
 					}
 				};
 
-				if (mPrintConsole) {
-					std::println("{}", "Creating FC Network");
-				}
+				auto createNetwork = [&]() {
 
-				mTrainingManager.addNetwork(mId);
-				auto& network = mTrainingManager.getNetwork(mId);
-				network.create(&mNetworkTemplate, true);
-				network.initializeId(mId);
+					if (mPrintConsole)
+						std::puts("Creating FC Network");
 
-				mTrainingManager.create(1);
-				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
-				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
-				
-				mGpuTask = &mTrainingManager.getGpuTask();
+					mTrainingManager.addNetwork(mId);
+					auto& network = mTrainingManager.getNetwork(mId);
+					network.create(&mNetworkTemplate, true);
+					network.initializeId(mId);
+
+					mTrainingManager.create(1);
+
+					mGpuTask = &mTrainingManager.getGpuTask();
+					};
+				createNetwork();
+
+				mLogicSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mLogicSamples.mXORSamples;
+
 			}       
 			void destroy() {
 				mTrainingManager.destroy();
+
+				mLogicSamples.destroy();
 			}
 
 			void train(std::size_t trainNum=1, bool print=false) {
@@ -83,6 +144,7 @@ namespace NetworkLib {
 		
 		class XORLottery {
 		public:
+			LogicSamples mLogicSamples;
 
 			NetworksSorter mNetworksSorter;
 
@@ -102,7 +164,7 @@ namespace NetworkLib {
 
 			void calculateConvergence() {
 
-				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 
 				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView, trueSampleNum);
 				mNetworksSorter.sortBySuperRadius();
@@ -121,7 +183,7 @@ namespace NetworkLib {
 					auto bestNetworkId = mNetworksSorter.getBestId();
 					std::println("\nRank 1 Network Id: {}; Misses: {}; Mse: {};", bestNetworkId, bestNetwork.mMisses, bestNetwork.mMse);
 
-					auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+					auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 
 					mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, mBatchedSamplesView, trueSampleNum, true);
 				
@@ -176,8 +238,8 @@ namespace NetworkLib {
 
 				createNetworks();
 				
-				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
-				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
+				mLogicSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mLogicSamples.mXORSamples;
 			}
 			void destroy() {
 
@@ -205,6 +267,7 @@ namespace NetworkLib {
 	
 		class LogicLottery {
 		public:
+			LogicSamples mLogicSamples;
 
 			NetworksSorter mNetworksSorter;
 
@@ -243,7 +306,7 @@ namespace NetworkLib {
 
 			void calculateConvergence(TrainingManager::GpuBatchedSamplesView samples, const std::string& caption) {
 
-				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 
 				mTrainingManager.calculateNetworksConvergence(samples, trueSampleNum);
 				mNetworksSorter.sortBySuperRadius();
@@ -283,7 +346,7 @@ namespace NetworkLib {
 						auto& bestNetwork = mNetworksSorter.getBest();
 						recordNetwork(1, bestNetwork);
 
-						auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+						auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 
 						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, trueSampleNum, true);
 					};
@@ -344,7 +407,7 @@ namespace NetworkLib {
 					};
 				createNetworks();
 				
-				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
+				mLogicSamples.create(mNetworkTemplate);
 
 				mNetworksTracker.create(mMaxNetworks);
 				mNetworksTracker.track(mTrainingManager.mNetworksMap);
@@ -359,7 +422,7 @@ namespace NetworkLib {
 
 			void train(bool print = false) {
 
-				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
 
 				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, 0, print);
 
@@ -368,7 +431,7 @@ namespace NetworkLib {
 
 			void calculateLogicConvergences() {
 
-				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
 
 				calculateConvergence(allSamples, "All Logic Samples");
 				calculateConvergence(orSamples, "OR Samples");

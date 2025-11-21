@@ -1,134 +1,131 @@
 #pragma once
-#include <random>
+
 #include <fstream>
 
-#include "Algorithms.h"
-
 #include "TrainingManager.h"
-
-#include "ModelLogic.h"
 
 namespace NetworkLib {
 
 	namespace Model {
 
-		class MNIST {
+		class Model {
 		public:
-			TrainingManager::GpuBatched2SamplesView mTrainBatched2SamplesView;
-			TrainingManager::GpuBatched3SamplesView mTestBatched3SamplesView;
-			
-			Gpu::GpuView2 mTestBatched3DesiredGroup;
-
+			std::string mRecordFileName = "./Model.txt";
+			bool mPrintConsole = false;
 			NetworkTemplate mNetworkTemplate;
-			std::size_t mId = 981;
-			std::size_t mConvergenceNetworkId = 0;
-
 			TrainingManager mTrainingManager;
-			TrainingManager::GpuTask* mGpuTaskTrain = nullptr, * mGpuTaskConvergence = nullptr;
-			std::mutex mNetworkMutex;
-
-			std::size_t mInputWidth = 28, mInputHeight = 28, mOutputSize = 10
-				, mTrainNum = 100;
-
-			std::size_t mBatchSize = 4;
+			std::size_t mInputWidth = 0, mInputHeight = 0, mOutputSize = 0
+				, mBatchSize = 0
+				, mTrainNum = 0;
 			float mLearnRate = 0.002f;
 
-			bool mPrintConsole = false;
-
-			MNIST() = default;
-	
-			void calculateConvergence(bool print=false) {
-
-				auto& trainNetwork = mTrainingManager.getNetwork(mId);
-				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
-
-				//we calculate convergence on a diff gpu so copy to it
-				auto copyToConvergenceNetwork = [&]() {
-					std::scoped_lock lock(mNetworkMutex);
-					//copy train network to convergence network
-					ccNetwork.mirror(trainNetwork);
-					};
-
-				time<milliseconds>("Calculating Convergence", [&]() {
-
-					copyToConvergenceNetwork();
-
-
-					auto trueSampleNum = mTrainingManager.mMNISTSamples.mTrueTestSamplesNum;
-
-					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
-						, mTestBatched3SamplesView, trueSampleNum, mTestBatched3DesiredGroup, print);
-
-					}, print);
+			Model(std::string_view recordFileName
+				, std::size_t inputWidth=1, std::size_t inputHeight=1, std::size_t outputSize =1
+				, std::size_t batchSize = 1, std::size_t trainNum=1)
+				: mRecordFileName(recordFileName)
+				, mInputWidth(inputWidth), mInputHeight(inputHeight), mOutputSize(outputSize)
+				, mBatchSize( batchSize), mTrainNum(trainNum)
+			{
+				clearRecord();
 			}
-			void create() {
 
-				using ConvolutionType = LayerTemplate::ConvolutionType;
-				using ActivationFunction = LayerTemplate::ActivationFunction;
-				constexpr auto ReLU = ActivationFunction::ReLU;
-
-				mNetworkTemplate = { mInputWidth*mInputHeight, mBatchSize
-					, {{ ConvolutionType::Conv1, 3, 10, ReLU }
-					, { mOutputSize, ActivationFunction::Softmax }}
-				};
-
-				if (mPrintConsole) 
-					std::puts("Creating MNIST Network");
-
-				mTrainingManager.addNetwork(mId);
-				auto& network = mTrainingManager.getNetwork(mId);
-				network.create(&mNetworkTemplate, true);
-				network.initializeId(mId);
-
-				mTrainingManager.addNetwork(mConvergenceNetworkId);
-				auto& ccnetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
-				ccnetwork.create(&mNetworkTemplate, true);
-
-				mTrainingManager.create(2);
-
-				auto& mnistSamples = mTrainingManager.mMNISTSamples;
-
-				mnistSamples.create(mNetworkTemplate);
-				
-				mTrainBatched2SamplesView = mnistSamples.mTrainBatched2Samples;
-				mTestBatched3SamplesView = mnistSamples.mTestBatched3Samples;
-				mTestBatched3DesiredGroup = mnistSamples.mOutputs;
-
-				mGpuTaskTrain = &mTrainingManager.getGpuTask(0);
-				mGpuTaskConvergence = &mTrainingManager.getGpuTask(1);
-			}
 			void destroy() {
 				mTrainingManager.destroy();
 			}
 
-			void train(std::size_t trainNum = 1, std::size_t offset =0, bool print = false) {
+			void clearRecord() {
+				std::ofstream fout(mRecordFileName, std::ios::out);
+			}
+			template<typename ...Args>
+			void record(const std::format_string<Args...>& format, Args&&... args) {
 
-				mTrainingManager.train(*mGpuTaskTrain, trainNum, mTrainBatched2SamplesView, mLearnRate, offset, false, print);
+				std::string text;
 
-				//we need to synchronize with cc because that thread wants this data
-				std::scoped_lock lock(mNetworkMutex);
-				mGpuTaskTrain->mGpuNetwork.download(mGpuTaskTrain->mGpu);
+				if constexpr (sizeof...(Args) == 0)
+					text = format.get();
+				else
+					text = std::format(format, std::forward<Args>(args)...);
+
+				std::cout << text << '\n';
+
+				std::ofstream fout(mRecordFileName, std::ios::app);
+				fout << text << '\n';
 			}
 
-			Cpu::Network& getNetwork() {
-				return mTrainingManager.getNetwork(mId);
+			void recordNetwork(std::size_t rank, auto& network) {
+				record("Rank: {}; Id: {}; Misses: {}; Mse: {};", rank, network.mId, network.mMisses, network.mMse);
 			}
-			Cpu::Network& getConvergenceNetwork() {
-				return mTrainingManager.getNetwork(mConvergenceNetworkId);
+		};
+		
+		class LotteryModel : public Model {
+		public:
+
+			NetworksSorter mNetworksSorter;
+			std::size_t mMaxGpus = 2, mMaxNetworks = 1000;
+
+			LotteryModel(std::string_view recordFileName
+				, std::size_t inputWidth, std::size_t inputHeight, std::size_t outputSize
+				, std::size_t batchSize
+				, std::size_t trainNum
+				, std::size_t maxGpus, std::size_t maxNetworks)
+				: Model(recordFileName, inputWidth, inputHeight, outputSize, batchSize, trainNum)
+				, mMaxGpus(maxGpus), mMaxNetworks(maxNetworks)
+			{}
+			
+			~LotteryModel() = default;
+
+			void recordTopAndBottomNetworks(std::size_t listSize = 5) {
+
+				auto& networksMap = mTrainingManager.mNetworksMap;
+
+				auto best = mNetworksSorter.getTop(listSize);
+				for (std::size_t rank = 0; auto id : best) {
+					auto& network = networksMap[id];
+					recordNetwork(++rank, network);
+				}
+
+				auto worst = mNetworksSorter.getBottom(listSize);
+				for (std::size_t rank = networksMap.size() - listSize; auto id : worst | std::views::reverse) {
+					auto& network = networksMap[id];
+					recordNetwork(++rank, network);
+				}
+				record("\n");
 			}
-			void run(bool print = true) {
 
-				mPrintConsole = print;
+			void recordZeroMisses(){
 
-				create();
-				calculateConvergence(true);
+				auto& networksMap = mTrainingManager.mNetworksMap;
 
-				auto totalTrainNum = mTrainNum * mTrainBatched2SamplesView.size();
-				train(totalTrainNum, 0, true);
+				auto zeroMissesCount = std::count_if(networksMap.begin(), networksMap.end(), [&](auto& networkPair) {
+					return networkPair.second.mMisses == 0;
+					});
 
-				calculateConvergence(true);
-				destroy();
+				record("Networks with zero misses: {}", zeroMissesCount);
 			}
+			void createNetworks() {
+
+				for (auto n : std::views::iota(0ULL, mMaxNetworks))
+					mTrainingManager.addNetwork();
+
+				mNetworksSorter.create(mTrainingManager.mNetworksMap);
+
+				auto& networkIds = mNetworksSorter.mNetworksIds;
+				Parallel parallelNetworks(networkIds.size());
+				parallelNetworks([&](auto& section) {
+
+					for (auto idx : section.mIotaView) {
+
+						auto id = networkIds[idx];
+						auto& network = mTrainingManager.getNetwork(id);
+
+						network.create(&mNetworkTemplate, true);
+						network.initializeId(id);
+					}
+					});
+
+				mTrainingManager.create(mMaxGpus);
+			}
+
 		};
 	}
 }

@@ -6,9 +6,6 @@
 
 using namespace NetworkLib;
 
-
-using LogicSamples = TrainingManager::LogicSamples;
-
 void TrainingManager::create(std::size_t gpuNum) {
 
 	mGpuNum = gpuNum;
@@ -38,38 +35,9 @@ void TrainingManager::destroy() {
 		gpuNetwork.destroy();
 
 		});
-
-	mLogicSamples.destroy();
-}
-void TrainingManager::addNetwork() {
-	std::size_t id = mNetworksIdCounter++;
-	addNetwork(id);
-}
-void TrainingManager::addNetwork(std::size_t id) {
-
-	auto found = mNetworksMap.find(id);
-	if (found != mNetworksMap.end())
-		throw std::runtime_error("network already exists");
-
-	auto network = mNetworksMap[id];
-}
-Cpu::Network& TrainingManager::TrainingManager::getNetwork(std::size_t id) {
-
-	auto found = mNetworksMap.find(id);
-	if (found == mNetworksMap.end())
-		throw std::runtime_error("Network not found");
-
-	return found->second;
-}
-TrainingManager::GpuTask& TrainingManager::getGpuTask(std::size_t idx) {
-
-	auto& sectionsView = mParallelGpuTasks.mSectionsView;
-	auto& section = sectionsView[idx % sectionsView.size()];
-	return std::any_cast<GpuTask&>(section.mAny);
 }
 
-
-void TrainingManager::forEachNetwork(Cpu::NetworksMap& networks, auto&& functor) {
+void TrainingManager::forEachNetwork(Cpu::NetworksMap& networks, ForEachFunctor&& functor) {
 
 	auto networksBegin = networks.begin();
 
@@ -104,6 +72,32 @@ void TrainingManager::forEachNetwork(Cpu::NetworksMap& networks, auto&& functor)
 }
 
 
+void TrainingManager::addNetwork() {
+	std::size_t id = mNetworksIdCounter++;
+	addNetwork(id);
+}
+void TrainingManager::addNetwork(std::size_t id) {
+
+	auto found = mNetworksMap.find(id);
+	if (found != mNetworksMap.end())
+		throw std::runtime_error("network already exists");
+
+	auto network = mNetworksMap[id];
+}
+Cpu::Network& TrainingManager::TrainingManager::getNetwork(std::size_t id) {
+
+	auto found = mNetworksMap.find(id);
+	if (found == mNetworksMap.end())
+		throw std::runtime_error("Network not found");
+
+	return found->second;
+}
+TrainingManager::GpuTask& TrainingManager::getGpuTask(std::size_t idx) {
+
+	auto& sectionsView = mParallelGpuTasks.mSectionsView;
+	auto& section = sectionsView[idx % sectionsView.size()];
+	return std::any_cast<GpuTask&>(section.mAny);
+}
 
 
 TrainingManager::GpuBatchedSamples TrainingManager::createGpuBatchedSamplesSpace(Gpu::LinkedFloatSpace& linkedSampleSpace
@@ -177,51 +171,3 @@ Gpu::GpuView1 TrainingManager::advanceGpuViews(Gpu::LinkedFloatSpace& linkedSamp
 	gpuSampleSpace.advance(gpuView1, start, std::distance(start, end));
 	return gpuView1;
 }
-
-void LogicSamples::create(NetworkTemplate& networkTemplate) {
-
-	auto inputSize = networkTemplate.mInputSize
-		, outputSize = networkTemplate.mLayerTemplates.back().mNodeCount;
-	auto batchSize = networkTemplate.mBatchSize;
-	auto sampleNum = 4 * 3; //XOR, AND, OR all have 4 samples
-
-	mLogicSamples = TrainingManager::createGpuBatchedSamplesSpace(mFloatSpace
-		, inputSize, outputSize, sampleNum, batchSize);
-
-	mTrueSampleNum = outputSize * batchSize;
-
-	auto begin = mFloatSpace.mGpuSpace.begin();
-
-	CpuSamples andSamples = {
-		{{ 0,0 }, {1,0}},
-		{{ 0,1 }, {1,0}},
-		{{ 1,0 }, {1,0}},
-		{{ 1,1 }, {0,1}}
-	};
-	const CpuSamples xorSamples = {
-		{{0,0}, {1,0}},
-		{{0,1}, {0,1}},
-		{{1,0}, {0,1}},
-		{{1,1}, {1,0}}
-	};
-	const CpuSamples orSamples = {
-		{{0,0}, {1,0}},
-		{{0,1}, {0,1}},
-		{{1,0}, {0,1}},
-		{{1,1}, {0,1}}
-	};
-
-	mANDSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, andSamples, batchSize);
-	mORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, orSamples, batchSize);
-	mXORSamples = TrainingManager::advanceGpuBatchedSamples(mFloatSpace, begin, mLogicSamples, xorSamples, batchSize);
-
-	mFloatSpace.mGpuSpace.upload();
-}
-void LogicSamples::destroy() {
-	mFloatSpace.destroy();
-}
-	
-LogicSamples::SamplesGroup LogicSamples::getSamples() {
-	return { mXORSamples, mORSamples, mANDSamples, mLogicSamples };
-}
-	

@@ -104,6 +104,7 @@
     <ClInclude Include="FloatSpaceConvert.h" />
     <ClInclude Include="Gpt2.h" />
     <ClInclude Include="GpuNetwork.h" />
+    <ClInclude Include="ModelMNIST.h" />
     <ClInclude Include="NetworkSorter.h" />
     <ClInclude Include="NetworkTemplate.h" />
     <ClInclude Include="Parallel.h" />

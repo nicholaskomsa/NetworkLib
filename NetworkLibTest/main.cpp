@@ -7,7 +7,7 @@
 #include <CpuTensor.h>
 #include <ModelLogic.h>
 #include <ModelConv1.h>
-#include <Model.h>
+#include <ModelMNIST.h>
 
 int main() {
 
@@ -43,8 +43,10 @@ int main() {
 	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
 	//conv1Lotto.run();
 
-	NetworkLib::Model::MNIST mnistModel;
-	mnistModel.run();
+	//NetworkLib::Model::MNIST mnistModel;
+	//mnistModel.run();
+	NetworkLib::Model::MNISTLottery mnistLottery;
+	mnistLottery.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

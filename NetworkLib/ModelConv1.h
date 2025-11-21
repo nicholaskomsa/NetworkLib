@@ -14,6 +14,8 @@ namespace NetworkLib {
 
 		class Convolution1 {
 		public:
+			LogicSamples mLogicSamples;
+
 			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
 			NetworkTemplate mNetworkTemplate;
 			std::size_t mId = 981;
@@ -32,7 +34,7 @@ namespace NetworkLib {
 			virtual ~Convolution1() = default;
 
 			void calculateConvergence() {
-				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
 				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, mPrintConsole);
 			}
@@ -60,8 +62,8 @@ namespace NetworkLib {
 				network.initializeId(mId);
 
 				mTrainingManager.create(1);
-				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
-				mBatchedSamplesView = mTrainingManager.mLogicSamples.mXORSamples;
+				mLogicSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mLogicSamples.mXORSamples;
 
 				mGpuTask = &mTrainingManager.getGpuTask();
 			}
@@ -190,6 +192,8 @@ namespace NetworkLib {
 
 		class Convolution1Lottery {
 		public:
+			LogicSamples mLogicSamples;
+
 			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
 			NetworkTemplate mNetworkTemplate;
 			std::size_t mId = 981;
@@ -231,7 +235,7 @@ namespace NetworkLib {
 
 			void calculateConvergence(TrainingManager::GpuBatchedSamplesView samples, const std::string& caption) {
 
-				auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 				mTrainingManager.calculateNetworksConvergence(samples, trueSampleNum);
 				mNetworksSorter.sortBySuperRadius();
 
@@ -270,7 +274,7 @@ namespace NetworkLib {
 						auto& bestNetwork = mNetworksSorter.getBest();
 						recordNetwork(1, bestNetwork);
 
-						auto trueSampleNum = mTrainingManager.mLogicSamples.mTrueSampleNum;
+						auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 
 						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, trueSampleNum, true);
 						};
@@ -335,7 +339,7 @@ namespace NetworkLib {
 					};
 				createNetworks();
 
-				mTrainingManager.mLogicSamples.create(mNetworkTemplate);
+				mLogicSamples.create(mNetworkTemplate);
 
 				mNetworksTracker.create(mMaxNetworks);
 				mNetworksTracker.track(mTrainingManager.mNetworksMap);
@@ -350,7 +354,7 @@ namespace NetworkLib {
 
 			void train(bool print = false) {
 
-				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
 
 				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, 0, print);
 
@@ -359,7 +363,7 @@ namespace NetworkLib {
 
 			void calculateLogicConvergences() {
 
-				auto [xorSamples, orSamples, andSamples, allSamples] = mTrainingManager.mLogicSamples.getSamples();
+				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
 
 				calculateConvergence(allSamples, "All Logic Samples");
 				calculateConvergence(orSamples, "OR Samples");
