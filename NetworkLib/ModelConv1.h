@@ -12,81 +12,67 @@ namespace NetworkLib {
 
 	namespace Model {
 
-		class Convolution1 {
+		class Convolution1:	public Model {
 		public:
 			LogicSamples mLogicSamples;
 
 			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
-			NetworkTemplate mNetworkTemplate;
+		
 			std::size_t mId = 981;
-			TrainingManager mTrainingManager;
-			TrainingManager::GpuTask* mGpuTask = nullptr;
 
-			std::size_t mInputWidth = 2, mOutputSize = 2
-				, mTrainNum = 5000;
-			std::size_t kernelSize = 2;
+			Convolution1() : Model("Convolution1.txt", 2, 1, 2, 4, 1) {}
 
-			std::size_t mBatchSize = 4;
-			float mLearnRate = 0.002f;
-
-			bool mPrintConsole = false;
-
-			virtual ~Convolution1() = default;
-
-			void calculateConvergence() {
+			void calculateConvergence(bool print=false) {
 				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
-				mTrainingManager.calculateConvergence(*mGpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, mPrintConsole);
+				mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), cpuNetwork, mBatchedSamplesView, trueSampleNum, print);
 			}
-			void create() {
 
-				using ConvolutionType = LayerTemplate::ConvolutionType;
-				using ActivationFunction = LayerTemplate::ActivationFunction;
+			void create(bool print=false) {
 
-				//mNetworkTemplate = { mInputWidth, mBatchSize
-				//	, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-				///,  { mOutputSize, ActivationFunction::Softmax } 
-				//	}};
-				mNetworkTemplate = { mInputWidth, mBatchSize
-					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					, { ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::Softmax }
-					}};
+				auto createNetwork = [&]() {
+					using ConvolutionType = LayerTemplate::ConvolutionType;
+					using ActivationFunction = LayerTemplate::ActivationFunction;
 
-				if (mPrintConsole) {
-					std::println("{}","Creating Convolutional Network");
-				}
+					mNetworkTemplate = { mInputWidth, mBatchSize
+						, {{ ConvolutionType::Conv1, 2, 2, ActivationFunction::ReLU }
+						, { ConvolutionType::Conv1, 2, 2, ActivationFunction::Softmax }
+						} };
 
-				mTrainingManager.addNetwork(mId);
-				auto& network = mTrainingManager.getNetwork(mId);
-				network.create(&mNetworkTemplate, true);
-				network.initializeId(mId);
+					if (print)
+						std::println("{}", "Creating Convolutional Network");
 
-				mTrainingManager.create(1);
+					mTrainingManager.addNetwork(mId);
+					auto& network = mTrainingManager.getNetwork(mId);
+					network.create(&mNetworkTemplate, true);
+					network.initializeId(mId);
+
+					mTrainingManager.create(1);
+					};
+
+				createNetwork();
+
 				mLogicSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mLogicSamples.mXORSamples;
-
-				mGpuTask = &mTrainingManager.getGpuTask();
 			}
 			void destroy() {
-				mTrainingManager.destroy();
+				mLogicSamples.destroy();
+				Model::destroy();
 			}
 
 			void train(std::size_t trainNum = 1, bool print = false) {
-				mTrainingManager.train(*mGpuTask, trainNum, mBatchedSamplesView, mLearnRate, 0, true, print);
+				mTrainingManager.train(mTrainingManager.getGpuTask(), trainNum, mBatchedSamplesView, mLearnRate, 0, true, print);
 			}
 
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);
 			}
-			virtual void run(bool print = true) {
+			void run(bool print = true) {
 
-				mPrintConsole = print;
-
-				create();
-				calculateConvergence();
-				train(mTrainNum, true);
-
-				calculateConvergence();
+				create(print);
+				calculateConvergence(print);
+				train(mTrainNum, print);
+				calculateConvergence(print);
 				destroy();
 			}
 		};
@@ -96,10 +82,10 @@ namespace NetworkLib {
 
 			void compare(XOR& fcModel) {
 				
-				auto& [fcGpu, fcGpuNetwork] = *fcModel.mGpuTask;
+				auto& [fcGpu, fcGpuNetwork] = fcModel.mTrainingManager.getGpuTask();
 				fcGpuNetwork.download(fcGpu);
 
-				auto& [c1Gpu, c1GpuNetwork] = *mGpuTask;
+				auto& [c1Gpu, c1GpuNetwork] = mTrainingManager.getGpuTask();
 				c1GpuNetwork.download(c1Gpu);
 
 
@@ -166,23 +152,17 @@ namespace NetworkLib {
 					, sVec(fcOutputsBot1), sVec(c1OutputsBot1), sVec(fcWeightsBot1), sVec(c1WeightsBot1));
 			}
 
-			virtual ~Convolution1Comparison() = default;
+			void run(bool print=true) {
 
-			void run(bool print = true) override {
-
-
-				mPrintConsole = print;
 				XOR xorModel;
-				xorModel.mPrintConsole = print;
-
-
+				
 				mTrainNum = 5000;
 
-				xorModel.create(); create();
+				xorModel.create(print); create(print);
 
-				xorModel.train(mTrainNum, true); train(mTrainNum, true);
+				xorModel.train(mTrainNum, print); train(mTrainNum, print);
 
-				xorModel.calculateConvergence(); calculateConvergence();
+				xorModel.calculateConvergence(print); calculateConvergence(print);
 
 				compare(xorModel);
 
@@ -190,196 +170,59 @@ namespace NetworkLib {
 			}
 		};
 
-		class Convolution1Lottery {
+		class Convolution1Lottery	:	public LotteryModel {
 		public:
-			LogicSamples mLogicSamples;
+			LogicSamples mSamples;
 
 			TrainingManager::GpuBatchedSamplesView mBatchedSamplesView;
-			NetworkTemplate mNetworkTemplate;
-			std::size_t mId = 981;
-			TrainingManager mTrainingManager;
-			NetworksSorter mNetworksSorter;
-			NetworksTracker mNetworksTracker;
 
-			std::size_t mInputWidth = 2, mOutputSize = 2
-				, mTrainNum = 5000;
-			std::size_t kernelSize = 2;
+			Convolution1Lottery() : LotteryModel("Conv1Lottery.txt", 2, 1, 2, 4, 1000, 2, 100) {}
+			void create(bool print = false) {
 
-			std::size_t mBatchSize = 4;
-			float mLearnRate = 0.002f;
-
-			std::size_t mMaxGpus = 2, mMaxNetworks = 1000;
-
-			bool mPrintConsole = false;
-
-			std::string mRecordFileName = "./LogicLottery.txt";
-
-			void clearRecord() {
-				std::ofstream fout(mRecordFileName, std::ios::out);
-			}
-			template<typename ...Args>
-			void record(const std::format_string<Args...>& format, Args&&... args) {
-
-				std::string text;
-
-				if constexpr (sizeof...(Args) == 0)
-					text = format.get();
-				else
-					text = std::format(format, std::forward<Args>(args)...);
-
-				std::cout << text << '\n';
-
-				std::ofstream fout(mRecordFileName, std::ios::app);
-				fout << text << '\n';
-			}
-
-			void calculateConvergence(TrainingManager::GpuBatchedSamplesView samples, const std::string& caption) {
-
-				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
-				mTrainingManager.calculateNetworksConvergence(samples, trueSampleNum);
-				mNetworksSorter.sortBySuperRadius();
-
-				if (mPrintConsole) {
-
-					record("\nConvergence Results for {}"
-						"\nNetworks sorted by SuperRadius:", caption);
-
-					auto recordNetwork = [&](std::size_t rank, auto& network) {
-						record("Rank: {}; Id: {}; Misses: {}; Mse: {};", rank, network.mId, network.mMisses, network.mMse);
-						};
-
-					auto& networksMap = mTrainingManager.mNetworksMap;
-
-					auto recordTopAndBottomNetworks = [&]() {
-
-						std::size_t listSize = 5;
-
-						auto best = mNetworksSorter.getTop(listSize);
-						for (std::size_t rank = 0; auto id : best) {
-							auto& network = networksMap[id];
-							recordNetwork(++rank, network);
-						}
-
-						auto worst = mNetworksSorter.getBottom(listSize);
-						for (std::size_t rank = networksMap.size() - listSize; auto id : worst | std::views::reverse) {
-							auto& network = networksMap[id];
-							recordNetwork(++rank, network);
-						}
-						record("\n");
-
-						};
-
-					auto recordBestNetwork = [&]() {
-
-						auto& bestNetwork = mNetworksSorter.getBest();
-						recordNetwork(1, bestNetwork);
-
-						auto trueSampleNum = mLogicSamples.mTrueSampleNum;
-
-						mTrainingManager.calculateConvergence(mTrainingManager.getGpuTask(), bestNetwork, samples, trueSampleNum, true);
-						};
-
-					auto recordZeroMisses = [&]() {
-
-						auto zeroMissesCount = std::count_if(networksMap.begin(), networksMap.end(), [&](auto& networkPair) {
-
-							return networkPair.second.mMisses == 0;
-
-							});
-
-						record("\nNetworks with zero misses: {}", zeroMissesCount);
-						};
-
-
-					recordTopAndBottomNetworks();
-					recordBestNetwork();
-					recordZeroMisses();
-				}
-			}
-
-			void create() {
-
-				if (mPrintConsole)
-					record("Create Logic Lottery:"
-						"\nNetwork count: {}"
-						"\nTrain Num: {}", mMaxNetworks, mTrainNum);
+				if (print)
+					std::println("Create Conv1 XOR Lottery: ");
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
-
 				mNetworkTemplate = { mInputWidth, mBatchSize
-					, {{ ConvolutionType::Conv1, kernelSize, 2, ActivationFunction::ReLU }
-					, { ConvolutionType::Conv1,kernelSize, 2, ActivationFunction::Softmax}
+					, {{ ConvolutionType::Conv1, 2, 2, ActivationFunction::ReLU }
+					, { ConvolutionType::Conv1, 2, 2, ActivationFunction::Softmax}
 					}
 				};
 
-				auto createNetworks = [&]() {
-
-					for (auto n : std::views::iota(0ULL, mMaxNetworks))
-						mTrainingManager.addNetwork();
-
-					mNetworksSorter.create(mTrainingManager.mNetworksMap);
-
-					auto& networkIds = mNetworksSorter.mNetworksIds;
-					Parallel parallelNetworks(networkIds.size());
-					parallelNetworks([&](auto& section) {
-
-						for (auto idx : section.mIotaView) {
-
-							auto id = networkIds[idx];
-							auto& network = mTrainingManager.getNetwork(id);
-
-							network.create(&mNetworkTemplate, true);
-							network.initializeId(id);
-						}
-						});
-
-					mTrainingManager.create(mMaxGpus);
-
-					};
 				createNetworks();
 
-				mLogicSamples.create(mNetworkTemplate);
-
-				mNetworksTracker.create(mMaxNetworks);
-				mNetworksTracker.track(mTrainingManager.mNetworksMap);
+				mSamples.create(mNetworkTemplate);
+				mBatchedSamplesView = mSamples.mXORSamples;
 			}
-			void destroy() {
+			void destroy(bool print = false) {
 
-				if (mPrintConsole)
+				if (print)
 					std::println("destroying model");
 
-				mTrainingManager.destroy();
+				mSamples.destroy();
+				LotteryModel::destroy();
 			}
-
 			void train(bool print = false) {
+				mTrainingManager.trainNetworks(mTrainNum, mBatchedSamplesView, mLearnRate, 0, print);
+			}
+			void calculateTrainConvergence(bool print = false) {
 
-				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
+				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView
+					, mSamples.mTrueSampleNum, print);
 
-				mTrainingManager.trainNetworks(mTrainNum, xorSamples, mLearnRate, 0, print);
-
-				mNetworksTracker.track(mTrainingManager.mNetworksMap);
+				sort("Train", print);
 			}
 
-			void calculateLogicConvergences() {
-
-				auto [xorSamples, orSamples, andSamples, allSamples] = mLogicSamples.getSamples();
-
-				calculateConvergence(allSamples, "All Logic Samples");
-				calculateConvergence(orSamples, "OR Samples");
-				calculateConvergence(andSamples, "AND Samples");
-				calculateConvergence(xorSamples, "XOR Samples");
-			}
 			void run(bool print = true) {
 
-				mPrintConsole = print;
+				create(print);
 
-				create();
-				calculateLogicConvergences();
-				train(true);
-				calculateLogicConvergences();
+				calculateTrainConvergence(print);
+				train(print);
+				calculateTrainConvergence(print);
 
-				destroy();
+				destroy(print);
 			}
 		};
 	}

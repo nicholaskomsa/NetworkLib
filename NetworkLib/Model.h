@@ -11,7 +11,6 @@ namespace NetworkLib {
 		class Model {
 		public:
 			std::string mRecordFileName = "./Model.txt";
-			bool mPrintConsole = false;
 			NetworkTemplate mNetworkTemplate;
 			TrainingManager mTrainingManager;
 			std::size_t mInputWidth = 0, mInputHeight = 0, mOutputSize = 0
@@ -34,7 +33,7 @@ namespace NetworkLib {
 			}
 
 			void clearRecord() {
-				std::ofstream fout(mRecordFileName, std::ios::out);
+				std::ofstream{ mRecordFileName, std::ios::out };
 			}
 			template<typename ...Args>
 			void record(const std::format_string<Args...>& format, Args&&... args) {
@@ -126,6 +125,18 @@ namespace NetworkLib {
 				mTrainingManager.create(mMaxGpus);
 			}
 
+			void sort(std::string_view caption = "", bool print = false) {
+
+				mNetworksSorter.sortBySuperRadius();
+
+				if (!print) return;
+
+				record("\nConvergence Results for MNIST {}"
+					"\nNetworks sorted by SuperRadius:", caption);
+
+				recordTopAndBottomNetworks();
+				recordZeroMisses();
+			}
 		};
 	}
 }

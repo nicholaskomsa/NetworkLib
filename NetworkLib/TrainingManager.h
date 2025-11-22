@@ -200,7 +200,7 @@ namespace NetworkLib {
 
 			time<seconds>("Calculate Networks Convergence", [&]() {
 				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
-					calculateConvergence(gpuTask, cpuNetwork, samples, trueSampleNum, print);
+					calculateConvergence(gpuTask, cpuNetwork, samples, trueSampleNum);
 					});
 				}, print);
 		}
@@ -213,7 +213,7 @@ namespace NetworkLib {
 
 			time<seconds>("Calculate Networks Convergence", [&]() {
 				forEachNetwork(networks, [&](GpuTask& gpuTask, Cpu::Network& cpuNetwork) {
-					calculateConvergence(gpuTask, cpuNetwork, samples, trueSampleNum, desiredGroup, print);
+					calculateConvergence(gpuTask, cpuNetwork, samples, trueSampleNum, desiredGroup);
 					});
 				}, print);
 		}

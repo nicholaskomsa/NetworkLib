@@ -36,8 +36,8 @@ int main() {
 
 	//NetworkLib::Model::XOR xorModel;
 	//xorModel.run();
-	//NetworkLib::Model::LogicLottery logicLotto;
-	//logicLotto.run();
+	NetworkLib::Model::LogicLottery logicLotto;
+	logicLotto.run();
 	//NetworkLib::Model::Convolution1Comparison comparison;
 	//comparison.run();
 	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
@@ -45,8 +45,8 @@ int main() {
 
 	//NetworkLib::Model::MNIST mnistModel;
 	//mnistModel.run();
-	NetworkLib::Model::MNISTLottery mnistLottery;
-	mnistLottery.run();
+	//NetworkLib::Model::MNISTLottery mnistLottery;
+	//mnistLottery.run();
 
 	std::puts("\nProgram Finished press enter to exit");
 	std::cin.get();

@@ -367,7 +367,7 @@ namespace NetworkLib {
 
 			std::mutex mNetworkMutex;
 
-			MNISTLottery() : LotteryModel("MNISTLottery.txt", 28, 28, 10, 4, 1, 2, 1000) {}
+			MNISTLottery() : LotteryModel("MNISTLottery.txt", 28, 28, 10, 1, 1, 2, 100) {}
 
 			void calculateTestConvergence(bool print = false) {
 
@@ -385,19 +385,6 @@ namespace NetworkLib {
 				sort("Train", print);
 			}
 
-			void sort(std::string_view caption="", bool print = false ) {
-
-				mNetworksSorter.sortBySuperRadius();
-
-				if (!print) return;
-
-				record("\nConvergence Results for MNIST {}"
-					"\nNetworks sorted by SuperRadius:", caption);
-
-				recordTopAndBottomNetworks();
-				recordZeroMisses();
-			}
-			
 			void create(bool print = false) {
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;

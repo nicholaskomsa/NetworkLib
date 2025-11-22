@@ -10,7 +10,7 @@
 #include <Gpt2.h>
 #include <Serializer.h>
 #include <ModelLogic.h>
-#include <Model.h>
+#include <ModelMNIST.h>
 
 Animator::Error::Error(std::errc code, const std::string& message)
     : std::system_error(int(code), std::generic_category(), message) {}
@@ -490,7 +490,7 @@ void Animator::animateXORNetwork() {
 
     NetworkLib::Model::XOR xorModel;
     xorModel.create();
-    auto& [gpu, gpuNetwork] = *xorModel.mGpuTask;
+    auto& [gpu, gpuNetwork] = xorModel.mTrainingManager.getGpuTask();
 
     std::size_t generation = 0;
     
