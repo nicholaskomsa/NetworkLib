@@ -37,10 +37,10 @@ namespace NetworkLib {
 				auto begin = mFloatSpace.mGpuSpace.begin();
 
 				TrainingManager::CpuSamples andSamples = {
-					{{ 0,0 }, {1,0}},
-					{{ 0,1 }, {1,0}},
-					{{ 1,0 }, {1,0}},
-					{{ 1,1 }, {0,1}}
+					{{0,0}, {1,0}},
+					{{0,1}, {1,0}},
+					{{1,0}, {1,0}},
+					{{1,1}, {0,1}}
 				}, xorSamples = {
 					{{0,0}, {1,0}},
 					{{0,1}, {0,1}},
@@ -77,7 +77,7 @@ namespace NetworkLib {
 
 			std::size_t mId = 981;
 
-			XOR(): Model("mnist.txt", 2, 1, 2, 4, 1) {}
+			XOR(): Model("XOR.txt", 2, 1, 2, 4, 1) {}
 
 			void calculateConvergence(bool print=false) {
 				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
@@ -87,28 +87,17 @@ namespace NetworkLib {
 			}
 			void create(bool print=false) {
 
-				auto createNetwork = [&]() {
+				using ActivationFunction = LayerTemplate::ActivationFunction;
+				mNetworkTemplate = { mInputWidth, mBatchSize
+					, {{ 1000, ActivationFunction::ReLU}
+					, { 500, ActivationFunction::ReLU}
+					, { mOutputSize, ActivationFunction::Softmax}
+					}
+				};
 
-					using ActivationFunction = LayerTemplate::ActivationFunction;
-					mNetworkTemplate = { mInputWidth, mBatchSize
-						, {{ 1000, ActivationFunction::ReLU}
-						, { 500, ActivationFunction::ReLU}
-						, { mOutputSize, ActivationFunction::Softmax}
-						}
-					};
-
-					if (print)
-						std::puts("Creating FC Network");
-
-					mTrainingManager.addNetwork(mId);
-					auto& network = mTrainingManager.getNetwork(mId);
-					network.create(&mNetworkTemplate, true);
-					network.initializeId(mId);
-
-					mTrainingManager.create(1);
-					};
-				createNetwork();
-
+				createNetwork("FC", mId, true, print);
+				mTrainingManager.create(1);
+					
 				mLogicSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mLogicSamples.mXORSamples;
 			}       
@@ -129,10 +118,10 @@ namespace NetworkLib {
 			void run(bool print=true) {
 
 				create(print);
-				calculateConvergence();
+				calculateConvergence(print);
 				train(mTrainNum, print);
 
-				calculateConvergence();
+				calculateConvergence(print);
 				destroy();
 			}
 		};
@@ -147,16 +136,13 @@ namespace NetworkLib {
 
 			void create(bool print=false) {
 
-				if (print)
-					std::println("Create XOR Lottery: ");
-
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
 
-				createNetworks();
+				createNetworks("XOR", print);
 				
 				mSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mSamples.mXORSamples;
@@ -173,10 +159,7 @@ namespace NetworkLib {
 				mTrainingManager.trainNetworks(mTrainNum, mBatchedSamplesView, mLearnRate, 0, print);
 			}
 			void calculateTrainConvergence(bool print = false) {
-
-				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView
-					, mSamples.mTrueSampleNum, false);
-
+				mTrainingManager.calculateNetworksConvergence(mBatchedSamplesView, mSamples.mTrueSampleNum, false);
 				sort("Train", print);
 			}
 
@@ -196,7 +179,7 @@ namespace NetworkLib {
 		public:
 			LogicSamples mSamples;
 
-			LogicLottery() : LotteryModel("LogicLottery.txt", 2, 1, 2, 4, 1000, 2, 1000) {}
+			LogicLottery() : LotteryModel("LogicLottery.txt", 2, 1, 2, 4, 5000, 2, 1000) {}
 
 			void calculateConvergences(bool print) {
 
@@ -205,8 +188,7 @@ namespace NetworkLib {
 				auto [xorSamples, orSamples, andSamples, allSamples] = mSamples.getSamples();
 
 				auto sortSamples = [&](std::string_view caption, auto& samples) {
-					mTrainingManager.calculateNetworksConvergence(samples
-						, trueSampleNum, print);
+					mTrainingManager.calculateNetworksConvergence(samples, trueSampleNum, print);
 					sort(caption, print);
 					};
 
@@ -216,19 +198,16 @@ namespace NetworkLib {
 			}
 
 			void create(bool print=false) {
-
-				if (print) 
-					record("Create Logic Lottery:"
-						"\nNetwork count: {}"
-						"\nTrain Num: {}", mMaxNetworks, mTrainNum);
 			
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputWidth, mBatchSize
 					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}}
 				};
-				createNetworks();
-				
+
+				createNetworks("Logic", print);
+				mTrainingManager.create(mMaxGpus);
+
 				mSamples.create(mNetworkTemplate);
 			}
 			void destroy(bool print=false) {

@@ -30,28 +30,18 @@ namespace NetworkLib {
 
 			void create(bool print=false) {
 
-				auto createNetwork = [&]() {
-					using ConvolutionType = LayerTemplate::ConvolutionType;
-					using ActivationFunction = LayerTemplate::ActivationFunction;
+				
+				using ConvolutionType = LayerTemplate::ConvolutionType;
+				using ActivationFunction = LayerTemplate::ActivationFunction;
 
-					mNetworkTemplate = { mInputWidth, mBatchSize
-						, {{ ConvolutionType::Conv1, 2, 2, ActivationFunction::ReLU }
-						, { ConvolutionType::Conv1, 2, 2, ActivationFunction::Softmax }
-						} };
+				mNetworkTemplate = { mInputWidth, mBatchSize
+					, {{ ConvolutionType::Conv1, 2, 2, ActivationFunction::ReLU }
+					, { ConvolutionType::Conv1, 2, 2, ActivationFunction::Softmax }
+					} };
 
-					if (print)
-						std::println("{}", "Creating Convolutional Network");
-
-					mTrainingManager.addNetwork(mId);
-					auto& network = mTrainingManager.getNetwork(mId);
-					network.create(&mNetworkTemplate, true);
-					network.initializeId(mId);
-
-					mTrainingManager.create(1);
-					};
-
-				createNetwork();
-
+				createNetwork("Conv1", mId, true, print);
+				mTrainingManager.create(1);
+					
 				mLogicSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mLogicSamples.mXORSamples;
 			}
@@ -179,9 +169,6 @@ namespace NetworkLib {
 			Convolution1Lottery() : LotteryModel("Conv1Lottery.txt", 2, 1, 2, 4, 1000, 2, 100) {}
 			void create(bool print = false) {
 
-				if (print)
-					std::println("Create Conv1 XOR Lottery: ");
-
 				using ConvolutionType = LayerTemplate::ConvolutionType;
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputWidth, mBatchSize
@@ -190,7 +177,8 @@ namespace NetworkLib {
 					}
 				};
 
-				createNetworks();
+				createNetworks("Conv1", print);
+				mTrainingManager.create(mMaxGpus);
 
 				mSamples.create(mNetworkTemplate);
 				mBatchedSamplesView = mSamples.mXORSamples;

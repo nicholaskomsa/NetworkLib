@@ -32,6 +32,19 @@ namespace NetworkLib {
 				mTrainingManager.destroy();
 			}
 
+			void createNetwork(std::string_view caption, Cpu::Network::Id id, bool backwards=true, bool initialize=true, bool print=false) {
+
+				if (print)
+					record("Creating {} Network: ID = {}", caption, id);
+
+				mTrainingManager.addNetwork(id);
+				auto& network = mTrainingManager.getNetwork(id);
+				network.create(&mNetworkTemplate, backwards);
+
+				if( initialize)
+					network.initializeId(id);
+			}
+
 			void clearRecord() {
 				std::ofstream{ mRecordFileName, std::ios::out };
 			}
@@ -101,7 +114,10 @@ namespace NetworkLib {
 
 				record("Networks with zero misses: {}", zeroMissesCount);
 			}
-			void createNetworks() {
+			void createNetworks(std::string_view caption, bool print=false) {
+
+				if (print)
+					record("Create {} Lottery:\tNetwork count: {};\tGpu count: {};" , caption, mMaxNetworks, mMaxGpus);
 
 				for (auto n : std::views::iota(0ULL, mMaxNetworks))
 					mTrainingManager.addNetwork();
@@ -122,7 +138,7 @@ namespace NetworkLib {
 					}
 					});
 
-				mTrainingManager.create(mMaxGpus);
+
 			}
 
 			void sort(std::string_view caption = "", bool print = false) {
@@ -131,7 +147,7 @@ namespace NetworkLib {
 
 				if (!print) return;
 
-				record("\nConvergence Results for MNIST {}"
+				record("\nConvergence Results for {}"
 					"\nNetworks sorted by SuperRadius:", caption);
 
 				recordTopAndBottomNetworks();

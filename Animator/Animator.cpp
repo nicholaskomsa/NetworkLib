@@ -535,6 +535,7 @@ void Animator::animateXORNetwork() {
 
         xorModel.train();
 
+
         xorModel.calculateConvergence();
 
         return true;

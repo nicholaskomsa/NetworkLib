@@ -187,9 +187,6 @@ namespace NetworkLib {
 									auto imageIdx = (imageCounter + b) % cpuImages.size();
 									auto& image = cpuImages[imageIdx];
 
-									auto seenSize = seen.mSize;
-									auto imageSize = image.size();
-
 									std::copy(image.begin(), image.end(), seen.begin());
 								}
 
@@ -309,14 +306,9 @@ namespace NetworkLib {
 					std::puts("Creating MNIST Network");
 
 				auto createNetworks = [&]() {
-					mTrainingManager.addNetwork(mId);
-					auto& network = mTrainingManager.getNetwork(mId);
-					network.create(&mNetworkTemplate, true);
-					network.initializeId(mId);
 
-					mTrainingManager.addNetwork(mConvergenceNetworkId);
-					auto& ccnetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
-					ccnetwork.create(&mNetworkTemplate, false);
+					createNetwork("train", mId, true, print);
+					createNetwork("test", mConvergenceNetworkId, false, print);
 
 					mTrainingManager.create(2);
 
@@ -396,10 +388,8 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 
-				if (print)
-					std::puts("Creating MNIST Networks");
-
-				createNetworks();
+				createNetworks("MNIST", print);
+				mTrainingManager.create(mMaxGpus);
 
 				mSamples.create(mNetworkTemplate);
 			}
