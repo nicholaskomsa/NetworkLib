@@ -535,7 +535,6 @@ void Animator::animateXORNetwork() {
 
         xorModel.train();
 
-
         xorModel.calculateConvergence();
 
         return true;
@@ -628,5 +627,6 @@ void Animator::animateMNISTNetwork() {
     mPaused = true;
     run(step);
 
+    convergenceFuture.get();
     mnistModel.destroy();
 }

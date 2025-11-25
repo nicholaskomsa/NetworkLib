@@ -302,13 +302,13 @@ namespace NetworkLib {
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 
-				if (print)
-					std::puts("Creating MNIST Network");
-
 				auto createNetworks = [&]() {
 
-					createNetwork("train", mId, true, print);
-					createNetwork("test", mConvergenceNetworkId, false, print);
+					if (print)
+						std::puts("Creating MNIST Network");
+
+					createNetwork("train", mId, true, true, print);
+					createNetwork("test", mConvergenceNetworkId, false, false, print);
 
 					mTrainingManager.create(2);
 

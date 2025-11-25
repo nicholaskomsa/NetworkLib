@@ -11,9 +11,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
         Animator animator;
 
-       //animator.animateMT19937();
+      // animator.animateMT19937();
        // animator.animateChatGPT2();
-        //animator.animateXORNetwork();
+      //  animator.animateXORNetwork();
         animator.animateMNISTNetwork();
     }
     catch (const Animator::Error& e) {

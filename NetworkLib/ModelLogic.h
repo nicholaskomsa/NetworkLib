@@ -95,7 +95,7 @@ namespace NetworkLib {
 					}
 				};
 
-				createNetwork("FC", mId, true, print);
+				createNetwork("FC", mId, true, true, print);
 				mTrainingManager.create(1);
 					
 				mLogicSamples.create(mNetworkTemplate);
