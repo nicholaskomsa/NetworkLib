@@ -77,20 +77,19 @@ namespace NetworkLib {
 
 			std::size_t mId = 981;
 
-			XOR(): Model("XOR.txt", 2, 1, 2, 4, 1) {}
+			XOR(): Model("XOR.txt", 2, 1, 2, 4, 5000) {}
 
 			void calculateConvergence(bool print=false) {
 				auto trueSampleNum = mLogicSamples.mTrueSampleNum;
 				auto& cpuNetwork = mTrainingManager.getNetwork(mId);
 				auto& gpuTask = mTrainingManager.getGpuTask();
-				mTrainingManager.calculateConvergence(gpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, false);
+				mTrainingManager.calculateConvergence(gpuTask, cpuNetwork, mBatchedSamplesView, trueSampleNum, print);
 			}
 			void create(bool print=false) {
 
 				using ActivationFunction = LayerTemplate::ActivationFunction;
 				mNetworkTemplate = { mInputWidth, mBatchSize
-					, {{ 1000, ActivationFunction::ReLU}
-					, { 500, ActivationFunction::ReLU}
+					, {{ 2, ActivationFunction::ReLU}
 					, { mOutputSize, ActivationFunction::Softmax}
 					}
 				};

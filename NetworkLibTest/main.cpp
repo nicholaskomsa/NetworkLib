@@ -34,17 +34,17 @@ int main() {
 	//NetworkLib::Gpu::Environment::example();
 	//NetworkLib::Gpu::Environment::example2();
 
-	//NetworkLib::Model::XOR xorModel;
-	//xorModel.run();
-	NetworkLib::Model::LogicLottery logicLotto;
-	logicLotto.run();
+//	NetworkLib::Model::XOR xorModel;
+//	xorModel.run();
+	//NetworkLib::Model::LogicLottery logicLotto;
+	//logicLotto.run();
 	//NetworkLib::Model::Convolution1Comparison comparison;
 	//comparison.run();
 	//NetworkLib::Model::Convolution1Lottery conv1Lotto;
 	//conv1Lotto.run();
 
-	//NetworkLib::Model::MNIST mnistModel;
-	//mnistModel.run();
+	NetworkLib::Model::MNIST mnistModel;
+	mnistModel.run();
 	//NetworkLib::Model::MNISTLottery mnistLottery;
 	//mnistLottery.run();
 

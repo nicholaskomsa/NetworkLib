@@ -19,6 +19,8 @@ namespace NetworkLib {
 		namespace Tensor {
 
 			using FloatType = float;
+			using IntType = std::int32_t;
+
 			using Floats = std::vector<FloatType>;
 			using FloatsView = std::span<FloatType>;
 			using Dimension = std::size_t;
@@ -41,23 +43,23 @@ namespace NetworkLib {
 
 			using CUBlasColMajor = std::layout_right;
 
-			template<typename... Dimensions>
-			using View = std::mdspan<FloatType, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
+			template<typename T>
+			concept IntOrFloatConcept = std::same_as<T, IntType> || std::same_as<T, FloatType>;
 
-			template<typename... Dimensions>
-			using IntView = std::mdspan<int, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
+			template<IntOrFloatConcept IntOrFloatType, typename... Dimensions>
+			using View = std::mdspan<IntOrFloatType, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
 
 			using Dynamic = std::integral_constant<size_t, std::dynamic_extent>;
 			template<std::size_t c>
 			using DimensionConstant = std::integral_constant<std::size_t, c>;
 
-			using View1 = View<Dynamic>;
-			using View2 = View<Dynamic, Dynamic>;
-			using View3 = View<Dynamic, Dynamic, Dynamic>;
+			using View1 = View<FloatType, Dynamic>;
+			using View2 = View<FloatType, Dynamic, Dynamic>;
+			using View3 = View<FloatType, Dynamic, Dynamic, Dynamic>;
 
-			using IntView1 = IntView<Dynamic>;
-			using IntView2 = IntView<Dynamic, Dynamic>;
-			using IntView3 = IntView<Dynamic, Dynamic, Dynamic>;
+			using IntView1 = View<IntType, Dynamic>;
+			using IntView2 = View<IntType, Dynamic, Dynamic>;
+			using IntView3 = View<IntType, Dynamic, Dynamic, Dynamic>;
 
 			//match mdspans
 			template<typename T>
@@ -93,8 +95,6 @@ namespace NetworkLib {
 			concept ThreeDimensionalConcept = ViewConcept<T> &&
 				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 3);
 
-
-
 			template<typename T>
 			concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
 
@@ -116,22 +116,26 @@ namespace NetworkLib {
 				return result;
 			}
 
-			template<DynamicViewConcept ViewType, typename... Dimensions>
-			void advance(ViewType& view, float*& begin, Dimensions ...dimensions) {
-				using ViewDataType = typename ViewType::element_type;
-				view = ViewType(&*reinterpret_cast<ViewDataType*>(begin), std::array{ dimensions... });
+			template<DynamicViewConcept ViewType
+				, typename ViewDataType = ViewType::element_type
+				, IntOrFloatConcept BeginType
+				, typename... Dimensions>
+			void advance(ViewType& view, BeginType*& begin, Dimensions ...dimensions) {
+
+				view = ViewType(reinterpret_cast<ViewDataType*>(begin), std::array{ dimensions... });
 				begin += area(view);
 			}
-			template<FixedViewConcept ViewType>
-			void advance(ViewType& view, float*& begin) {
-				//the floatspace can convert to int views here
-				//this view data type will be either int or float both have same sized
-				using ViewDataType = typename ViewType::element_type;
-				view = ViewType(&*reinterpret_cast<ViewDataType*>(begin));
+			template<FixedViewConcept ViewType
+				, typename ViewDataType = ViewType::element_type
+				, IntOrFloatConcept BeginType>
+			void advance(ViewType& view, BeginType*& begin) {
+
+				view = ViewType(reinterpret_cast<ViewDataType*>(begin));
 				begin += area(view);
 			}
 
-			static void advance(float*& f, float*& begin) {
+			template<IntOrFloatConcept DataType, IntOrFloatConcept BeginType>
+			static void advance(DataType*& f, BeginType*& begin) {
 				f = begin++;
 			}
 
@@ -240,8 +244,8 @@ namespace NetworkLib {
 
 			using width = Tensor::DimensionConstant<a>;
 			using height = Tensor::DimensionConstant<b>;
-			Tensor::View<width, height> fv2(nullptr);
-			Tensor::View<width, Tensor::Dynamic, Tensor::Dynamic> fv3;
+			Tensor::View<Tensor::FloatType, width, height> fv2(nullptr);
+			Tensor::View<Tensor::FloatType, width, Tensor::Dynamic, Tensor::Dynamic> fv3;
 
 			//Tensor::advance(v1, begin, a);
 			//Tensor::advance(v2, begin, b, c);

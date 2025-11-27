@@ -83,9 +83,6 @@ void FloatSpace1::destroy() {
 	mView.mGpu = nullptr;
 }
 
-float* FloatSpace1::getGpu(float* cpu) {
-	return mView.mGpu + (cpu - mView.mCpu);
-}
 
 float* FloatSpace1::begin() { return mView.begin(); }
 float* FloatSpace1::end() { return mView.end(); }

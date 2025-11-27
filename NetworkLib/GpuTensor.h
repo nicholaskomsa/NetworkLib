@@ -20,15 +20,16 @@ namespace NetworkLib {
 		template<ViewConcept ViewType>
 		struct GpuView {
 			ViewType mView;
-			float* mGpu = nullptr, * mCpu = nullptr;
+			using ViewDataType = ViewType::element_type;
+
+			ViewDataType* mGpu = nullptr, * mCpu = nullptr;
 			Dimension mSize = 0;
 
-			using ViewDataType = typename ViewType::element_type;
-
-			using CpuView1 = std::mdspan<ViewDataType, std::extents<Dimension, std::dynamic_extent>, Cpu::Tensor::CUBlasColMajor>;
+			using CpuView1 = Cpu::Tensor::View<ViewDataType, Cpu::Tensor::Dynamic>;
 
 			GpuView() = default;
-			GpuView(ViewType view, float* gpu, float* cpu) 
+		
+			GpuView(ViewType view, ViewDataType* gpu, ViewDataType* cpu)
 				:mView(view), mGpu(gpu), mCpu(cpu) {
 
 				setSize();
@@ -53,16 +54,16 @@ namespace NetworkLib {
 					cudaMemcpyDeviceToHost,
 					stream));
 			}
-			float* begin() {
+			ViewDataType* begin() {
 				return mCpu;
 			}
-			float* end() {
+			ViewDataType* end() {
 				return mCpu + mSize;
 			}
-			const float* begin() const{
+			const ViewDataType* begin() const{
 				return mCpu;
 			}
-			const float* end() const {
+			const ViewDataType* end() const {
 				return mCpu + mSize;
 			}
 
@@ -106,7 +107,7 @@ namespace NetworkLib {
 				return GpuView<CpuView1>{
 					 cpuView
 					, gpu
-					, reinterpret_cast<float*>(cpuView.data_handle())
+					, cpuView.data_handle()
 				};
 			}
 
@@ -169,7 +170,9 @@ namespace NetworkLib {
 
 			void destroy();
 
-			float* getGpu(float* cpu);
+			float* getGpu(float* cpu) {
+				return mView.mGpu + (cpu - mView.mCpu);
+			}
 
 			template<ViewConcept ViewType>
 			float* getGpu(ViewType& view) {
@@ -179,12 +182,17 @@ namespace NetworkLib {
 			float* begin();
 			float* end();
 
-			template<ViewConcept ViewType, typename... Dimensions>
-			void advance(GpuView<ViewType>& gpuView, float*& begin, Dimensions&&...dimensions) {
+			template<ViewConcept ViewType, typename ViewDataType = ViewType::element_type
+				, typename BeginType, typename... Dimensions>
+			void advance(GpuView<ViewType>& gpuView, BeginType*& begin, Dimensions&&...dimensions) {
 				ViewType view;
-				auto source = begin;
+
+				ViewDataType* source = reinterpret_cast<ViewDataType*>(begin);
 				Cpu::Tensor::advance(view, begin, dimensions...);
-				gpuView = { view, getGpu(view), source };
+				ViewDataType* gpu = reinterpret_cast<ViewDataType*>(getGpu(view));
+
+
+				gpuView = { view, gpu , source };
 			}
 			void advance(Float& f, float*& begin);
 			void advance(Int& i, float*& begin);
