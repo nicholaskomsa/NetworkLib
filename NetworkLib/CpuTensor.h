@@ -150,7 +150,8 @@ namespace NetworkLib {
 				return result;
 			}
 			
-			template<OneDimensionalConcept View1Type, TwoDimensionalConcept View2Type>
+			template<TwoDimensionalConcept View2Type, typename ViewDataType = View2Type::element_type
+				, typename View1Type = View<ViewDataType, Dynamic>>
 			View1Type viewColumn(const View2Type v2, Coordinate col) {
 
 				auto rows = v2.extent(0);
@@ -187,13 +188,13 @@ namespace NetworkLib {
 			IntViewType toIntType(FromType v) {
 				return ViewTypeTo(v.data_handle(), std::array{ getShape(v) });
 			}
-
-			static View1 field(const View1 v, std::size_t offset, std::size_t size) {
+			template<OneDimensionalConcept View1Type>
+			View1Type field(const View1Type v, std::size_t offset, std::size_t size) {
 				
 				if (offset + size > v.extent(0))
 					Error::checkBounds(offset + size, v.extent(0));
 
-				return View1(v.data_handle() + offset, std::array{size});
+				return View1Type(v.data_handle() + offset, std::array{size});
 			}
 		}	
 

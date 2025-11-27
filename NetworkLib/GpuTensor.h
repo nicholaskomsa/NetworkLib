@@ -26,6 +26,7 @@ namespace NetworkLib {
 			Dimension mSize = 0;
 
 			using CpuView1 = Cpu::Tensor::View<ViewDataType, Cpu::Tensor::Dynamic>;
+			using CpuView2 = Cpu::Tensor::View<ViewDataType, Cpu::Tensor::Dynamic, Cpu::Tensor::Dynamic>;
 
 			GpuView() = default;
 		
@@ -81,16 +82,16 @@ namespace NetworkLib {
 					, mCpu
 				};
 			}
-			GpuView<Cpu::Tensor::View1> field(std::size_t offset, std::size_t size) const {
+			GpuView<CpuView1> field(std::size_t offset, std::size_t size) const {
 				
 				auto cpuView = Cpu::Tensor::field(mView, offset, size);
 
 				auto gpu = mGpu + offset;
 
 				return {
-						 cpuView
-						, gpu
-						, cpuView.data_handle()
+					cpuView
+					, gpu
+					, cpuView.data_handle()
 				};
 			}
 
@@ -98,20 +99,20 @@ namespace NetworkLib {
 
 				Error::checkBounds(col, mView.extent(1));
 
-				CpuView1 cpuView = Cpu::Tensor::viewColumn<CpuView1>(mView, col);
+				auto cpuView = Cpu::Tensor::viewColumn(mView, col);
 
 				int rows = mView.extent(0);
 				std::size_t offset = col * rows;
 				auto gpu = mGpu + offset;
 
-				return GpuView<CpuView1>{
+				return {
 					 cpuView
 					, gpu
 					, cpuView.data_handle()
 				};
 			}
 
-			GpuView<Cpu::Tensor::View2> viewDepth(Coordinate depth) const {
+			GpuView<CpuView2> viewDepth(Coordinate depth) const {
 
 				Error::checkBounds(depth, mView.extent(2));
 
