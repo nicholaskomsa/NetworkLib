@@ -10,14 +10,7 @@ namespace NetworkLib {
 		using Dimension = Cpu::Tensor::Dimension;
 		using Coordinate = Cpu::Tensor::Coordinate;
 
-
-		template<typename T>
-		concept ViewConcept = Cpu::Tensor::ViewConcept<T>;
-		
-		template<typename T>
-		concept IntViewConcept = Cpu::Tensor::IntViewConcept<T>;
-
-		template<ViewConcept ViewType>
+		template<Cpu::Tensor::ViewConcept ViewType>
 		struct GpuView {
 			ViewType mView;
 			using ViewDataType = ViewType::element_type;
@@ -175,7 +168,7 @@ namespace NetworkLib {
 				return mView.mGpu + (cpu - mView.mCpu);
 			}
 
-			template<ViewConcept ViewType>
+			template<Cpu::Tensor::ViewConcept ViewType>
 			float* getGpu(ViewType& view) {
 				return getGpu(reinterpret_cast<float*>(view.data_handle()));
 			}
@@ -183,7 +176,7 @@ namespace NetworkLib {
 			float* begin();
 			float* end();
 
-			template<ViewConcept ViewType, typename ViewDataType = ViewType::element_type
+			template<Cpu::Tensor::ViewConcept ViewType, typename ViewDataType = ViewType::element_type
 				, Cpu::Tensor::IntOrFloatConcept BeginType, Cpu::Tensor::DimensionsConcept... Dimensions>
 			void advance(GpuView<ViewType>& gpuView, BeginType*& begin, Dimensions&&...dimensions) {
 				ViewType view;
