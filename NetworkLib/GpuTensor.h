@@ -183,14 +183,13 @@ namespace NetworkLib {
 			float* end();
 
 			template<ViewConcept ViewType, typename ViewDataType = ViewType::element_type
-				, typename BeginType, typename... Dimensions>
+				, Cpu::Tensor::IntOrFloatConcept BeginType, Cpu::Tensor::DimensionsConcept... Dimensions>
 			void advance(GpuView<ViewType>& gpuView, BeginType*& begin, Dimensions&&...dimensions) {
 				ViewType view;
 
 				ViewDataType* source = reinterpret_cast<ViewDataType*>(begin);
 				Cpu::Tensor::advance(view, begin, dimensions...);
 				ViewDataType* gpu = reinterpret_cast<ViewDataType*>(getGpu(view));
-
 
 				gpuView = { view, gpu , source };
 			}

@@ -119,7 +119,7 @@ namespace NetworkLib {
 			template<DynamicViewConcept ViewType
 				, typename ViewDataType = ViewType::element_type
 				, IntOrFloatConcept BeginType
-				, typename... Dimensions>
+				, DimensionsConcept... Dimensions>
 			void advance(ViewType& view, BeginType*& begin, Dimensions ...dimensions) {
 
 				view = ViewType(reinterpret_cast<ViewDataType*>(begin), std::array{ dimensions... });
@@ -136,7 +136,7 @@ namespace NetworkLib {
 
 			template<IntOrFloatConcept DataType, IntOrFloatConcept BeginType>
 			static void advance(DataType*& f, BeginType*& begin) {
-				f = begin++;
+				f = reinterpret_cast<DataType*>(begin++);
 			}
 
 			template<ViewConcept ViewType>
