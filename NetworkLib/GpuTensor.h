@@ -61,14 +61,14 @@ namespace NetworkLib {
 				return mCpu + mSize;
 			}
 
-			GpuView<Cpu::Tensor::View1> flatten() const {
+			GpuView<CpuView1> flatten() const {
 				return {
 					Cpu::Tensor::flatten(mView)
 					, mGpu
 					, mCpu
 				};
 			}
-			GpuView<Cpu::Tensor::View2> upDimension() {
+			GpuView<CpuView2> upDimension() {
 				return {
 					Cpu::Tensor::upDimension(mView)
 					, mGpu

@@ -46,9 +46,15 @@ namespace NetworkLib {
 			template<typename T>
 			concept IntOrFloatConcept = std::same_as<T, IntType> || std::same_as<T, FloatType>;
 
-			template<IntOrFloatConcept IntOrFloatType, typename... Dimensions>
-			using View = std::mdspan<IntOrFloatType, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
+			template<typename T>
+			concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
 
+			template<typename T>
+			concept CoordinatesConcept = std::convertible_to<std::remove_reference_t<T>, Coordinate>;
+
+			template<IntOrFloatConcept IntOrFloatType, DimensionsConcept... Dimensions>
+			using View = std::mdspan<IntOrFloatType, std::extents<Dimension, Dimensions::value...>, CUBlasColMajor>;
+			
 			using Dynamic = std::integral_constant<size_t, std::dynamic_extent>;
 			template<std::size_t c>
 			using DimensionConstant = std::integral_constant<std::size_t, c>;
@@ -95,12 +101,6 @@ namespace NetworkLib {
 			concept ThreeDimensionalConcept = ViewConcept<T> &&
 				(std::remove_cvref_t<T>::extents_type::rank_dynamic() == 3);
 
-			template<typename T>
-			concept DimensionsConcept = std::convertible_to<std::remove_reference_t<T>, Dimension>;
-
-			template<typename T>
-			concept CoordinatesConcept = std::convertible_to<std::remove_reference_t<T>, Coordinate>;
-
 			template<DimensionsConcept... Dimensions>
 			std::size_t area(Dimensions&& ...dimensions) {
 				return (... * dimensions);
@@ -125,6 +125,7 @@ namespace NetworkLib {
 				view = ViewType(reinterpret_cast<ViewDataType*>(begin), std::array{ dimensions... });
 				begin += area(view);
 			}
+
 			template<FixedViewConcept ViewType
 				, typename ViewDataType = ViewType::element_type
 				, IntOrFloatConcept BeginType>
@@ -172,7 +173,7 @@ namespace NetworkLib {
 
 			template<ViewConcept ViewType>
 			View1 flatten(ViewType v) {
-				return View1(v.data_handle(), std::array{ area(v) });
+				return { v.data_handle(), std::array{ area(v) } };
 			}
 
 			static View2 upDimension(const View1 v) {
@@ -184,10 +185,11 @@ namespace NetworkLib {
 				return FloatsView(v.data_handle(), area(v));
 			}
 
-			template<IntViewConcept IntViewType, ViewConcept FromType>
-			IntViewType toIntType(FromType v) {
-				return ViewTypeTo(v.data_handle(), std::array{ getShape(v) });
+			template<ViewConcept FromViewType, ViewConcept ToViewType, typename ToType = ToViewType::element_type>
+			ToViewType reinterpret(FromViewType v) {
+				return { reinterpret_cast<ToType*>(v.data_handle()), std::array{getShape(v)} };
 			}
+
 			template<OneDimensionalConcept View1Type>
 			View1Type field(const View1Type v, std::size_t offset, std::size_t size) {
 				

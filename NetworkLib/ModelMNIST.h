@@ -159,7 +159,7 @@ namespace NetworkLib {
 
 							auto desired = mOutputs.viewColumn(outputIdx);
 
-							std::fill(desired.begin(), desired.end(), 0ULL);
+							std::fill(desired.begin(), desired.end(), 0.0f);
 							desired.mView[outputIdx] = 1.0f;
 						}
 						};
@@ -262,7 +262,7 @@ namespace NetworkLib {
 			
 			MNISTSamples mSamples;
 
-			std::size_t mId = 981;
+			std::size_t mId = 911;
 			std::size_t mConvergenceNetworkId = 0;
 
 			TrainingManager::GpuTask* mGpuTaskTrain = nullptr, * mGpuTaskConvergence = nullptr;
@@ -270,27 +270,7 @@ namespace NetworkLib {
 
 			MNIST() : Model("mnist.txt", 28, 28, 10, 4, 1) {}
 
-			void calculateConvergence(bool print = false) {
-
-				auto& trainNetwork = mTrainingManager.getNetwork(mId);
-				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
-
-				//we calculate convergence on a diff gpu so copy to it
-				auto copyToConvergenceNetwork = [&]() {
-					std::scoped_lock lock(mNetworkMutex);
-					//copy train network to convergence network
-					ccNetwork.mirror(trainNetwork);
-					};
-
-				time<milliseconds>("Calculating Convergence", [&]() {
-
-					copyToConvergenceNetwork();
-
-					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
-						, mSamples.mTestBatched3Samples, mSamples.mTrueTestSamplesNum, mSamples.mOutputs, print);
-
-					}, print);
-			}
+	
 			void create(bool print = false) {
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
@@ -298,10 +278,9 @@ namespace NetworkLib {
 				constexpr auto ReLU = ActivationFunction::ReLU;
 
 				mNetworkTemplate = { mInputWidth * mInputHeight, mBatchSize
-					, {{ ConvolutionType::Conv1, 3, 10, ReLU }
+					, {{ 24, ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
-
 				auto createNetworks = [&]() {
 
 					if (print)
@@ -333,6 +312,29 @@ namespace NetworkLib {
 				std::scoped_lock lock(mNetworkMutex);
 				mGpuTaskTrain->mGpuNetwork.download(mGpuTaskTrain->mGpu);
 			}
+
+			void calculateConvergence(bool print = false) {
+
+				auto& trainNetwork = mTrainingManager.getNetwork(mId);
+				auto& ccNetwork = mTrainingManager.getNetwork(mConvergenceNetworkId);
+
+				//we calculate convergence on a diff gpu so copy to it
+				auto copyToConvergenceNetwork = [&]() {
+					std::scoped_lock lock(mNetworkMutex);
+					//copy train network to convergence network
+					ccNetwork.mirror(trainNetwork);
+					};
+
+				time<milliseconds>("Calculating Convergence", [&]() {
+
+					copyToConvergenceNetwork();
+
+					mTrainingManager.calculateConvergence(*mGpuTaskConvergence, ccNetwork
+						, mSamples.mTestBatched3Samples, mSamples.mTrueTestSamplesNum, mSamples.mOutputs, print);
+
+					}, print);
+			}
+
 
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);

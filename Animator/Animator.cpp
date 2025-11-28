@@ -556,9 +556,12 @@ void Animator::animateMNISTNetwork() {
     constexpr auto convergencePeriod = 1s;
 	auto convergenceTime = Clock::now() - convergencePeriod;
 
+
+
+
     auto periodicCalculateConvergence = [&]() {
 
-        auto convergenceDone = [&]()->bool{
+        auto convergenceDone = [&]()->bool {
             return convergenceFuture.valid() && convergenceFuture.wait_for(0s) == std::future_status::ready;
             };
 
@@ -627,6 +630,8 @@ void Animator::animateMNISTNetwork() {
     mPaused = true;
     run(step);
 
-    convergenceFuture.get();
+    if( convergenceFuture.valid() ) 
+        convergenceFuture.get();
+
     mnistModel.destroy();
 }
