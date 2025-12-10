@@ -95,6 +95,7 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AnimateEquation.h" />
     <ClInclude Include="Animator.h" />
     <ClInclude Include="Geometry.h" />
     <ClInclude Include="Text.h" />

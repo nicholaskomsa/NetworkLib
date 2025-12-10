@@ -7,19 +7,22 @@
 class QuadManager {
 public:
 
-
 	using Vertices = std::vector<float>;
 	Vertices mVertices;
     GLuint mVao = 0, mVbo = 0;
 
-    using Quad = std::array<float, 16>;
+    static constexpr auto QuadSize = 16;
+    using Quad = std::array<float, QuadSize>;
+
     using QuadReference = std::size_t;
     QuadReference mNewQuadIdx = 0;
+
 
     void reserve(std::size_t quadCount = 1) {
         mVertices.reserve(quadCount * sizeof(Quad));                     
         mNewQuadIdx = 0;
         mVertices.clear();
+
     }
 
     QuadReference addQuad(const Quad& quad) {
@@ -27,6 +30,19 @@ public:
         mVertices.insert(mVertices.end(), quad.begin(), quad.end());
 
         return mNewQuadIdx++;
+    }
+
+    void setAspectRatio(QuadReference quadRef, float monitorRatio, float desiredRatio) {
+       
+		float* quad = mVertices.data() + quadRef * QuadSize;
+      
+        auto yScale = 1.0f;
+        auto xScale = desiredRatio / monitorRatio;
+    
+        quad[0] = -xScale; quad[1] = yScale;
+        quad[4] = xScale; quad[5] = yScale;
+        quad[8] = -xScale; quad[9] = -yScale;
+        quad[12] = xScale; quad[13] = -yScale;
     }
 
     QuadReference addIdentity() {

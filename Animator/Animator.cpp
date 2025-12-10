@@ -165,11 +165,14 @@ void Animator::doEvents() {
                 if (mCustomGuiEvents)
                     mCustomGuiEvents(doChangeDimensions, doConvert);
 
-                if (doChangeDimensions )
+                if (doChangeDimensions){
                     setDimensions();
-                
-                if (doConvert)
                     floatSpaceConvert();
+
+                }else if (doConvert){
+					mOptionalStripeNum.reset();
+                    floatSpaceConvert();
+                }
                 
                 });
         }
@@ -179,9 +182,7 @@ Animator::Animator(std::size_t width, std::size_t height) {
     mFrameWidth = width;
     mFrameHeight = height;
 }
-Animator::~Animator() {
-    shutdown();
-}
+
 
 void Animator::setup(FloatsView floats = {}) {
 
@@ -324,6 +325,10 @@ void Animator::setup(FloatsView floats = {}) {
                 mCreateCustomGui();
 
             textArea.create(mQuadManager, mTextScale);
+
+            if (mCustomPreQuadGenerate)
+                mCustomPreQuadGenerate();
+
             mQuadManager.generate(); 
 
             textArea.render(mQuadManager, true);
@@ -555,9 +560,6 @@ void Animator::animateMNISTNetwork() {
 	std::future<void> convergenceFuture;
     constexpr auto convergencePeriod = 1s;
 	auto convergenceTime = Clock::now() - convergencePeriod;
-
-
-
 
     auto periodicCalculateConvergence = [&]() {
 

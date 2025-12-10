@@ -270,7 +270,6 @@ namespace NetworkLib {
 
 			MNIST() : Model("mnist.txt", 28, 28, 10, 4, 1) {}
 
-	
 			void create(bool print = false) {
 
 				using ConvolutionType = LayerTemplate::ConvolutionType;
@@ -326,6 +325,7 @@ namespace NetworkLib {
 					};
 
 				time<milliseconds>("Calculating Convergence", [&]() {
+
 
 					copyToConvergenceNetwork();
 

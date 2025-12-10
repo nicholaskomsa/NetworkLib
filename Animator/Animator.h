@@ -34,7 +34,7 @@ public:
     constexpr static float mAspectRatio = float(mWindowWidth) / mWindowHeight;
     constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 8;
 
-private:
+protected:
 
     std::size_t mFrameWidth = 0, mFrameHeight = 0;
 
@@ -47,6 +47,7 @@ private:
     ColorizeMode mColorizeMode = ColorizeMode::NICKRGB;
     using Stripes = std::array<const std::size_t, 6>;
     Stripes mStripes = { 1,2,10,50,100,1000 };
+    std::optional<std::size_t> mOptionalStripeNum;
     Stripes::iterator mSelectedStripes;
     float mX = 0.0f, mY = 0.0f, mTranslateSpeed = 0.1f, mScale = 1.0f;
     static constexpr milliseconds mKeyRepeatTime = 1000ms / 3;
@@ -95,9 +96,9 @@ public:
     Animator() = default;
 
     Animator(std::size_t width, std::size_t height);
-    ~Animator();
+    ~Animator() = default;
 
-    std::function<void(void)> mCreateCustomGui, mCustomGuiRender;
+    std::function<void(void)> mCreateCustomGui, mCustomGuiRender, mCustomPreQuadGenerate;
     std::function<void(bool&, bool&)> mCustomGuiEvents;
 
     void setup(FloatsView floats);
@@ -113,18 +114,24 @@ public:
     void animateMNISTNetwork();
 
     void floatSpaceConvert() {
+        
+		std::size_t selectedStripes;
+        if(mOptionalStripeNum.has_value() )
+			selectedStripes = mOptionalStripeNum.value();
+        else 
+			selectedStripes = *mSelectedStripes;
 
         if (mFloats.empty()) return;
 
         FloatSpaceConvert::floatSubSpaceConvert(mFloats, mPixels
             , mFloatRect, mFrameWidth
-            , mColorizeMode, 0.0f, 1.0f, *mSelectedStripes);
+            , mColorizeMode, 0.0f, 1.0f, selectedStripes);
 
         auto& textArea = mTextManager.getTextArea(mTextAreaRef);
         textArea.updateLabeledValue(mColorModeValueRef
             , std::format("{}x{}"
                 , FloatSpaceConvert::getColorNames()[mColorizeMode]
-                , *mSelectedStripes));
+                , selectedStripes));
     }
     void setDimensions() {
 

@@ -4,6 +4,7 @@
 #include <windows.h>
 
 #include "Animator.h"
+#include "AnimateEquation.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     
@@ -14,7 +15,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
       // animator.animateMT19937();
        // animator.animateChatGPT2();
       //  animator.animateXORNetwork();
-        animator.animateMNISTNetwork();
+      //  animator.animateMNISTNetwork();
+        
+        EquationAnimator equationAnimator;
+		equationAnimator.run();
     }
     catch (const Animator::Error& e) {
         MessageBoxA(nullptr, e.what(), "Animator Error", MB_OK | MB_ICONERROR);
