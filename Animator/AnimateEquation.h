@@ -43,32 +43,40 @@ public:
 				});
 			};
 
-		auto equationA = [&](float x, float y) -> float {
-			float r = std::sqrt(x * x + y * y);
-			return std::sin(r) / safeDenom(r);
-			};
-
-		auto equationB = [&](float x, float y) -> float {
-			return std::sin(0.1f * x) * std::cos(0.1f * y);
-			};
-
 		auto equationCircle = [&](float x, float y) -> float {
 			float r = std::sqrt(x * x + y * y);
 			return r;
 			};
 
-		auto equationC = [&](float x, float y) -> float {
+		auto equationA = [&](float x, float y) -> float {
+			float r = equationCircle(x,y);
+			return std::sin(r) / safeDenom(r);
+			};
+
+		auto equationStandingWave = [&](float x, float y) -> float {
+			return std::sin( 0.1f * y) * std::cos( 0.1f * x);
+			};
+
+		auto equationHyperbola = [&](float x, float y) -> float {
 			return std::pow(y, 2) - std::pow(x, 2);
 			};
 
-		drawEquation(equationA);
+		auto equationRippledSine = [&](float x, float y) -> float {
+			return std::sin(x * x + y * y);
+			};
 
-		std::array<FloatSpaceConvert::ColorizeMode, 5> colorModes = {
-			FloatSpaceConvert::ColorizeMode::BINARY
-			, FloatSpaceConvert::ColorizeMode::GREYSCALE
-			, FloatSpaceConvert::ColorizeMode::ROYGBIV
-			, FloatSpaceConvert::ColorizeMode::SHORTNRGB
-			, FloatSpaceConvert::ColorizeMode::NICKRGB
+		auto equationMonkeySaddle = [&](float x, float y) -> float {
+			return x * x * x - 3.0f * x * y * y;
+			};
+		drawEquation(equationMonkeySaddle);
+
+		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
+		auto colorModes = std::array{
+			ColorizeMode::BINARY
+			, ColorizeMode::GREYSCALE
+			, ColorizeMode::ROYGBIV
+			, ColorizeMode::SHORTNRGB
+			, ColorizeMode::NICKRGB
 			};
 
 		auto colorizeMode = colorModes.begin();
@@ -91,13 +99,11 @@ public:
 			if (currentStripes >= endStripes) {
 				currentStripes = startStripes;
 				std::advance(colorizeMode, 1);
-				//mPaused = true;
 				if (colorizeMode == colorModes.end())
 					colorizeMode = colorModes.begin();
 				mColorizeMode = *colorizeMode;
 
 				mOptionalStripeNum = currentStripes;
-				floatSpaceConvert();
 			}
 			};
 
