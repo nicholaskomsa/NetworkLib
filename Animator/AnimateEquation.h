@@ -37,8 +37,8 @@ public:
 			for_each(execution::par_unseq, horizontalPixels.begin(), horizontalPixels.end(), [&](auto px) {
 					for (auto py : views::iota(0ULL, height)) {
 
-						float x = scale* safeDenom(float(px) - halfWidth);
-						float y = scale* safeDenom(float(py) - halfHeight);
+						float x = scale* safeDenom(float(px) - halfWidth)
+							, y = scale* safeDenom(float(py) - halfHeight);
 						 
 						floats[px + py * width] = equation(x, y);
 					}
@@ -75,11 +75,12 @@ public:
 		auto equationChaoticPeaksA = [&](float x, float y) -> float {
 			return sin(x) * cos(y) + sin(y * 0.5f) * cos(x * 0.5f);
 			};
+
 		auto equationChaoticPeaksB = [&](float x, float y) -> float {
-			return sin(x) + sin(sqrt(2) * y) + sin(1.5f * x + 0.5f * y);
+			return sin(x) + sin(sqrt(2.0f) * y) + sin(1.5f * x + 0.5f * y);
 			};
 
-		drawEquation(equationStandingWave);
+		drawEquation(equationChaoticPeaksB);
 
 		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
 		auto colorModes = array{
