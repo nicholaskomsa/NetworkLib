@@ -86,6 +86,7 @@ public:
 			float r2 = x * x + y * y;
 			return exp(-r2 * expScale );
 			};
+
 		auto equationGaussianPeeksTwo = [&](float x, float y) -> float {
 			float a = x * x + y * y;
 			float b = pow(x - 1.0, 2.0) + pow(y + 1.0, 2.0);
@@ -96,7 +97,16 @@ public:
 			float r2 = x * x + y * y;
 			return (1.0f - r2) * exp(-r2 * expScale / 2.0f);
 			};
-		drawEquation(equationGaussianPeeksTwo);
+
+		auto equationMonkeySaddleHat = [&](float x, float y) -> float {
+
+			float mh = equationMexicanHat(x,y);
+			float ms = equationMonkeySaddle(x,y);
+			
+			return mh * ms;
+			};
+
+		drawEquation(equationMonkeySaddleHat);
 
 		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
 		auto colorModes = array{
