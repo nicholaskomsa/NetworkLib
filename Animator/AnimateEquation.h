@@ -80,7 +80,23 @@ public:
 			return sin(x) + sin(sqrt(2.0f) * y) + sin(1.5f * x + 0.5f * y);
 			};
 
-		drawEquation(equationChaoticPeaksB);
+		constexpr auto expScale = 1.0f / 10'000.0f;
+
+		auto equationGaussianMountain = [&](float x, float y) -> float {
+			float r2 = x * x + y * y;
+			return exp(-r2 * expScale );
+			};
+		auto equationGaussianPeeksTwo = [&](float x, float y) -> float {
+			float a = x * x + y * y;
+			float b = pow(x - 1.0, 2.0) + pow(y + 1.0, 2.0);
+			
+			return exp(-a * expScale ) - exp( -b* expScale );
+			};
+		auto equationMexicanHat = [&](float x, float y) -> float {
+			float r2 = x * x + y * y;
+			return (1.0f - r2) * exp(-r2 * expScale / 2.0f);
+			};
+		drawEquation(equationGaussianPeeksTwo);
 
 		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
 		auto colorModes = array{
