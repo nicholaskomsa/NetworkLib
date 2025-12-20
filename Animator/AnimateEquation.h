@@ -10,7 +10,7 @@ public:
 	
 	//color z is determined by a function of x and y; z = f(x,y)
 	using EquationFunction = std::function<float(float, float)>;
-
+	using FloatLimits = std::numeric_limits<float>;
 	void run() {
 
 		using namespace std;
@@ -23,13 +23,14 @@ public:
 
 		//to avoid division by zero in equations, replace zero with smallest float
 		auto safeDenom = [&](float x) {
-			float safe = (x == 0.0f) ? numeric_limits<float>::min() : x;
+			float safe = (x == 0.0f) ? FloatLimits::min() : x;
 			return safe;
 			};
+		constexpr auto downScale = 1.0f / 5'000.0f;
+		constexpr auto BigFloat = 100'000.0f;
+		constexpr auto expScale = 1.0f / 10'000.0f;
 
-		auto drawEquation = [&](EquationFunction&& equation) {
-
-			float scale = 1.0f;
+		auto drawEquation = [&](EquationFunction&& equation, float scale = 1.0f) {
 
 			size_t halfWidth = width / 2.0f, halfHeight = height / 2.0f;
 
@@ -43,6 +44,23 @@ public:
 						floats[px + py * width] = equation(x, y);
 					}
 				});
+
+
+			auto handleInfs = [&]() {
+				auto containsInfs = std::find(floats.begin(), floats.end(), FloatLimits::infinity());
+				if (containsInfs != floats.end()) {
+					//prevent inf it will break FloatSpaceConvert
+					auto max = std::max_element(floats.begin(), floats.end(), [&](auto a, auto b) {
+
+						if (a == FloatLimits::infinity() || b == FloatLimits::infinity()) return false;
+						return a < b;
+
+						});
+
+					std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), *max);
+				}
+				};
+			handleInfs();
 			};
 
 		auto equationCircle = [&](float x, float y) -> float {
@@ -80,8 +98,6 @@ public:
 			return sin(x) + sin(sqrt(2.0f) * y) + sin(1.5f * x + 0.5f * y);
 			};
 
-		constexpr auto expScale = 1.0f / 10'000.0f;
-
 		auto equationGaussianMountain = [&](float x, float y) -> float {
 			float r2 = x * x + y * y;
 			return exp(-r2 * expScale );
@@ -99,14 +115,50 @@ public:
 			};
 
 		auto equationMonkeySaddleHat = [&](float x, float y) -> float {
-
 			float mh = equationMexicanHat(x,y);
 			float ms = equationMonkeySaddle(x,y);
 			
 			return mh * ms;
 			};
+ 
+		auto equationMexicanHatDiff = [&](float x, float y) -> float {
 
-		drawEquation(equationMonkeySaddleHat);
+			float mexicanHats = equationMexicanHat(x, y) - equationMexicanHat(x, y + 1);
+			return mexicanHats;
+			};
+
+		auto equationMexicanHatSky= [&](float x, float y) -> float {
+
+			auto mh = equationMexicanHat(x, y);
+			auto r = equationCircle(x+1, y-1);
+			return mh * r;
+			};
+		auto equationMexicanHatSkyDifference = [&](float x, float y) -> float {
+
+			auto mh = equationMexicanHat(x, y);
+			auto mh2 = equationMexicanHat(x, y + 1);
+			auto r = equationCircle(x + 1, y - 1);
+			return (mh - mh2) * r;
+
+			};
+
+		auto equationLogarithmicSpiral = [&](float x, float y) -> float {
+			float theta = atan2(x, y); //vertical line
+			float r = sqrt(x * x + y * y);
+			return log(safeDenom(r)) - theta;
+			};
+
+
+		auto equationIntensityOfLight = [&](float x, float y) -> float {
+			float r = sqrt(x * x + y * y);
+			constexpr auto intensity = FloatLimits::max() / BigFloat;
+
+			return intensity / safeDenom(r * r);
+			};
+
+
+		drawEquation(equationIntensityOfLight, downScale);
+
 
 		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
 		auto colorModes = array{
