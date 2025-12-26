@@ -27,38 +27,45 @@ public:
 			return safe;
 			};
 		constexpr auto downScale = 1.0f / 5'000.0f;
-		constexpr auto BigFloat = 100'000.0f;
+		constexpr auto bigFloat = 100'000.0f;
 		constexpr auto expScale = 1.0f / 10'000.0f;
 
 		auto drawEquation = [&](EquationFunction&& equation, float scale = 1.0f) {
 
-			size_t halfWidth = width / 2.0f, halfHeight = height / 2.0f;
+			auto halfWidth = width / 2.0f, halfHeight = height / 2.0f;
 
 			auto horizontalPixels = views::iota(0ULL, width);
 			for_each(execution::par_unseq, horizontalPixels.begin(), horizontalPixels.end(), [&](auto px) {
 					for (auto py : views::iota(0ULL, height)) {
 
-						float x = scale* safeDenom(float(px) - halfWidth)
-							, y = scale* safeDenom(float(py) - halfHeight);
+						float x = safeDenom(scale * (float(px) - halfWidth))
+							, y = safeDenom(scale * (float(py) - halfHeight));
 						 
 						floats[px + py * width] = equation(x, y);
 					}
 				});
 
-
 			auto handleInfs = [&]() {
-				auto containsInfs = std::find(floats.begin(), floats.end(), FloatLimits::infinity());
-				if (containsInfs != floats.end()) {
-					//prevent inf it will break FloatSpaceConvert
-					auto max = std::max_element(floats.begin(), floats.end(), [&](auto a, auto b) {
+				//replace +/- inf it will break FloatSpaceConvert
+				//seach for the min and maxes excluding infs
+				//replace infs with max or min rather than FLOAT max/lowest to minimize floatspace distortion during FSC
+				auto max = *max_element(floats.begin(), floats.end(), [](auto a, auto b) {
+					if( a == FloatLimits::infinity() || b == FloatLimits::infinity())
+						return false;
 
-						if (a == FloatLimits::infinity() || b == FloatLimits::infinity()) return false;
-						return a < b;
+					return abs(a) < abs(b);
+					});
 
-						});
+				auto min = *min_element(floats.begin(), floats.end(), [](auto a, auto b) {
+					if (a == -FloatLimits::infinity() || b == -FloatLimits::infinity())
+						return false;
 
-					std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), *max);
-				}
+					return abs(a) < abs(b);
+					});
+
+				std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), max);
+				std::replace(floats.begin(), floats.end(), -FloatLimits::infinity(), min);
+
 				};
 			handleInfs();
 			};
@@ -142,23 +149,34 @@ public:
 
 			};
 
+
+		auto equationLogarmithm = [&](float x, float y) -> float {
+			float r = sqrt(x * x + y * y);
+			return log(safeDenom(r*r));
+
+			};
 		auto equationLogarithmicSpiral = [&](float x, float y) -> float {
+
 			float theta = atan2(x, y); //vertical line
 			float r = sqrt(x * x + y * y);
 			return log(safeDenom(r)) - theta;
 			};
+		auto equationLogarithmicSpiralWithWaves = [&](float x, float y) -> float {
+			
+			float r = sqrt(x * x + y * y);
+			float theta = atan2(x, y); //vertical line
 
+			return log(safeDenom(r)) - theta + sin(5.0f * log(safeDenom(r*r)));
+			};
 
 		auto equationIntensityOfLight = [&](float x, float y) -> float {
 			float r = sqrt(x * x + y * y);
-			constexpr auto intensity = FloatLimits::max() / BigFloat;
+			constexpr auto intensity = FloatLimits::max() / bigFloat / 100;
 
 			return intensity / safeDenom(r * r);
 			};
 
-
-		drawEquation(equationIntensityOfLight, downScale);
-
+		drawEquation(equationLogarithmicSpiralWithWaves);
 
 		using ColorizeMode = FloatSpaceConvert::ColorizeMode;
 		auto colorModes = array{
