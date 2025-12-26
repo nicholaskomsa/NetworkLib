@@ -11,6 +11,7 @@ public:
 	//color z is determined by a function of x and y; z = f(x,y)
 	using EquationFunction = std::function<float(float, float)>;
 	using FloatLimits = std::numeric_limits<float>;
+
 	void run() {
 
 		using namespace std;
@@ -34,6 +35,8 @@ public:
 
 			auto halfWidth = width / 2.0f, halfHeight = height / 2.0f;
 
+			bool containsInfs = false;
+
 			auto horizontalPixels = views::iota(0ULL, width);
 			for_each(execution::par_unseq, horizontalPixels.begin(), horizontalPixels.end(), [&](auto px) {
 					for (auto py : views::iota(0ULL, height)) {
@@ -41,29 +44,33 @@ public:
 						float x = safeDenom(scale * (float(px) - halfWidth))
 							, y = safeDenom(scale * (float(py) - halfHeight));
 						 
-						floats[px + py * width] = equation(x, y);
+						float z = equation(x, y);
+
+						if (!isfinite(z))
+							containsInfs = true;
+
+						floats[px + py * width] = z;
 					}
 				});
 
 			auto handleInfs = [&]() {
 				//replace +/- inf it will break FloatSpaceConvert
-				//seach for the min and maxes excluding infs
+				//search for the min and maxes excluding infs
 				//replace infs with max or min rather than FLOAT max/lowest to minimize floatspace distortion during FSC
+				auto excludeInfs = floats | views::filter([](auto f) {
+					return isfinite(f);
+					});
 
-				auto excludeInfs= [](auto a, auto b){
-					if( isfinite(a) && isfinite(b) )
-						return a < b;
-					return false;
-					};
-
-				auto max = *max_element(floats.begin(), floats.end(), excludeInfs);
-				auto min = *min_element(floats.begin(), floats.end(), excludeInfs);
-
-				std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), max);
-				std::replace(floats.begin(), floats.end(), -FloatLimits::infinity(), min);
+				auto [minIt, maxIt] = minmax_element(excludeInfs.begin(), excludeInfs.end());
+				
+				constexpr auto inf = FloatLimits::infinity();
+				std::replace(floats.begin(), floats.end(), inf, *maxIt);
+				std::replace(floats.begin(), floats.end(), -inf, *minIt);
 
 				};
-			handleInfs();
+
+			if(containsInfs)
+				handleInfs();
 			};
 
 		auto equationCircle = [&](float x, float y) -> float {
