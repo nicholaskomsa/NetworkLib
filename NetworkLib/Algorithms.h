@@ -80,18 +80,12 @@ namespace NetworkLib {
 	};
 
 	static void printProgress(std::size_t progress, std::size_t totalSize, float printPercent = 0.10f ) {
-
-		if (progress % std::size_t(std::ceil(totalSize * printPercent)) == 0 || progress >= totalSize - 1)
-			std::print("{:.0f}% ", progress / float(totalSize) * 100.0f);
+		
+		if (progress < totalSize-1) {
+			float progressPercent = progress / float(totalSize) * 100.0f;
+			if (progress % std::size_t(std::ceil(totalSize * printPercent)) == 0)
+				std::print("{:.0f}%...", progressPercent);
+		} else
+			std::print("Done");
 	}
-
-
-
-
-
-	struct Recorder {
-
-
-	};
-
 }
