@@ -50,17 +50,17 @@ public:
 				//seach for the min and maxes excluding infs
 				//replace infs with max or min rather than FLOAT max/lowest to minimize floatspace distortion during FSC
 				auto max = *max_element(floats.begin(), floats.end(), [](auto a, auto b) {
-					if( a == FloatLimits::infinity() || b == FloatLimits::infinity())
-						return false;
+					if( isfinite(a) && isfinite(b) )
+						return a < b;
 
-					return abs(a) < abs(b);
+					return false;
 					});
 
 				auto min = *min_element(floats.begin(), floats.end(), [](auto a, auto b) {
-					if (a == -FloatLimits::infinity() || b == -FloatLimits::infinity())
-						return false;
+					if (isfinite(a) && isfinite(b))
+						return a < b;
 
-					return abs(a) < abs(b);
+					return false;
 					});
 
 				std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), max);
