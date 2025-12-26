@@ -49,19 +49,15 @@ public:
 				//replace +/- inf it will break FloatSpaceConvert
 				//seach for the min and maxes excluding infs
 				//replace infs with max or min rather than FLOAT max/lowest to minimize floatspace distortion during FSC
-				auto max = *max_element(floats.begin(), floats.end(), [](auto a, auto b) {
+
+				auto excludeInfs= [](auto a, auto b){
 					if( isfinite(a) && isfinite(b) )
 						return a < b;
-
 					return false;
-					});
+					};
 
-				auto min = *min_element(floats.begin(), floats.end(), [](auto a, auto b) {
-					if (isfinite(a) && isfinite(b))
-						return a < b;
-
-					return false;
-					});
+				auto max = *max_element(floats.begin(), floats.end(), excludeInfs);
+				auto min = *min_element(floats.begin(), floats.end(), excludeInfs);
 
 				std::replace(floats.begin(), floats.end(), FloatLimits::infinity(), max);
 				std::replace(floats.begin(), floats.end(), -FloatLimits::infinity(), min);
