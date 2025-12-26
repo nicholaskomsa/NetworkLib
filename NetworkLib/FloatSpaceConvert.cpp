@@ -8,13 +8,20 @@
 #include <execution>
 #include <algorithm>
 
-void FloatSpaceConvert::setOpaque(std::uint32_t& p) {
+using namespace std;
+
+using UInt32Limits = std::numeric_limits<uint32_t>;
+//UInt32 is the size of a pixel ( RGBA )
+using UInt8Limits = std::numeric_limits<uint8_t>;
+//UInt8 is the size of a color channel ( R or G or B or A ) or one pixel byte
+
+void FloatSpaceConvert::setOpaque(uint32_t& p) {
 	reinterpret_cast<uint8_t*>(&p)[3] = 255;
 }
-std::uint32_t FloatSpaceConvert::rgb(std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+uint32_t FloatSpaceConvert::rgb(uint8_t r, uint8_t g, uint8_t b) {
 
-	std::uint32_t rgba = 0;
-	std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
+	uint32_t rgba = 0;
+	uint8_t* bytes = reinterpret_cast<uint8_t*>(&rgba);
 	bytes[0] = r;
 	bytes[1] = g;
 	bytes[2] = b;
@@ -22,23 +29,23 @@ std::uint32_t FloatSpaceConvert::rgb(std::uint8_t r, std::uint8_t g, std::uint8_
 	return rgba;
 }
 
-std::uint32_t FloatSpaceConvert::nrgb(double percent) {
+uint32_t FloatSpaceConvert::nrgb(double percent) {
 
 	//produce a three bytes (rgb) max value
-	constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 8 };
+	constexpr uint32_t maxValue = UInt32Limits::max() >> 8;
 
 	return maxValue * percent;
 }
 
-std::uint32_t FloatSpaceConvert::snrgb(double percent) {
+uint32_t FloatSpaceConvert::snrgb(double percent) {
 
 	//produce a two bytes (rg) max value
-	constexpr std::uint32_t maxValue = { std::numeric_limits<std::uint32_t>::max() >> 16 };
+	constexpr uint32_t maxValue = UInt32Limits::max() >> 16;
 
 	return maxValue * percent;
 }
 
-std::uint32_t FloatSpaceConvert::roygbiv(double percent) {
+uint32_t FloatSpaceConvert::roygbiv(double percent) {
 
 	//https://www.particleincell.com/2014/colormap/
 	uint8_t r = 0, g = 0, b = 0;
@@ -59,22 +66,20 @@ std::uint32_t FloatSpaceConvert::roygbiv(double percent) {
 	return rgb(r, g, b);
 }
 
-std::uint32_t FloatSpaceConvert::grayScale(double percent) {
+uint32_t FloatSpaceConvert::grayScale(double percent) {
 
-	constexpr std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
-	std::uint8_t gray = maxValue * percent;
+	constexpr std::uint8_t maxValue = UInt8Limits::max();
+	uint8_t gray = maxValue * percent;
 	return rgb(gray, gray, gray);
-
 }
 
-std::uint32_t FloatSpaceConvert::binary(double percent) {
+uint32_t FloatSpaceConvert::binary(double percent) {
 
-	constexpr std::uint8_t maxValue = { std::numeric_limits<std::uint8_t>::max() };
+	constexpr uint8_t maxValue = UInt8Limits::max();
 	//perrcent is between 0 and 1 so round to 0 or 1 and multiply by max value for either 0 or 255
-	std::uint8_t bit = std::round(percent);
-	std::uint8_t gray = maxValue * bit;
+	uint8_t bit = std::round(percent);
+	uint8_t gray = maxValue * bit;
 	return rgb(gray, gray, gray);
-
 }
 
 void FloatSpaceConvert::floatSpaceConvert(DataView data, PixelView converted, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
@@ -84,43 +89,43 @@ void FloatSpaceConvert::floatSpaceConvert(DataView data, PixelView converted, Co
 	floatSubSpaceConvert(data, converted, { {0,0}, dimensions }, dimensions.mWidth
 		, colorMode, vMin, vMax, stripeNum);
 }
-FloatSpaceConvert::Dimensions FloatSpaceConvert::getDimensions(std::size_t size, float aspectRatio) {
+FloatSpaceConvert::Dimensions FloatSpaceConvert::getDimensions(size_t size, float aspectRatio) {
 
 	Dimensions dimensions;
 
-	dimensions.mWidth = std::sqrt(size * aspectRatio);
-	dimensions.mHeight = std::ceil(size / float(dimensions.mWidth));
+	dimensions.mWidth = sqrt(size * aspectRatio);
+	dimensions.mHeight = ceil(size / float(dimensions.mWidth));
 
 	return dimensions;
 }
 
 void FloatSpaceConvert::colorizeFloatSpace(const std::string_view baseFileName, DataView floats) {
 
-	std::println("Colorizing float space: {}", baseFileName);
+	println("Colorizing float space: {}", baseFileName);
 
 	auto writeColorizedImages = [&](auto& image, auto width, auto height) {
 
 		if (image.size() == 0) return;
 
-		auto saveToBmpFile = [&](const std::string& fileName, PixelView image) {
+		auto saveToBmpFile = [&](const string& fileName, PixelView image) {
 			//image is int32 r g b a
 
 			//freeimage is writing in bgra format depending if you are windows vs apple, check your free image file format
-			auto bgra = [&](std::uint32_t rgba) {
+			auto bgra = [&](uint32_t rgba) {
 
-				std::uint8_t* bytes = reinterpret_cast<std::uint8_t*>(&rgba);
+				std::uint8_t* bytes = reinterpret_cast<uint8_t*>(&rgba);
 				std::swap(bytes[0], bytes[2]);
 
 				return rgba;
 				};
 
 			//given windows do this transform else consider free image file format
-			std::transform(image.begin(), image.end(), image.begin(), bgra);
+			transform(image.begin(), image.end(), image.begin(), bgra);
 
 			uint8_t* bytes = reinterpret_cast<uint8_t*>(image.data());
 			int pitch = width * (32 / 8);
 
-			//converted data are four byte type (int32)
+			//converted data are four byte type (uint32)
 			//consider byte order for free image write unless windows
 			FIBITMAP* convertedImage = FreeImage_ConvertFromRawBits(bytes, width, height, pitch, 32, FI_RGBA_RED_MASK, FI_RGBA_GREEN_MASK, FI_RGBA_BLUE_MASK);
 
@@ -131,13 +136,13 @@ void FloatSpaceConvert::colorizeFloatSpace(const std::string_view baseFileName, 
 
 		ColorNames colorNames = getColorNames();
 
-		auto stripes = { 1,2,10,100 };
+		auto stripes = array{ 1,2,10,100 };
 
 		FreeImage_Initialise();
 
-		std::for_each(std::execution::par, stripes.begin(), stripes.end(), [&](int stripeNum) {
+		for_each(execution::par, stripes.begin(), stripes.end(), [&](auto stripeNum) {
 
-			std::vector<uint32_t> converted(width * height); //adjust to texture min size
+			vector<uint32_t> converted(width * height); //adjust to texture min size
 
 			for (auto& [mode, name] : colorNames) {
 
@@ -171,12 +176,12 @@ FloatSpaceConvert::ColorNames FloatSpaceConvert::getColorNames() {
 
 void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
 	, const Rect& subFrame
-	, std::size_t frameWidth
+	, size_t frameWidth
 	, ColorizeMode colorMode, double vMin, double vMax, double stripeNum) {
 
-	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) ->std::tuple<double, double, double> {
+	auto getViewWindow = [&](double startPercent = 0.0, double endPercent = 1.0) -> tuple<double, double, double> {
 
-		auto minmax = std::minmax_element(std::execution::par_unseq, data.begin(), data.end());
+		auto minmax = std::minmax_element(execution::par_unseq, data.begin(), data.end());
 		auto min = *minmax.first, max = *minmax.second;
 
 		double distance = max - min;
@@ -201,7 +206,7 @@ void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
 		f -= viewMin;
 
 		if (f < viewDistance) {
-			f -= stripeDistance * std::floor(f / stripeDistance);
+			f -= stripeDistance * floor(f / stripeDistance);
 
 			percent = f / stripeDistance;
 		}
@@ -243,15 +248,15 @@ void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
 		auto& [x, y] = subFrame.mOrigin;
 		auto& [w, h] = subFrame.mDimensions;
 
-		auto hIota = std::views::iota(y, y + h);
-		auto wIota = std::views::iota(x, x + w);
+		auto hIota = views::iota(y, y + h);
+		auto wIota = views::iota(x, x + w);
 
-		std::for_each(std::execution::par, hIota.begin(), hIota.end(), [&](auto iy) {
+		for_each(execution::par, hIota.begin(), hIota.end(), [&](auto iy) {
 
 			for (auto ix : wIota) {
 
-				std::size_t index = iy * frameWidth + ix;
-				std::size_t pxIndex = (iy - y) * w + (ix - x);
+				size_t index = iy * frameWidth + ix;
+				size_t pxIndex = (iy - y) * w + (ix - x);
 
 				if (pxIndex < converted.size() && index < data.size())
 					converted[pxIndex] = convertMethod(data[index]);
@@ -264,14 +269,14 @@ void FloatSpaceConvert::floatSubSpaceConvert(DataView data, PixelView converted
 }
 
 
-FloatSpaceConvert::Rect FloatSpaceConvert::getFloatSpaceRect(float& x, float& y, float& scale, std::size_t frameWidth, std::size_t frameHeight) {
+FloatSpaceConvert::Rect FloatSpaceConvert::getFloatSpaceRect(float& x, float& y, float& scale, size_t frameWidth, size_t frameHeight) {
 
 	if (scale < 1.0f) scale = 1.0f;
 
 	float rScale = 1.0f / scale;
 
-	x = std::clamp(x, -1.0f + rScale, 1.0f - rScale);
-	y = std::clamp(y, -1.0f + rScale, 1.0f - rScale);
+	x = clamp(x, -1.0f + rScale, 1.0f - rScale);
+	y = clamp(y, -1.0f + rScale, 1.0f - rScale);
 
 	float x1 = x - rScale, x2 = x + rScale
 		, y1 = y + rScale, y2 = y - rScale;
@@ -282,12 +287,12 @@ FloatSpaceConvert::Rect FloatSpaceConvert::getFloatSpaceRect(float& x, float& y,
 	y1 = (-y1 + 1.0f) / 2.0f;
 	y2 = (-y2 + 1.0f) / 2.0f;
 
-	std::size_t px1 = std::floor(x1 * frameWidth)
-		, px2 = std::ceil(x2 * frameWidth)
-		, py1 = std::floor(y1 * frameHeight)
-		, py2 = std::ceil(y2 * frameHeight);
+	size_t px1 = floor(x1 * frameWidth)
+		, px2 = ceil(x2 * frameWidth)
+		, py1 = floor(y1 * frameHeight)
+		, py2 = ceil(y2 * frameHeight);
 
-	std::size_t pw = px2 - px1
+	size_t pw = px2 - px1
 		, ph = py2 - py1;
 
 	return { {px1, py1}, {pw, ph} };

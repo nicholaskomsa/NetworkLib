@@ -15,9 +15,6 @@
     </CudaCompile>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="Gpt">
-      <UniqueIdentifier>{ccdcc16a-697f-4b51-bf1f-2c89a90a730a}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Algorithms">
       <UniqueIdentifier>{cce24ee4-7847-4f0e-b575-dbce6a8dbf17}</UniqueIdentifier>
     </Filter>
@@ -29,6 +26,9 @@
     </Filter>
     <Filter Include="Model">
       <UniqueIdentifier>{42031481-3d08-410c-9031-e601dfc03e29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gpt">
+      <UniqueIdentifier>{ccdcc16a-697f-4b51-bf1f-2c89a90a730a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
