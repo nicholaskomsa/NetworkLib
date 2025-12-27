@@ -18,9 +18,6 @@
     <Filter Include="Algorithms">
       <UniqueIdentifier>{cce24ee4-7847-4f0e-b575-dbce6a8dbf17}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Network">
-      <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
-    </Filter>
     <Filter Include="cuda">
       <UniqueIdentifier>{ae8809eb-ae77-4748-870f-96eb6a64b5e5}</UniqueIdentifier>
     </Filter>
@@ -30,10 +27,13 @@
     <Filter Include="Gpt">
       <UniqueIdentifier>{ccdcc16a-697f-4b51-bf1f-2c89a90a730a}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Model\Network">
+      <UniqueIdentifier>{39ff86ee-1d72-48b7-bba4-52017f41ce25}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CpuNetwork.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="Gpt2.h">
       <Filter>Gpt</Filter>
@@ -51,31 +51,31 @@
       <Filter>Gpt</Filter>
     </ClInclude>
     <ClInclude Include="CpuTensor.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="GpuNetwork.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="NetworkTemplate.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="GpuTensor.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="kernel.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="TrainingManager.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="Environment.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="Serializer.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="NetworkSorter.h">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClInclude>
     <ClInclude Include="Model.h">
       <Filter>Model</Filter>
@@ -92,7 +92,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CpuNetwork.cpp">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClCompile>
     <ClCompile Include="Gpt2.cpp">
       <Filter>Gpt</Filter>
@@ -116,16 +116,16 @@
       <Filter>Algorithms</Filter>
     </ClCompile>
     <ClCompile Include="GpuTensor.cpp">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClCompile>
     <ClCompile Include="Environment.cpp">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClCompile>
     <ClCompile Include="CpuTensor.cpp">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClCompile>
     <ClCompile Include="TrainingManager.cpp">
-      <Filter>Network</Filter>
+      <Filter>Model\Network</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

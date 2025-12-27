@@ -2,7 +2,7 @@
 
 #include <execution>
 
-#include "Animator.h"
+#include <Animator.h>
 
 class EquationAnimator : public Animator {
 public:
@@ -57,11 +57,11 @@ public:
 				//replace +/- inf it will break FloatSpaceConvert
 				//search for the min and maxes excluding infs
 				//replace infs with max or min rather than FLOAT max/lowest to minimize floatspace distortion during FSC
-				auto excludeInfs = floats | views::filter([](auto f) {
+				auto normalFloats = floats | views::filter([](auto f) {
 					return isfinite(f);
 					});
 
-				auto [minIt, maxIt] = minmax_element(excludeInfs.begin(), excludeInfs.end());
+				auto [minIt, maxIt] = minmax_element(normalFloats.begin(), normalFloats.end());
 				
 				constexpr auto inf = FloatLimits::infinity();
 				std::replace(floats.begin(), floats.end(), inf, *maxIt);
@@ -151,7 +151,6 @@ public:
 			return (mh - mh2) * r;
 
 			};
-
 
 		auto equationLogarmithm = [&](float x, float y) -> float {
 			float r = sqrt(x * x + y * y);

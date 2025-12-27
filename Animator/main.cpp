@@ -3,14 +3,14 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include "Animator.h"
+#include <Animator.h>
 #include "AnimateEquation.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
     
     try {
 
-        Animator animator;
+       //Animator animator;
 
       // animator.animateMT19937();
        // animator.animateChatGPT2();
