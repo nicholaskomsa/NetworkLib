@@ -64,8 +64,8 @@ public:
 				auto [minIt, maxIt] = minmax_element(normalFloats.begin(), normalFloats.end());
 				
 				constexpr auto inf = FloatLimits::infinity();
-				std::replace(floats.begin(), floats.end(), inf, *maxIt);
-				std::replace(floats.begin(), floats.end(), -inf, *minIt);
+				replace(floats.begin(), floats.end(), inf, *maxIt);
+				replace(floats.begin(), floats.end(), -inf, *minIt);
 
 				};
 

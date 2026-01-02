@@ -41,9 +41,6 @@
     <ClInclude Include="Parallel.h">
       <Filter>Algorithms</Filter>
     </ClInclude>
-    <ClInclude Include="FloatSpaceConvert.h">
-      <Filter>Algorithms</Filter>
-    </ClInclude>
     <ClInclude Include="Algorithms.h">
       <Filter>Algorithms</Filter>
     </ClInclude>
@@ -111,9 +108,6 @@
     </ClCompile>
     <ClCompile Include="Gpt2Tensor.cpp">
       <Filter>Gpt</Filter>
-    </ClCompile>
-    <ClCompile Include="FloatSpaceConvert.cpp">
-      <Filter>Algorithms</Filter>
     </ClCompile>
     <ClCompile Include="GpuTensor.cpp">
       <Filter>Model\Network</Filter>

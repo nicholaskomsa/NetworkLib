@@ -43,13 +43,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
-    <IncludePath>F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\projects\NetworkLib\AnimatorLib;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\projects\NetworkLib\AnimatorLib;F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
-    <IncludePath>F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\projects\NetworkLib\AnimatorLib;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;F:\software dev\programming2025\lib\boost\include\boost-1_87;F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\projects\NetworkLib\AnimatorLib;F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);F:\software dev\programming2025\lib\boost\lib;F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -61,7 +61,7 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>freetype.lib;opengl32.lib;glew32d.lib;SDL3.lib;AnimatorLib.lib;NetworkLib.lib;cublas.lib;cudart_static.lib;FreeImage.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib; floatspaceconvert.lib; freetype.lib;  glew32d.lib;SDL3.lib;AnimatorLib.lib;NetworkLib.lib;cublas.lib;cudart_static.lib;FreeImage.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -81,7 +81,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Windows</SubSystem>
-      <AdditionalDependencies>freetype.lib; opengl32.lib; glew32.lib; SDL3.lib; AnimatorLib.lib; NetworkLib.lib; cublas.lib;cudart_static.lib; FreeImage.lib; cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>opengl32.lib; floatspaceconvert.lib; freetype.lib;  ; glew32.lib; SDL3.lib; AnimatorLib.lib; NetworkLib.lib; cublas.lib;cudart_static.lib; FreeImage.lib; cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -91,10 +91,12 @@
     <CudaCompile Include="kernel.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Experiments.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimateEquation.h" />
+    <ClInclude Include="Experiments.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

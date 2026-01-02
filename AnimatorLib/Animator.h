@@ -4,7 +4,7 @@
 #include <GL/glew.h>
 #include <freetype/freetype.h>
 
-#include <FloatSpaceConvert.h>
+#include "FloatSpaceConvert.h"
 
 #include <array>
 #include <system_error>
@@ -107,11 +107,7 @@ public:
     using StepFunction = std::function<bool(FloatsView)>;
     void run(StepFunction&& step);
 
-    void animateMT19937(std::size_t floatCount=100000);
-    void viewChatGPT2();
-    void animateChatGPT2();
-    void animateXORNetwork();
-    void animateMNISTNetwork();
+
 
     void floatSpaceConvert() {
         
