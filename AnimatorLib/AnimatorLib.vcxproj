@@ -42,12 +42,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;$(IncludePath)</IncludePath>
-    <LibraryPath>F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);F:\software dev\programming2025\sdks\FreeImage\FreeImage\Dist\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>F:\software dev\programming2025\projects\FloatSpaceConvert\FloatSpaceConvert;F:\software dev\programming2025\src\freetype-2.14.1\include;F:\software dev\programming2025\src\glew-2.1.0\include;F:\software dev\programming2025\src\SDL\SDL-release-3.2.14\include;$(IncludePath)</IncludePath>
+    <LibraryPath>F:\software dev\programming2025\projects\FloatSpaceConvert\x64\$(Configuration);F:\software dev\programming2025\src\freetype-2.14.1\objs\x64\$(Configuration);F:\software dev\programming2025\src\glew-2.1.0\lib\$(Configuration)\x64;F:\software dev\programming2025\lib\SDL\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
