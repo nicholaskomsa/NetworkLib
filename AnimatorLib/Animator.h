@@ -32,7 +32,8 @@ public:
 
     constexpr static std::size_t mWindowWidth = 1920, mWindowHeight = 1080;
     constexpr static float mAspectRatio = float(mWindowWidth) / mWindowHeight;
-    constexpr static nanoseconds mLengthOfStep = nanoseconds(1s) / 8;
+    
+    nanoseconds mLengthOfStep = nanoseconds(1s) / 8;
 
 protected:
 
