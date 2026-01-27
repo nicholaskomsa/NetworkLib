@@ -171,9 +171,7 @@ namespace NetworkLib {
 							std::size_t imageCounter = 0;
 							std::size_t digit = 0;
 
-							for (auto batch : std::views::iota(0ULL, mTrainBatched2Samples.size())) {
-
-								auto& [seenBatch, desired] = mTrainBatched2Samples[batch];
+							for (auto& [seenBatch, desired] : mTrainBatched2Samples) {
 
 								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
 
@@ -194,9 +192,10 @@ namespace NetworkLib {
 									imageCounter += batchSize;
 									digit = 0;
 								}
-
-								mTrueTrainSamplesNum = getSamplesNum(mTrainSamplesMap);
 							}
+								
+							mTrueTrainSamplesNum = getSamplesNum(mTrainSamplesMap);
+							
 							};
 
 						auto setTestData = [&]() {
@@ -277,7 +276,7 @@ namespace NetworkLib {
 				constexpr auto ReLU = ActivationFunction::ReLU;
 
 				mNetworkTemplate = { mInputWidth * mInputHeight, mBatchSize
-					, {{ 24, ReLU }
+					, {{ 10, ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 				auto createNetworks = [&]() {
@@ -325,7 +324,6 @@ namespace NetworkLib {
 					};
 
 				time<milliseconds>("Calculating Convergence", [&]() {
-
 
 					copyToConvergenceNetwork();
 
@@ -386,7 +384,7 @@ namespace NetworkLib {
 				constexpr auto ReLU = ActivationFunction::ReLU;
 
 				mNetworkTemplate = { mInputWidth * mInputHeight, mBatchSize
-					, {{ 24, ReLU }
+					, {{ 3, ReLU },{ 3, ReLU },{ 3, ReLU }
 					, { mOutputSize, ActivationFunction::Softmax }}
 				};
 

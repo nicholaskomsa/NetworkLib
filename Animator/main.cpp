@@ -15,11 +15,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
       //  AnimateMT19937 mt;
       //  mt.run();
       // 
-        AnimatorXOR axor;
-		axor.run();
+      //  AnimatorXOR axor;
+		//axor.run();
        // animator.animateChatGPT2();
       //  animator.animateXORNetwork();
-      //  animator.animateMNISTNetwork();
+       
+        AnimatorMNIST amnist;
+        amnist.run();
         
      //  EquationAnimator equationAnimator;
       // equationAnimator.run();

@@ -42,12 +42,12 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>F:\software dev\programming2025\projects\NetworkLib\NetworkLib;$(IncludePath)</IncludePath>
+    <IncludePath>F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\lib\boost\include\boost-1_87;$(IncludePath)</IncludePath>
     <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
     <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>F:\software dev\programming2025\projects\NetworkLib\NetworkLib;$(IncludePath)</IncludePath>
+    <IncludePath>F:\software dev\programming2025\projects\NetworkLib\NetworkLib;F:\software dev\programming2025\lib\boost\include\boost-1_87;$(IncludePath)</IncludePath>
     <OutDir>F:\software dev\programming2025\bin\$(Configuration)\</OutDir>
     <LibraryPath>F:\software dev\programming2025\projects\NetworkLib\x64\$(Configuration);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
