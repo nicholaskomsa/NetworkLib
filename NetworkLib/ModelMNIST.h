@@ -6,25 +6,28 @@ namespace NetworkLib {
 
 	namespace Model {
 
+
+		using namespace std;
+
 		struct MNISTSamples {
 
-			std::string mMNISTFolder = "./mnist/";
+			string mMNISTFolder = "./mnist/";
 
 			Gpu::LinkedFloatSpace mFloatSpace;
 
 			TrainingManager::GpuBatched2Samples mTrainBatched2Samples;
 			TrainingManager::GpuBatched3Samples mTestBatched3Samples;
 			Gpu::GpuView2 mOutputs;
-			std::size_t mTrueTrainSamplesNum, mTrueTestSamplesNum;
+			size_t mTrueTrainSamplesNum, mTrueTestSamplesNum;
 
-			using Images = std::vector<float>;
-			using ImageView = std::span<float>;
-			using DigitImagesMap = std::map<std::uint8_t, std::vector<ImageView>>;
+			using Images = vector<float>;
+			using ImageView = span<float>;
+			using DigitImagesMap = map<uint8_t, vector<ImageView>>;
 			Images mTrainDigitsSamples, mTestDigitsSamples;
 			DigitImagesMap mTestSamplesMap, mTrainSamplesMap;
 
-			std::size_t getSamplesNum(const DigitImagesMap& samplesMap) {
-				return std::accumulate(samplesMap.begin(), samplesMap.end(), 0UL
+			size_t getSamplesNum(const DigitImagesMap& samplesMap) {
+				return accumulate(samplesMap.begin(), samplesMap.end(), 0UL
 					, [](auto sum, const auto& pair) {
 						return sum + pair.second.size();
 					});
@@ -32,25 +35,25 @@ namespace NetworkLib {
 
 			void loadAllDigitsSamples() {
 
-				std::string testImagesFileName = "t10k-images.idx3-ubyte"
+				string testImagesFileName = "t10k-images.idx3-ubyte"
 					, testLabelsFileName = "t10k-labels.idx1-ubyte"
 					, trainImagesFileName = "train-images.idx3-ubyte"
 					, trainLabelsFileName = "train-labels.idx1-ubyte";
 
-				std::tie(mTrainSamplesMap, mTrainDigitsSamples) = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
-				std::tie(mTestSamplesMap, mTestDigitsSamples) = loadDigitsSamples(testImagesFileName, testLabelsFileName);
+				tie(mTrainSamplesMap, mTrainDigitsSamples) = loadDigitsSamples(trainImagesFileName, trainLabelsFileName);
+				tie(mTestSamplesMap, mTestDigitsSamples) = loadDigitsSamples(testImagesFileName, testLabelsFileName);
 			}
-			std::pair<DigitImagesMap, Images> loadDigitsSamples(const std::string& imagesFileName, const std::string& labelsFileName) {
+			pair<DigitImagesMap, Images> loadDigitsSamples(const string& imagesFileName, const string& labelsFileName) {
 
-				using HeadingType = std::uint32_t;
-				using LabelType = std::uint8_t;
-				using Image1Type = std::uint8_t;
-				using Image1 = std::vector<Image1Type>;
+				using HeadingType = uint32_t;
+				using LabelType = uint8_t;
+				using Image1Type = uint8_t;
+				using Image1 = vector<Image1Type>;
 
 				auto readHeading = [](auto& filestream, HeadingType& h) {
 
 					filestream.read(reinterpret_cast<char*>(&h), sizeof(h));
-					h = std::byteswap(h);
+					h = byteswap(h);
 					};
 
 				auto checkMagic = [&](auto& filestream, HeadingType magic) {
@@ -59,17 +62,17 @@ namespace NetworkLib {
 					readHeading(filestream, magicHeading);
 
 					if (magicHeading != magic)
-						throw std::logic_error("Incorrect magic heading");
+						throw logic_error("Incorrect magic heading");
 					};
 
-				constexpr auto binaryIn = std::ios::in | std::ios::binary;
+				constexpr auto binaryIn = ios::in | ios::binary;
 				std::ifstream finImages(mMNISTFolder + imagesFileName, binaryIn)
 					, finLabels(mMNISTFolder + labelsFileName, binaryIn);
 
 				if (finImages.fail())
-					throw std::runtime_error(std::format("failed to open {}", imagesFileName));
+					throw runtime_error(std::format("failed to open {}", imagesFileName));
 				if (finLabels.fail())
-					throw std::runtime_error(std::format("failed to open {}", labelsFileName));
+					throw runtime_error(std::format("failed to open {}", labelsFileName));
 
 				HeadingType numImages = 0, numLabels = 0
 					, rows = 0, cols = 0;
@@ -81,7 +84,7 @@ namespace NetworkLib {
 				readHeading(finLabels, numLabels);
 
 				if (numImages != numLabels)
-					throw std::logic_error("image num should equal label num");
+					throw logic_error("image num should equal label num");
 
 				readHeading(finImages, rows);
 				readHeading(finImages, cols);
@@ -92,13 +95,13 @@ namespace NetworkLib {
 				Image1 image1(imageSize);
 				DigitImagesMap digitsMap;
 				Images images;
-				constexpr float normalizeFactor = std::numeric_limits<Image1Type>::max();
+				constexpr float normalizeFactor = numeric_limits<Image1Type>::max();
 
 				images.resize(imageSize * numImages);
 				auto imagesIt = images.begin();
 
 				std::println("Reading mnist x {} images", numImages);
-				for (auto i : std::views::iota(0UL, numImages)) {
+				for (auto i : views::iota(0UL, numImages)) {
 
 					finImages.read(reinterpret_cast<char*>(image1.data()), imageSize * sizeof(Image1Type));
 					finLabels.read(reinterpret_cast<char*>(&label), sizeof(label));
@@ -110,9 +113,9 @@ namespace NetworkLib {
 
 					digitsMap[label].push_back(floatImage);
 
-					std::advance(imagesIt, imageSize);
+					advance(imagesIt, imageSize);
 				}
-				return { std::move(digitsMap), std::move(images) };
+				return { move(digitsMap), move(images) };
 			}
 
 			void create(NetworkTemplate& networkTemplate) {
@@ -134,10 +137,10 @@ namespace NetworkLib {
 					//test data has a batched3 type so that it fits with no duplication
 
 
-					std::size_t trainSamplesNum = getSamplesNum(mTrainSamplesMap)
+					size_t trainSamplesNum = getSamplesNum(mTrainSamplesMap)
 						, testSamplesNum = getSamplesNum(mTestSamplesMap)
-						, trainBatchNum = std::ceil(trainSamplesNum / float(batchSize))
-						, testBatchNum = std::ceil(testSamplesNum / float(batchSize))
+						, trainBatchNum = ceil(trainSamplesNum / float(batchSize))
+						, testBatchNum = ceil(testSamplesNum / float(batchSize))
 						, outputClassesSize = outputSize * outputNum
 						, trainInputsSize = trainBatchNum * batchSize * inputSize
 						, testInputsSize = testBatchNum * batchSize * inputSize
@@ -155,11 +158,11 @@ namespace NetworkLib {
 						//first, setup the GpuOutputs for each digit as one hot output
 						gpuSampleSpace.advance(mOutputs, gpuSampleSpaceIt, outputSize, outputNum);
 
-						for (auto outputIdx : std::views::iota(0ULL, outputNum)) {
+						for (auto outputIdx : views::iota(0ULL, outputNum)) {
 
 							auto desired = mOutputs.viewColumn(outputIdx);
 
-							std::fill(desired.begin(), desired.end(), 0.0f);
+							fill(desired.begin(), desired.end(), 0.0f);
 							desired.mView[outputIdx] = 1.0f;
 						}
 						};
@@ -168,8 +171,8 @@ namespace NetworkLib {
 
 						auto setTrainingData = [&]() {
 
-							std::size_t imageCounter = 0;
-							std::size_t digit = 0;
+							size_t imageCounter = 0;
+							size_t digit = 0;
 
 							for (auto& [seenBatch, desired] : mTrainBatched2Samples) {
 
@@ -178,14 +181,14 @@ namespace NetworkLib {
 								auto& cpuImages = mTrainSamplesMap.find(digit)->second;
 								desired = mOutputs.viewColumn(digit);
 
-								for (auto b : std::views::iota(0ULL, batchSize)) {
+								for (auto b : views::iota(0ULL, batchSize)) {
 
 									auto seen = seenBatch.viewColumn(b);
 
 									auto imageIdx = (imageCounter + b) % cpuImages.size();
 									auto& image = cpuImages[imageIdx];
 
-									std::copy(image.begin(), image.end(), seen.begin());
+									copy(image.begin(), image.end(), seen.begin());
 								}
 
 								if (++digit == outputNum) {
@@ -200,18 +203,18 @@ namespace NetworkLib {
 
 						auto setTestData = [&]() {
 
-							std::size_t sampleCounter = 0;
+							size_t sampleCounter = 0;
 
 							for (auto& [seenBatch, desiredBatch] : mTestBatched3Samples) {
 								gpuSampleSpace.advance(seenBatch, gpuSampleSpaceIt, inputSize, batchSize);
 								gpuSampleSpace.advance(desiredBatch, gpuSampleSpaceIt, 1ULL, batchSize);
 							}
 
-							for (auto digit : std::views::iota(0, 10)) {
+							for (auto digit :  views::iota(0, 10)) {
 
 								auto& cpuImages = mTestSamplesMap.find(digit)->second;
 								auto imagesSize = cpuImages.size();
-								std::size_t imageCounter = 0;
+								size_t imageCounter = 0;
 
 								while (imageCounter < imagesSize) {
 
@@ -219,15 +222,15 @@ namespace NetworkLib {
 
 									auto& [seenBatch, desiredBatch] = mTestBatched3Samples[batchIdx];
 
-									auto partialSize = std::min(batchSize, imagesSize - imageCounter);
-									for (auto b : std::views::iota(0ULL, partialSize)) {
+									auto partialSize = min(batchSize, imagesSize - imageCounter);
+									for (auto b : views::iota(0ULL, partialSize)) {
 
 										Gpu::GpuView1 seen = seenBatch.viewColumn(b);
 										Gpu::GpuIntView1 desired = desiredBatch.viewColumn(b);
 
 										auto& image = cpuImages[imageCounter++];
 
-										std::copy(image.begin(), image.end(), seen.begin());
+										copy(image.begin(), image.end(), seen.begin());
 										desired.mView[0] = digit;
 
 										++sampleCounter;
@@ -261,8 +264,8 @@ namespace NetworkLib {
 			
 			MNISTSamples mSamples;
 
-			std::size_t mId = 911;
-			std::size_t mConvergenceNetworkId = 0;
+			size_t mId = 911;
+			size_t mConvergenceNetworkId = 0;
 
 			TrainingManager::GpuTask* mGpuTaskTrain = nullptr, * mGpuTaskConvergence = nullptr;
 			std::mutex mNetworkMutex;
@@ -282,7 +285,7 @@ namespace NetworkLib {
 				auto createNetworks = [&]() {
 
 					if (print)
-						std::puts("Creating MNIST Network");
+						puts("Creating MNIST Network");
 
 					createNetwork("train", mId, true, true, print);
 					createNetwork("test", mConvergenceNetworkId, false, false, print);
@@ -302,12 +305,12 @@ namespace NetworkLib {
 				Model::destroy();
 			}
 
-			void train(std::size_t trainNum = 1, std::size_t offset = 0, bool print = false) {
+			void train(size_t trainNum = 1, size_t offset = 0, bool print = false) {
 
 				mTrainingManager.train(*mGpuTaskTrain, trainNum, mSamples.mTrainBatched2Samples, mLearnRate, offset, false, print);
 
 				//we need to synchronize with cc because that thread wants this data
-				std::scoped_lock lock(mNetworkMutex);
+				scoped_lock lock(mNetworkMutex);
 				mGpuTaskTrain->mGpuNetwork.download(mGpuTaskTrain->mGpu);
 			}
 
@@ -333,7 +336,6 @@ namespace NetworkLib {
 					}, print);
 			}
 
-
 			Cpu::Network& getNetwork() {
 				return mTrainingManager.getNetwork(mId);
 			}
@@ -357,7 +359,7 @@ namespace NetworkLib {
 		public:
 			MNISTSamples mSamples;
 
-			std::mutex mNetworkMutex;
+			mutex mNetworkMutex;
 
 			MNISTLottery() : LotteryModel("MNISTLottery.txt", 28, 28, 10, 1, 1, 2, 100) {}
 
@@ -391,7 +393,7 @@ namespace NetworkLib {
 				createNetworks("MNIST", print);
 				mTrainingManager.create(mMaxGpus);
 
-				mSamples.create(mNetworkTemplate);
+				mSamples.create(mNetworkTemplate); 
 			}
 			void destroy() {
 				
@@ -399,7 +401,7 @@ namespace NetworkLib {
 				Model::destroy();
 			}
 
-			void train(std::size_t trainNum = 1, std::size_t offset = 0, bool print = false) {
+			void train(size_t trainNum = 1, size_t offset = 0, bool print = false) {
 
 				mTrainingManager.trainNetworks(trainNum, mSamples.mTrainBatched2Samples, mLearnRate, offset, print);
 			}

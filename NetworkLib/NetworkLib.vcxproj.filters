@@ -68,9 +68,6 @@
     <ClInclude Include="Environment.h">
       <Filter>Network</Filter>
     </ClInclude>
-    <ClInclude Include="Serializer.h">
-      <Filter>Network</Filter>
-    </ClInclude>
     <ClInclude Include="NetworkSorter.h">
       <Filter>Network</Filter>
     </ClInclude>
@@ -85,6 +82,9 @@
     </ClInclude>
     <ClInclude Include="ModelMNIST.h">
       <Filter>Model</Filter>
+    </ClInclude>
+    <ClInclude Include="Serializer.h">
+      <Filter>Gpt</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
